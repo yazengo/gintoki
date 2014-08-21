@@ -9,11 +9,12 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
-#include <upnp_util.h>
-#include <ithread.h>
 #include <upnp.h>
+#include <lua.h>
+#include <lauxlib.h>
 
 #include "upnp_device.h"
+#include "upnp_util.h"
 #include "utils.h"
 
 #define STR_DEVICE_DESC_XML "munodevicedesc.xml"
@@ -107,18 +108,19 @@ int upnp_control_action_request(Upnp_EventType EventType, void *Event, void *Coo
 static void upnp_luv_subs_cb(lua_State *L, void *_p) {
 	upnp_luv_subs_t *p = (upnp_luv_subs_t *)_p;
 
-	// local r = upnp.emit_first('subscribe')
+	// local out = upnp.emit_first('subscribe')
+	// local out_str = cjson.encode(out)
+
+	lua_getglobal(L, "cjson");
+	lua_getfield(L, -1, "encode");
+	lua_remove(L, -2);
+
 	lua_getglobal(L, "upnp");
 	lua_getfield(L, -1, "emit_first");
 	lua_remove(L, -2);
 	lua_pushstring(L, "subscribe");
-	lua_call(L, 1, 1);
 
-	// local json = cjson.encode(r)
-	lua_getglobal(L, "cjson");
-	lua_getfield(L, -1, "encode");
-	lua_remove(L, -2);
-	lua_insert(L, -2);
+	lua_call(L, 1, 1);
 	lua_call(L, 1, 1);
 
 	p->out = strdup((char *)lua_tostring(L, -1));
@@ -190,7 +192,7 @@ int PlayerDeviceCallbackEventHandler(Upnp_EventType EventType, void *Event, void
 			info("unknown event:%d", EventType);
 	}
 	/* Print a summary of the event received */
-	SampleUtil_PrintEvent(EventType, Event);
+	//SampleUtil_PrintEvent(EventType, Event);
 
 	return 0;
 }
@@ -246,15 +248,15 @@ error_handler:
 }
 
 int PlayerDeviceStart(
-		char *ip_address, unsigned short port,
+		char *ip, unsigned short port,
 		const char *desc_doc_name, const char *web_dir_path,
 		int combo) 
 {
 	int ret = UPNP_E_SUCCESS;
 	char desc_doc_url[DESC_URL_SIZE];
 
-	info("init start ip=%s port=%u", ip_address, port);
-	ret = UpnpInit(ip_address, port);
+	info("init start ip=%s port=%u", ip, port);
+	ret = UpnpInit(ip, port);
 	if (ret != UPNP_E_SUCCESS) {
 		warn("UpnpInit failed: %d", ret);
 		UpnpFinish();
@@ -262,9 +264,9 @@ int PlayerDeviceStart(
 		return ret;
 	}
 
-	ip_address = UpnpGetServerIpAddress();
+	ip = UpnpGetServerIpAddress();
 	port = UpnpGetServerPort();
-	info("init done ip=%s port=%u", ip_address, port);
+	info("init done ip=%s port=%u", ip, port);
 
 	if (!desc_doc_name) {
 		if (combo) {
@@ -278,7 +280,7 @@ int PlayerDeviceStart(
 		web_dir_path = DEFAULT_WEB_DIR;
 	}
 
-	snprintf(desc_doc_url, DESC_URL_SIZE, "http://%s:%d/%s", ip_address, port, desc_doc_name);
+	snprintf(desc_doc_url, DESC_URL_SIZE, "http://%s:%d/%s", ip, port, desc_doc_name);
 	info("webroot=%s", web_dir_path);
 
 	ret = UpnpSetWebServerRootDir(web_dir_path);
@@ -324,14 +326,29 @@ static int upnp_notify(lua_State *L) {
 		return 0;
 	}
 
-	const char *names[] = { "notification" };
-	const char *vals[] = { "{3:4}"};
+	// out = cjson.encode(p)
+	lua_getglobal(L, "cjson");
+	lua_getfield(L, -1, "encode");
+	lua_remove(L, -2);
+	lua_insert(L, -2);
+	lua_call(L, 1, 1);
+
+	char *json = (char *)lua_tostring(L, -1);
+
+	const char *names[] = { "event_data" };
+	const char *vals[] = { json };
+
+	info("udn=%s srv=%s json=%s", upnp->udn, upnp->srv, json);
+
 	int r = UpnpNotify(upnp->h, upnp->udn, upnp->srv, names, vals, 1);
 	if (r == UPNP_E_SUCCESS) {
 		info("ok");
 	} else {
 		info("fail");
 	}
+
+	lua_pop(L, 1);
+
 	return 0;
 }
 
@@ -354,11 +371,11 @@ void upnp_init(lua_State *L, uv_loop_t *loop) {
 	lua_setfield(L, -2, "notify");
 	lua_pop(L, 1);
 
-	char *ip_address = NULL;
+	char *ip = NULL;
 	char *desc_doc_name = NULL;
 	char *web_dir_path = NULL;
 	unsigned short port = 49152;
 
-	PlayerDeviceStart(ip_address, port, desc_doc_name, web_dir_path, 0);
+	PlayerDeviceStart(ip, port, desc_doc_name, web_dir_path, 0);
 }
 

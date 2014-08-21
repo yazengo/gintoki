@@ -23,6 +23,8 @@ void log_init();
 float now();
 
 void run_hello(int i);
+void run_test_c(int i, lua_State *L, uv_loop_t *loop);
+void run_test_lua(int i, lua_State *L, uv_loop_t *loop);
 
 typedef void (*luv_cb_t)(lua_State *L, void *cb_p);
 void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_p);

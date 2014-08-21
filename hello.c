@@ -190,8 +190,6 @@ static void *pthread_loop_1(void *_) {
 }
 
 static void pcall_luv_cb(lua_State *L, void *_) {
-	info("%p", _);
-	sleep(1);
 }
 
 static void test_pthread_call_luv() {
@@ -202,9 +200,43 @@ static void test_pthread_call_luv() {
 	pthread_t tid;
 	pthread_create(&tid, NULL, pthread_loop_1, loop);
 
-	pthread_call_luv_sync(NULL, loop, pcall_luv_cb, (void *)1);
-	pthread_call_luv_sync(NULL, loop, pcall_luv_cb, (void *)2);
-	pthread_call_luv_sync(NULL, loop, pcall_luv_cb, (void *)3);
+	/*
+	pthread_call_luv_sync(loop, on_done, (void *)1);
+
+	pthread_call_luv_async(loop, func (L, done) {
+		emit(done)
+	}, on_done, (void *)1);
+	*/
+
+	int i;
+	for (i = 0; i < 1000000; i++) 
+		pthread_call_luv_sync(NULL, loop, pcall_luv_cb, &i);
+}
+
+static int buggy_func(lua_State *L) {
+	lua_pushnumber(L, 11);
+	lua_pushnumber(L, 11);
+	lua_pushnumber(L, 11);
+	lua_pushnumber(L, 11);
+	lua_pushnumber(L, 11);
+	lua_pushnumber(L, 11);
+	lua_pushnumber(L, 11);
+	lua_pushnumber(L, 11);
+	return 0;
+}
+
+static void test_buggy_call() {
+	info("starts");
+
+	lua_State *L = luaL_newstate();
+	luaL_openlibs(L);
+
+	int i;
+	for (i = 0; i < 100; i++) {
+		lua_pushcfunction(L, buggy_func);
+		lua_call(L, 0, 0);
+		luaL_dostring(L, "print(1,2,3)");
+	}
 }
 
 void run_hello(int i) {
@@ -219,5 +251,22 @@ void run_hello(int i) {
 		test_work_queue();
 	if (i == 5)
 		test_pthread_call_luv();
+	if (i == 6)
+		test_buggy_call();
+}
+
+static void test_set_timeout() {
+}
+
+void run_test_c(int i, lua_State *L, uv_loop_t *loop) {
+	if (i == 1) 
+		test_set_timeout();
+}
+
+void run_test_lua(int i, lua_State *L, uv_loop_t *loop) {
+	char name[64];
+	sprintf(name, "test_%d.lua", i);
+	info("dofile %s", name);
+	luaL_dofile(L, name);
 }
 

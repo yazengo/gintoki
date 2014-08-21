@@ -359,7 +359,7 @@ int SampleUtil_PrintEvent(Upnp_EventType EventType, void *Event)
 		if (a_event->ActionRequest) {
 			xmlbuff = ixmlPrintNode((IXML_Node *)a_event->ActionRequest);
 			if (xmlbuff) {
-				info("ActRequest  =  %s", xmlbuff);
+				//info("ActRequest  =  %s", xmlbuff);
 				ixmlFreeDOMString(xmlbuff);
 			}
 			xmlbuff = NULL;
@@ -369,7 +369,7 @@ int SampleUtil_PrintEvent(Upnp_EventType EventType, void *Event)
 		if (a_event->ActionResult) {
 			xmlbuff = ixmlPrintNode((IXML_Node *)a_event->ActionResult);
 			if (xmlbuff) {
-				info("ActResult   =  %s", xmlbuff);
+				//info("ActResult   =  %s", xmlbuff);
 				ixmlFreeDOMString(xmlbuff);
 			}
 			xmlbuff = NULL;
@@ -389,7 +389,7 @@ int SampleUtil_PrintEvent(Upnp_EventType EventType, void *Event)
 		if (a_event->ActionRequest) {
 			xmlbuff = ixmlPrintNode((IXML_Node *)a_event->ActionRequest);
 			if (xmlbuff) {
-				info("ActRequest  =  %s", xmlbuff);
+				//info("ActRequest  =  %s", xmlbuff);
 				ixmlFreeDOMString(xmlbuff);
 			}
 			xmlbuff = NULL;
@@ -399,7 +399,7 @@ int SampleUtil_PrintEvent(Upnp_EventType EventType, void *Event)
 		if (a_event->ActionResult) {
 			xmlbuff = ixmlPrintNode((IXML_Node *)a_event->ActionResult);
 			if (xmlbuff) {
-				info("ActResult   =  %s", xmlbuff);
+				//info("ActResult   =  %s", xmlbuff);
 				ixmlFreeDOMString(xmlbuff);
 			}
 			xmlbuff = NULL;

@@ -1,4 +1,20 @@
 
+table.add = function (a,b) 
+	for k,v in pairs(b) do
+		a[k] = v
+	end
+end
+
+table.dump = function (t) 
+	for k,v in pairs(t) do
+		print(k,v)
+	end
+end
+
+clear_timeout = function (t)
+	if t then _G[t] = nil end
+end
+
 emitter_init = function (t)
 	t.emit_targets = {}
 	t.on = function (name, func) 
@@ -19,27 +35,4 @@ emitter_init = function (t)
 	end
 end
 
-if os.getenv('test') then
-	local ha = {}
-	local i = 0
-	emitter_init(ha)
-	ha.on('haha', function (a)
-		i = i + a
-		return 3
-	end)
-	ha.on('haha', function (a, b)
-		i = i + a + b
-		return 1
-	end)
-	ha.on('hehe', function (a, b, c)
-		i = i + a + b + c
-		return 2
-	end)
-	ha.emit('haha', 123, 11)
-	ha.emit('hehe', 5, 88, 99)
-	ha.emit('haha', 123, 1, 1)
-	assert(i == 696)
-
-	assert(ha.emit_first('haha', 1,2) == 3)
-end
 

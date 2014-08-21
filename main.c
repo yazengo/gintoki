@@ -16,14 +16,20 @@ static void usage() {
 int main(int argc, char *argv[]) {
 	info("starts");
 
+	int hello = 0;
+
 	int i;
 	for (i = 1; i < argc; i++) {
-		if (!strcmp(argv[i], "-he")) {
-			if (i+1 >= argc) usage();
-			int no = 0; sscanf(argv[i+1], "%d", &no);
-			run_hello(no);
-			return 0;
+		if (!strcmp(argv[i], "-hello")) {
+			if (i+1 >= argc)
+				usage();
+			sscanf(argv[i+1], "%d", &hello);
 		}
+	}
+
+	if (hello >= 100 && hello < 200) {
+		run_hello(hello);
+		return 0;
 	}
 
 	uv_loop_t *loop = uv_default_loop();
@@ -31,15 +37,26 @@ int main(int argc, char *argv[]) {
 	uv_async_init(loop, &as, NULL); // make loop never exists
 
 	lua_State *L = luaL_newstate();
+
 	luaL_openlibs(L);
 	luaopen_cjson_safe(L);
 	luaL_dofile(L, "utils.lua");
+	utils_init(L, loop);
+
+	if (hello >= 200 && hello < 300) {
+		run_test_c(hello-200, L, loop);
+		return uv_run(loop, UV_RUN_DEFAULT);
+	}
+
+	if (hello >= 300 && hello < 400) {
+		run_test_lua(hello-300, L, loop);
+		return uv_run(loop, UV_RUN_DEFAULT);
+	}
 
 	upnp_init(L, loop);
+
 	luaL_dofile(L, "main.lua");
 
-	uv_run(loop, UV_RUN_DEFAULT);
-
-	return 0;
+	return uv_run(loop, UV_RUN_DEFAULT);
 }
 

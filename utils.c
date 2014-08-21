@@ -78,12 +78,8 @@ float now() {
 }
 
 typedef struct {
-} luv_async_t;
-
-typedef struct {
 	lua_State *L;
 	luv_cb_t cb;
-	uv_async_t *as;
 	void *cb_p;
 	pthread_mutex_t lock;
 } pcall_luv_t;
@@ -94,7 +90,6 @@ static void pcall_luv_wrap(uv_async_t *as, int _) {
 	p->cb(p->L, p->cb_p);
 
 	pthread_mutex_unlock(&p->lock);
-	uv_close((uv_handle_t *)p->as, NULL);
 }
 
 void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_p) {
@@ -103,13 +98,138 @@ void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_
 		.lock = PTHREAD_MUTEX_INITIALIZER,
 	};
 	pthread_mutex_lock(&p.lock);
+
 	uv_async_t as;
-	as.data = &p;
-	p.as = &as;
 	uv_async_init(loop, &as, pcall_luv_wrap);
+	as.data = &p;
 	uv_async_send(&as);
 
 	pthread_mutex_lock(&p.lock);
 	pthread_mutex_destroy(&p.lock);
+}
+
+typedef struct {
+	lua_State *L;
+	luv_cb_t on_start;
+	luv_cb_t on_done;
+	void *cb_p;
+	pthread_mutex_t lock;
+} pcall_luv_v2_t;
+
+static int pcall_luv_v2_done(lua_State *L) {
+	void *ud = lua_touserdata(L, lua_upvalueindex(1));
+	pcall_luv_v2_t *p;
+	memcpy(&p, ud, sizeof(p));
+
+	if (p == NULL)
+		return 0;
+	memset(ud, 0, sizeof(p));
+
+	p->on_done(p->L, p->cb_p);
+	pthread_mutex_unlock(&p->lock);
+
+	return 0;
+}
+
+static void pcall_luv_v2_wrap(uv_async_t *as, int _) {
+	pcall_luv_v2_t *p = (pcall_luv_v2_t *)as->data;
+
+	void *ud = lua_newuserdata(p->L, sizeof(p));
+	memcpy(ud, &p, sizeof(p));
+	lua_pushcclosure(p->L, pcall_luv_v2_done, 1);
+
+	p->on_start(p->L, p->cb_p);
+
+	lua_pop(p->L, 1);
+}
+
+void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, luv_cb_t on_start, luv_cb_t on_done, void *cb_p) {
+	pcall_luv_v2_t p = {
+		.L = L, .cb_p = cb_p,
+		.on_start = on_start,
+		.on_done = on_done,
+		.lock = PTHREAD_MUTEX_INITIALIZER,
+	};
+	pthread_mutex_lock(&p.lock);
+
+	uv_async_t as;
+	uv_async_init(loop, &as, pcall_luv_v2_wrap);
+	as.data = &p;
+	uv_async_send(&as);
+
+	pthread_mutex_lock(&p.lock);
+	pthread_mutex_destroy(&p.lock);
+}
+
+static int timer_cb_inner(lua_State *L) {
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_call(L, 0, 0);
+
+	return 0;
+}
+
+static void timer_cb(uv_timer_t *t, int _) {
+	lua_State *L = (lua_State *)t->data;
+
+	uv_timer_stop(t);
+	free(t);
+
+	char name[64];
+	sprintf(name, "timer_%p", t);
+
+	lua_getglobal(L, name);
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return;
+	}
+	lua_call(L, 0, 0);
+
+	lua_pushnil(L);
+	lua_setglobal(L, name);
+}
+
+static int set_timeout(lua_State *L) {
+	uv_loop_t *loop;
+	void *ud = lua_touserdata(L, lua_upvalueindex(1));
+	memcpy(&loop, ud, sizeof(loop));
+
+	//   -1  timeout
+	//   -2  callback
+	int timeout = lua_tonumber(L, -1);
+	lua_pop(L, 1);
+
+	//   -1  callback
+	lua_pushcclosure(L, timer_cb_inner, 1);
+
+	uv_timer_t *t = (uv_timer_t *)malloc(sizeof(uv_timer_t));
+	uv_timer_init(loop, t);
+	t->data = L;
+
+	char name[64];
+	sprintf(name, "timer_%p", t);
+	lua_setglobal(L, name);
+
+	//info("%s timeout=%d", name, timeout);
+	uv_timer_start(t, timer_cb, timeout, timeout);
+
+	// return timer_xxx
+	lua_pushstring(L, name);
+	return 1;
+}
+
+static int info_lua(lua_State *L) {
+	const char *msg = lua_tostring(L, -1);
+	info("%s", msg);
+	return 0;
+}
+
+void utils_init(lua_State *L, uv_loop_t *loop) {
+	void *ud = lua_newuserdata(L, sizeof(loop));
+	memcpy(ud, &loop, sizeof(loop));
+	lua_pushcclosure(L, set_timeout, 1);
+	lua_setglobal(L, "set_timeout");
+
+	lua_pushcfunction(L, info_lua);
+	lua_setglobal(L, "info");
 }
 
