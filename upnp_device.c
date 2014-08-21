@@ -276,9 +276,10 @@ int PlayerDeviceStart(
 			desc_doc_name = STR_DEVICE_DESC_XML;
 		}
 	}
-	if (!web_dir_path) {
-		web_dir_path = DEFAULT_WEB_DIR;
-	}
+
+	web_dir_path = getenv("UPNP_WEB_DIR");
+	if (web_dir_path == NULL) 
+		web_dir_path = "/usr/app/web";
 
 	snprintf(desc_doc_url, DESC_URL_SIZE, "http://%s:%d/%s", ip, port, desc_doc_name);
 	info("webroot=%s", web_dir_path);
