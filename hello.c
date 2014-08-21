@@ -267,6 +267,6 @@ void run_test_lua(int i, lua_State *L, uv_loop_t *loop) {
 	char name[64];
 	sprintf(name, "test_%d.lua", i);
 	info("dofile %s", name);
-	luaL_dofile(L, name);
+	lua_dofile_or_die(L, name);
 }
 

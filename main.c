@@ -40,8 +40,11 @@ int main(int argc, char *argv[]) {
 
 	luaL_openlibs(L);
 	luaopen_cjson_safe(L);
-	luaL_dofile(L, "utils.lua");
+
 	utils_init(L, loop);
+
+	lua_dofile_or_die(L, "utils.lua");
+	lua_dofile_or_die(L, "radio.lua");
 
 	if (hello >= 200 && hello < 300) {
 		run_test_c(hello-200, L, loop);
@@ -55,7 +58,7 @@ int main(int argc, char *argv[]) {
 
 	upnp_init(L, loop);
 
-	luaL_dofile(L, "main.lua");
+	lua_dofile_or_die(L, "main.lua");
 
 	return uv_run(loop, UV_RUN_DEFAULT);
 }

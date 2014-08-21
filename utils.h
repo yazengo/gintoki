@@ -29,3 +29,6 @@ void run_test_lua(int i, lua_State *L, uv_loop_t *loop);
 typedef void (*luv_cb_t)(lua_State *L, void *cb_p);
 void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_p);
 
+void lua_dofile_or_die(lua_State *L, char *fname);
+void lua_call_or_die(lua_State *L, int nargs, int nresults);
+

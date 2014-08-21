@@ -6,6 +6,7 @@
 
 #include <uv.h>
 #include <lua.h>
+#include <lauxlib.h>
 #include <pthread.h>
 
 #include "utils.h"
@@ -162,17 +163,22 @@ void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, luv_cb_t on_start, 
 }
 
 static int timer_cb_inner(lua_State *L) {
+	//info("is_function %d", lua_isfunction(L, lua_upvalueindex(1)));
 	lua_pushvalue(L, lua_upvalueindex(1));
-	lua_call(L, 0, 0);
+	lua_call_or_die(L, 0, 0);
 
 	return 0;
+}
+
+static void timer_free(uv_handle_t *t) {
+	free(t);
 }
 
 static void timer_cb(uv_timer_t *t, int _) {
 	lua_State *L = (lua_State *)t->data;
 
 	uv_timer_stop(t);
-	free(t);
+	uv_close((uv_handle_t *)t, timer_free);
 
 	char name[64];
 	sprintf(name, "timer_%p", t);
@@ -182,7 +188,8 @@ static void timer_cb(uv_timer_t *t, int _) {
 		lua_pop(L, 1);
 		return;
 	}
-	lua_call(L, 0, 0);
+
+	lua_call_or_die(L, 0, 0);
 
 	lua_pushnil(L);
 	lua_setglobal(L, name);
@@ -198,19 +205,16 @@ static int set_timeout(lua_State *L) {
 	int timeout = lua_tonumber(L, -1);
 	lua_pop(L, 1);
 
-	//   -1  callback
-	lua_pushcclosure(L, timer_cb_inner, 1);
-
 	uv_timer_t *t = (uv_timer_t *)malloc(sizeof(uv_timer_t));
 	uv_timer_init(loop, t);
 	t->data = L;
+	uv_timer_start(t, timer_cb, timeout, timeout);
 
+	//   -1  callback
+	lua_pushcclosure(L, timer_cb_inner, 1);
 	char name[64];
 	sprintf(name, "timer_%p", t);
 	lua_setglobal(L, name);
-
-	//info("%s timeout=%d", name, timeout);
-	uv_timer_start(t, timer_cb, timeout, timeout);
 
 	// return timer_xxx
 	lua_pushstring(L, name);
@@ -221,6 +225,20 @@ static int info_lua(lua_State *L) {
 	const char *msg = lua_tostring(L, -1);
 	info("%s", msg);
 	return 0;
+}
+
+void lua_call_or_die(lua_State *L, int nargs, int nresults) {
+	if (lua_pcall(L, nargs, nresults, 0)) {
+		error("%s", lua_tostring(L, -1));
+		exit(-1);
+	}
+}
+
+void lua_dofile_or_die(lua_State *L, char *fname) {
+	if (luaL_dofile(L, fname)) {
+		error("%s", lua_tostring(L, -1));
+		exit(-1);
+	}
 }
 
 void utils_init(lua_State *L, uv_loop_t *loop) {

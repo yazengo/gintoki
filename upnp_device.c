@@ -62,9 +62,9 @@ static void upnp_luv_act_cb(lua_State *L, void *_p) {
 	lua_remove(L, -2);
 	lua_pushstring(L, act->in);
 
-	lua_call(L, 1, 1);
-	lua_call(L, 2, 1);
-	lua_call(L, 1, 1);
+	lua_call_or_die(L, 1, 1);
+	lua_call_or_die(L, 2, 1);
+	lua_call_or_die(L, 1, 1);
 
 	char *out = (char *)lua_tostring(L, -1);
 	if (out)
@@ -332,7 +332,7 @@ static int upnp_notify(lua_State *L) {
 	lua_getfield(L, -1, "encode");
 	lua_remove(L, -2);
 	lua_insert(L, -2);
-	lua_call(L, 1, 1);
+	lua_call_or_die(L, 1, 1);
 
 	char *json = (char *)lua_tostring(L, -1);
 
@@ -353,6 +353,17 @@ static int upnp_notify(lua_State *L) {
 	return 0;
 }
 
+static void *upnp_thread(void *_) {
+	char *ip = NULL;
+	char *desc_doc_name = NULL;
+	char *web_dir_path = NULL;
+	unsigned short port = 49152;
+
+	PlayerDeviceStart(ip, port, desc_doc_name, web_dir_path, 0);
+
+	return NULL;
+}
+
 void upnp_init(lua_State *L, uv_loop_t *loop) {
 	upnp->L = L;
 	upnp->loop = loop;
@@ -364,7 +375,7 @@ void upnp_init(lua_State *L, uv_loop_t *loop) {
 	// emitter_init(upnp)
 	lua_getglobal(L, "emitter_init");
 	lua_getglobal(L, "upnp");
-	lua_call(L, 1, 0);
+	lua_call_or_die(L, 1, 0);
 
 	// upnp.notify = ...
 	lua_getglobal(L, "upnp");
@@ -372,11 +383,7 @@ void upnp_init(lua_State *L, uv_loop_t *loop) {
 	lua_setfield(L, -2, "notify");
 	lua_pop(L, 1);
 
-	char *ip = NULL;
-	char *desc_doc_name = NULL;
-	char *web_dir_path = NULL;
-	unsigned short port = 49152;
-
-	PlayerDeviceStart(ip, port, desc_doc_name, web_dir_path, 0);
+	pthread_t tid;
+	pthread_create(&tid, NULL, upnp_thread, NULL);
 }
 
