@@ -227,18 +227,46 @@ static int info_lua(lua_State *L) {
 	return 0;
 }
 
+static int lua_traceback(lua_State *L) {
+  const char *msg = lua_tostring(L, 1);
+  if (msg)
+    luaL_traceback(L, L, msg, 1);
+  else if (!lua_isnoneornil(L, 1)) {  /* is there an error object? */
+    if (!luaL_callmeta(L, 1, "__tostring"))  /* try its 'tostring' metamethod */
+      lua_pushliteral(L, "(no error message)");
+  }
+  return 1;
+}
+
+static int lua_docall(lua_State *L, int narg, int nres) {
+  int status;
+  int base = lua_gettop(L) - narg;  /* function index */
+  lua_pushcfunction(L, lua_traceback);  /* push traceback function */
+  lua_insert(L, base);  /* put it under chunk and args */
+  status = lua_pcall(L, narg, nres, base);
+  lua_remove(L, base);  /* remove traceback function */
+  return status;
+}
+
 void lua_call_or_die(lua_State *L, int nargs, int nresults) {
-	if (lua_pcall(L, nargs, nresults, 0)) {
+	if (lua_docall(L, nargs, nresults)) {
 		error("%s", lua_tostring(L, -1));
 		exit(-1);
 	}
 }
 
 void lua_dofile_or_die(lua_State *L, char *fname) {
-	if (luaL_dofile(L, fname)) {
-		error("%s", lua_tostring(L, -1));
+	int r = luaL_loadfile(L, fname);
+	if (r) {
+		if (r == LUA_ERRFILE) 
+			error("'%s' open failed", fname);
+		else if (r == LUA_ERRSYNTAX) 
+			error("'%s' has syntax error", fname);
+		else 
+			error("'%s' has unknown error", fname);
 		exit(-1);
 	}
+	lua_call_or_die(L, 0, LUA_MULTRET);
 }
 
 void utils_init(lua_State *L, uv_loop_t *loop) {

@@ -10,17 +10,11 @@
 #include "upnp_device.h"
 #include "upnp_util.h"
 
-static int volup(lua_State *L) {
-	info("call");
-	lua_pushnumber(L, 1);
-	return 1;
-}
-
 typedef struct {
 	strbuf_t *sb;
 } proc_t;
 
-static uv_buf_t alloc_buffer(uv_handle_t *h, size_t len) {
+static uv_buf_t read_alloc_buffer(uv_handle_t *h, size_t len) {
 	proc_t *p = (proc_t *)h->data;
 	strbuf_ensure_empty_length(p->sb, len);
 	return uv_buf_init(p->sb->buf, len);
@@ -28,6 +22,7 @@ static uv_buf_t alloc_buffer(uv_handle_t *h, size_t len) {
 
 static void pipe_read(uv_stream_t *st, ssize_t nread, uv_buf_t buf) {
 	proc_t *p = (proc_t *)((uv_handle_t *)st)->data;
+	info("n=%d", nread);
 	if (nread > 0)
 		strbuf_append_mem(p->sb, buf.base, buf.len);
 }
@@ -42,38 +37,46 @@ static void proc_on_exit(uv_process_t *puv, int stat, int sig) {
 	free(p);
 }
 
+static void shutdown_done(uv_shutdown_t *s, int stat) {
+	info("done");
+}
+
+static void pipe_write_done(uv_write_t *w, int stat) {
+	uv_shutdown_t *s = malloc(sizeof(uv_shutdown_t));
+	uv_shutdown(s, w->handle, shutdown_done);
+}
+
 static void test_uv_subprocess() {
 	info("starts");
 
 	lua_State *L = luaL_newstate();
 	luaL_openlibs(L);
-	lua_register(L, "volup", volup);
-	lua_getglobal(L, "volup");
-	lua_pcall(L, 0, 1, 0);
 
 	uv_loop_t *loop = uv_loop_new();
-
-	uv_pipe_t pipe = {};
-	uv_pipe_init(loop, &pipe, 0);
-	uv_pipe_open(&pipe, 0);
 
 	proc_t *p = (proc_t *)malloc(sizeof(proc_t));
 	p->sb = strbuf_new(4096);
 
 	uv_process_t *puv = (uv_process_t *)malloc(sizeof(uv_process_t));
 	memset(puv, 0, sizeof(uv_process_t));
-
 	puv->data = p;
-	pipe.data = p;
+
+	uv_pipe_t pipe[2] = {};
+	uv_pipe_init(loop, &pipe[0], 0);
+	uv_pipe_open(&pipe[0], 0);
+	pipe[0].data = p;
+	uv_pipe_init(loop, &pipe[1], 0);
+	uv_pipe_open(&pipe[1], 0);
+	pipe[1].data = p;
 
 	uv_process_options_t opts = {};
 	uv_stdio_container_t stdio[3] = {
-		{.flags = UV_IGNORE},
-		{.flags = UV_CREATE_PIPE|UV_READABLE_PIPE, .data.stream = (uv_stream_t *)&pipe},
+		{.flags = UV_CREATE_PIPE|UV_READABLE_PIPE, .data.stream = (uv_stream_t *)&pipe[0]},
+		{.flags = UV_CREATE_PIPE|UV_READABLE_PIPE, .data.stream = (uv_stream_t *)&pipe[1]},
 		{.flags = UV_IGNORE},
 	};
 
-	char *args[] = {"echo", "hello world", NULL};
+	char *args[] = {"cat", NULL};
 	opts.file = args[0];
 	opts.args = args;
 	opts.stdio = stdio;
@@ -83,9 +86,14 @@ static void test_uv_subprocess() {
 	int r = uv_spawn(loop, puv, opts);
 	info("spawn=%d", r);
 
-	uv_read_start((uv_stream_t *)&pipe, alloc_buffer, pipe_read);
+	uv_write_t w = { .data = &pipe[1] };
+
+	uv_buf_t buf = { .base = "hello world", .len = 12 };
+	uv_write(&w, (uv_stream_t *)&pipe[0], &buf, 1, pipe_write_done);
+	uv_read_start((uv_stream_t *)&pipe[1], read_alloc_buffer, pipe_read);
 
 	uv_run(loop, UV_RUN_DEFAULT);
+	info("exits");
 }
 
 static void send_async_before(uv_async_t *h, int stat) {
@@ -240,6 +248,7 @@ static void test_buggy_call() {
 }
 
 void run_hello(int i) {
+	i -= 100;
 	info("run hello world #%d", i);
 	if (i == 1)
 		test_uv_send_async_before_run_loop();
@@ -253,14 +262,11 @@ void run_hello(int i) {
 		test_pthread_call_luv();
 	if (i == 6)
 		test_buggy_call();
-}
-
-static void test_set_timeout() {
+	if (i == 7)
+		test_uv_subprocess();
 }
 
 void run_test_c(int i, lua_State *L, uv_loop_t *loop) {
-	if (i == 1) 
-		test_set_timeout();
 }
 
 void run_test_lua(int i, lua_State *L, uv_loop_t *loop) {
