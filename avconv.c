@@ -63,11 +63,13 @@ static void proc_on_exit(uv_process_t *puv, int stat, int sig) {
 	if (av->on_exit)
 		av->on_exit(av);
 
+	if (av->on_free)
+		av->on_free(av);
+
 	uv_close((uv_handle_t *)puv, handle_free);
 }
 
 void avconv_start(uv_loop_t *loop, avconv_t *av, char *fname) {
-	info("fname=%s", fname);
 
 	uv_process_t *puv = (uv_process_t *)zalloc(sizeof(uv_process_t));
 	puv->data = av;
@@ -106,7 +108,8 @@ void avconv_start(uv_loop_t *loop, avconv_t *av, char *fname) {
 	} 
 
 	int r = uv_spawn(loop, puv, opts);
-	info("spawn=%d", r);
+	av->pid = puv->pid;
+	info("cmd=%s spawn=%d pid=%d", fname, r, av->pid);
 
 	uv_read_start((uv_stream_t *)av->pipe[0], data_alloc_buffer, data_pipe_read);
 	uv_read_start((uv_stream_t *)av->pipe[1], probe_alloc_buffer, probe_pipe_read);
@@ -126,5 +129,6 @@ void avconv_stop(avconv_t *av) {
 	kill(av->pid, 9);
 	av->on_read_done = NULL;
 	av->on_probed = NULL;
+	av->on_exit = NULL;
 }
 

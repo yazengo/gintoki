@@ -11,6 +11,7 @@ typedef struct avconv_s {
 	void (*on_probed)(struct avconv_s *);
 	void (*on_read_done)(struct avconv_s *, int);
 	void (*on_exit)(struct avconv_s *);
+	void (*on_free)(struct avconv_s *);
 	int pid;
 	void *data;
 	uv_pipe_t *pipe[2];
