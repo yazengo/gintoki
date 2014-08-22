@@ -11,7 +11,7 @@ ldflags = -g -luv -lm -lavcodec -lavutil -lavformat -lavdevice
 ldflags-x86 = $(shell pkg-config --libs libupnp lua5.2) $(ldflags)
 ldflags-mips = -L deps_mips/lib -L $(sysroot-mips)/lib  $(ldflags) -llua -pthread -lupnp -lthreadutil -lixml -lrt 
 
-objs = utils.o main.o audio_out.o strbuf.o upnp_device.o upnp_util.o hello.o \
+objs = utils.o main.o avconv.o audio_out.o audio_out_test.o strbuf.o upnp_device.o upnp_util.o hello.o \
 	lua_cjson.o lua_cjson_fpconv.o
 objs-mips = $(subst .o,-mips.o,$(objs))
 objs-x86 = $(subst .o,-x86.o,$(objs))

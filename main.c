@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (hello >= 100 && hello < 200) {
-		run_hello(hello);
+		run_hello(hello-100);
 		return 0;
 	}
 

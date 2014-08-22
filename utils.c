@@ -85,12 +85,18 @@ typedef struct {
 	pthread_mutex_t lock;
 } pcall_luv_t;
 
+static void pcall_luv_end(uv_handle_t *h) {
+	free(h);
+}
+
 static void pcall_luv_wrap(uv_async_t *as, int _) {
 	pcall_luv_t *p = (pcall_luv_t *)as->data;
 
 	p->cb(p->L, p->cb_p);
 
 	pthread_mutex_unlock(&p->lock);
+
+	uv_close((uv_handle_t *)as, pcall_luv_end);
 }
 
 void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_p) {
@@ -100,10 +106,10 @@ void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_
 	};
 	pthread_mutex_lock(&p.lock);
 
-	uv_async_t as;
-	uv_async_init(loop, &as, pcall_luv_wrap);
-	as.data = &p;
-	uv_async_send(&as);
+	uv_async_t *as = (uv_async_t *)malloc(sizeof(uv_async_t));
+	uv_async_init(loop, as, pcall_luv_wrap);
+	as->data = &p;
+	uv_async_send(as);
 
 	pthread_mutex_lock(&p.lock);
 	pthread_mutex_destroy(&p.lock);
@@ -132,6 +138,10 @@ static int pcall_luv_v2_done(lua_State *L) {
 	return 0;
 }
 
+static void pcall_luv_v2_end(uv_handle_t *h) {
+	free(h);
+}
+
 static void pcall_luv_v2_wrap(uv_async_t *as, int _) {
 	pcall_luv_v2_t *p = (pcall_luv_v2_t *)as->data;
 
@@ -142,6 +152,8 @@ static void pcall_luv_v2_wrap(uv_async_t *as, int _) {
 	p->on_start(p->L, p->cb_p);
 
 	lua_pop(p->L, 1);
+
+	uv_close((uv_handle_t *)as, pcall_luv_v2_end);
 }
 
 void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, luv_cb_t on_start, luv_cb_t on_done, void *cb_p) {
@@ -153,10 +165,10 @@ void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, luv_cb_t on_start, 
 	};
 	pthread_mutex_lock(&p.lock);
 
-	uv_async_t as;
-	uv_async_init(loop, &as, pcall_luv_v2_wrap);
-	as.data = &p;
-	uv_async_send(&as);
+	uv_async_t *as = (uv_async_t *)malloc(sizeof(uv_async_t));
+	uv_async_init(loop, as, pcall_luv_v2_wrap);
+	as->data = &p;
+	uv_async_send(as);
 
 	pthread_mutex_lock(&p.lock);
 	pthread_mutex_destroy(&p.lock);
@@ -277,5 +289,15 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 
 	lua_pushcfunction(L, info_lua);
 	lua_setglobal(L, "info");
+}
+
+void *zalloc(int len) {
+	void *p = malloc(len);
+	if (p == NULL) {
+		error("no memory");
+		exit(-1);
+	}
+	memset(p, 0, len);
+	return p;
 }
 

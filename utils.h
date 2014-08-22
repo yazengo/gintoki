@@ -10,7 +10,7 @@ enum {
 	LOG_ERROR,
 };
 
-#define log(fmt, args...) _log(LOG_DEBUG, __func__, __FILE__, __LINE__, fmt, ##args) 
+#define debug(fmt, args...) _log(LOG_DEBUG, __func__, __FILE__, __LINE__, fmt, ##args) 
 #define info(fmt, args...) _log(LOG_INFO, __func__, __FILE__, __LINE__, fmt, ##args) 
 #define warn(fmt, args...) _log(LOG_WARN, __func__, __FILE__, __LINE__, fmt, ##args) 
 #define error(fmt, args...) _log(LOG_ERROR, __func__, __FILE__, __LINE__, fmt, ##args) 
@@ -31,4 +31,6 @@ void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_
 
 void lua_dofile_or_die(lua_State *L, char *fname);
 void lua_call_or_die(lua_State *L, int nargs, int nresults);
+
+void *zalloc(int len);
 

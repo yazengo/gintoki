@@ -44,38 +44,56 @@ audio.play(radio.cursong())
 
 --]]
 
-local list = {
-	{stat='buffering', position=0},
-	{stat='playing', position=0},
-	{stat='paused', position=3},
-	{stat='playing', position=3},
+local L = {}
+
+L.list = {
+	{stat='buffering', position=0, i=0, t=3000},
+	{stat='playing', position=0, i=0, t=3000},
+	{stat='paused', position=3, i=0, t=3000},
+	{stat='playing', position=3, i=0, t=3000},
+
+	{stat='buffering', position=0, i=1, t=3000},
+	{stat='playing', position=0, i=1, t=3000},
+	{stat='paused', position=3, i=1, t=3000},
+	{stat='playing', position=3, i=1, t=3000},
+
+	{stat='buffering', position=0, i=2, t=3000},
+	{stat='playing', position=0, i=2, t=3000},
+	{stat='paused', position=3, i=2, t=3000},
+	{stat='playing', position=3, i=2, t=7000},
+
+	{stat='fetching'},
 }
-local list_i = 0
-local song_i = 0
+L.i = 0
+L.next = function () 
+	if L.i >= table.maxn(L.list) then
+		return
+	end
+
+	local l = L.list[L.i+1]
+	local song = {}
+
+	if l.i then song = radio.songs[l.i+1] end
+	local p = {['audio.info']=table.add(song, l)}
+
+	L.i = L.i + 1
+	return p, l.t
+end
+
+local timer
 
 local test
 test = function () 
-	local song = radio.songs[song_i+1]
-	local t = list[list_i+1]
-	local p = {['audio.info']=table.add(song, t)}
-
-	info(cjson.encode(p))
-	upnp.notify(p)
-	list_i = list_i + 1
-
-	if list_i >= table.maxn(list) then
-		song_i = song_i + 1
-		list_i = 0
-		if song_i >= table.maxn(radio.songs) then
-			return
-		end
-	end
-	set_timeout(test, 3000)
+	r, tm = L.next()
+	upnp.notify(r)
+	if tm then set_timeout(test, tm) end
 end
 
 upnp.on('subscribe', function ()
 	info('upnp subscribe')
-	set_timeout(test, 3000)
+	L.i = 0
+	clear_timeout(timer)
+	timer = set_timeout(test, 3000)
 	return { ['muno.info']=muno.info(), ['audio.info']=table.add(radio.info(), audio.info()) }
 end)
 

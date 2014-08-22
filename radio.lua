@@ -29,7 +29,7 @@ emitter_init(A)
 A.dur = 0
 A.pos = 0
 
-A.stat = 'stopped'
+A.stat = 'buffering'
 
 A.play = function (song)
 	if A.stat ~= 'stopped' then
@@ -118,7 +118,6 @@ R.songs = {
 	{title='唱支山歌给 K.B.Z 听', artist='邓小平', album='K.B.Z Collection 80s-90s', duration=10, cover_url=urls[3], id='03'},
 }
 R.songs_i = 0
-R.stat = 'playing'
 
 R.cursong = function () 
 	return R.songs[R.songs_i+1]

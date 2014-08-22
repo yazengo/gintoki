@@ -3,8 +3,8 @@
 #include <math.h>
 #include <stdint.h>
 
-#include <utils.h>
-#include <audio_out.h>
+#include "utils.h"
+#include "audio_out.h"
 
 static int16_t buf[44100/3];
 static float freq[] = {
@@ -25,17 +25,19 @@ static void fillbuf(int16_t *buf, int n) {
 	}
 }
 
-static void done(void *_) {
+static void done(audio_out_t *ao) {
 	info("freq %d", freq_i);
 	freq_i++;
 	fillbuf(buf, sizeof(buf)/2);
-	audio_out_play(buf, sizeof(buf), done, NULL);
+	audio_out_play(ao, buf, sizeof(buf), done);
 }
 
-void test_audio_out() {
-	audio_out_init(loop, 44100);
+void test_audio_out(uv_loop_t *loop) {
+	audio_out_t *ao = (audio_out_t *)malloc(sizeof(audio_out_t));
+
+	audio_out_init(loop, ao, 44100);
 
 	fillbuf(buf, sizeof(buf)/2);
-	audio_out_play(buf, sizeof(buf), done, NULL);
+	audio_out_play(ao, buf, sizeof(buf), done);
 }
 

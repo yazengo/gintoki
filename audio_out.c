@@ -1,58 +1,31 @@
 
-#include <sys/soundcard.h>
-#include <libavutil/avutil.h>
-#include <libavformat/avformat.h>
-#include <libavdevice/avdevice.h>
-#include <libavresample/avresample.h>
-#include <libavutil/mathematics.h>
+#include "utils.h"
+#include "audio_out.h"
 
-#include <utils.h>
-#include <audio_out.h>
-
-typedef struct {
-	AVOutputFormat *ofmt;
-	AVFormatContext *fmt_ctx;
-	AVCodec *codec;
-	AVStream *st;
-
-	int fd_oss;
-
-	uv_async_t async_main;
-	uv_async_t async_audio;
-	uv_loop_t *loop_audio;
-
-	void *buf;
-	int size;
-	void (*cb)(void *);
-	void *cb_p;
-} ao_t;
-
-static ao_t _ao, *ao = &_ao;
-
-static void ao_play_oss(void *buf, int size) {
-	log("size %d", size);
+static void play_oss(audio_out_t *ao, void *buf, int size) {
+	debug("size %d", size);
 	write(ao->fd_oss, buf, size);
 }
 
-static void ao_play_libav_alsa(void *buf, int size) {
+static void play_libav_alsa(audio_out_t *ao, void *buf, int size) {
 	AVPacket pkt = {};
 
 	pkt.data = buf;
 	pkt.size = size;
 
-	log("size %d", size);
+	info("size %d", size);
 	ao->ofmt->write_packet(ao->fmt_ctx, &pkt);
 }
 
-void ao_play(void *buf, int size) {
+static void play(audio_out_t *ao, void *buf, int len) {
 #ifdef __mips__
-	ao_play_oss(buf, size);
+	play_oss(ao, buf, len);
 #else
-	ao_play_libav_alsa(buf, size);
+	play_libav_alsa(ao, buf, len);
 #endif
 }
 
-void ao_init_oss(int sample_rate) {
+static void init_oss(audio_out_t *ao, int sample_rate) {
 	int v, r;
 
 	if (ao->fd_oss)
@@ -60,38 +33,39 @@ void ao_init_oss(int sample_rate) {
 
 	ao->fd_oss = open("/dev/dsp", O_WRONLY);
 	if (ao->fd_oss < 0) {
-		log("open dev failed: %s", strerror(errno));
+		debug("open dev failed: %s", strerror(errno));
 		exit(-1);
 	}
 
 	v = AFMT_S16_LE;
 	r = ioctl(ao->fd_oss, SNDCTL_DSP_SETFMT, &v);
 	if (r < 0) {
-		log("ioctl setfmt failed: %s", strerror(errno));
+		debug("ioctl setfmt failed: %s", strerror(errno));
 		exit(-1);
 	}
 
 	v = 2;
 	r = ioctl(ao->fd_oss, SNDCTL_DSP_CHANNELS, &v);
 	if (r < 0) {
-		log("ioctl set channels failed: %s", strerror(errno));
+		debug("ioctl set channels failed: %s", strerror(errno));
 		exit(-1);
 	}
 
 	v = sample_rate;
 	r = ioctl(ao->fd_oss, SNDCTL_DSP_SPEED, &v);
 	if (r < 0) {
-		log("ioctl set speed failed: %s", strerror(errno));
+		debug("ioctl set speed failed: %s", strerror(errno));
 		exit(-1);
 	}
 
 	if (v != sample_rate) {
-		log("driver sample_rate changes: orig=%d ret=%d", sample_rate, v);
+		debug("driver sample_rate changes: orig=%d ret=%d", sample_rate, v);
 		exit(-1);
 	}
 }
 
-static void ao_init_libav_alsa(int sample_rate) {
+static void init_libav_alsa(audio_out_t *ao, int sample_rate) {
+
 	if (ao->fmt_ctx == NULL) {
 		av_register_all();
 		avdevice_register_all();
@@ -101,12 +75,12 @@ static void ao_init_libav_alsa(int sample_rate) {
 
 		const char *drv = "alsa";
 
-		log("open %s samplerate=%d", drv, sample_rate);
+		debug("open %s samplerate=%d", drv, sample_rate);
 
 		ao->ofmt = av_guess_format(drv, NULL, NULL);
 
 		if (ao->ofmt == NULL) {
-			log("ofmt null");
+			debug("ofmt null");
 			exit(-1);
 		}
 	}
@@ -121,45 +95,49 @@ static void ao_init_libav_alsa(int sample_rate) {
 	ao->st->codec->channels = 2;
 
 	int r = ao->ofmt->write_header(ao->fmt_ctx);
-	log("init: %d", r);
-	if (r)
-		exit(r);
+	info("init: %d", r);
+	if (r) {
+		error("init failed");
+		exit(-1);
+	}
 }
 
-void audio_out_play(void *buf, int size, void (*cb)(void *), void *cb_p) {
-	ao->buf = buf;
-	ao->size = size;
-	ao->cb = cb;
-	ao->cb_p = cb_p;
-	uv_async_send(&ao->async_audio);
+// on thread main
+static void play_done(uv_work_t *w, int stat) {
+	audio_out_t *ao = (audio_out_t *)w->data;
+
+	ao->play_buf = NULL;
+	ao->on_play_done(ao);
+	free(w);
 }
 
-static void audio_thread(void *_) {
-	uv_run(ao->loop_audio, UV_RUN_DEFAULT);
+// on thread play
+static void play_thread(uv_work_t *w) {
+	audio_out_t *ao = (audio_out_t *)w->data;
+	play(ao, ao->play_buf, ao->play_len);
 }
 
-static void play_start(uv_async_t *a, int r) {
-	ao_play(ao->buf, ao->size);
-	uv_async_send(&ao->async_main);
+// on thread main
+void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_t *)) {
+	if (ao->play_buf)
+		return;
+
+	ao->play_buf = buf;
+	ao->play_len = len;
+	ao->on_play_done = done;
+
+	uv_work_t *w = (uv_work_t *)zalloc(sizeof(uv_work_t));
+	w->data = ao;
+	uv_queue_work(ao->loop, w, play_thread, play_done);
 }
 
-static void play_done(uv_async_t *a, int r) {
-	ao->cb(ao->cb_p);
-}
-
-void audio_out_init(uv_loop_t *loop_main, int sample_rate) {
-  ao->loop_audio = uv_loop_new();
-
-	uv_async_init(loop_main, &ao->async_main, play_done);
-	uv_async_init(ao->loop_audio, &ao->async_audio, play_start);
-
-	uv_thread_t tid;
-	uv_thread_create(&tid, audio_thread, NULL);
+void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int sample_rate) {
+	ao->loop = loop;
 
 #ifdef __mips__
-	ao_init_oss(sample_rate);
+	init_oss(ao, sample_rate);
 #else
-	ao_init_libav_alsa(sample_rate);
+	init_libav_alsa(ao, sample_rate);
 #endif
 }
 

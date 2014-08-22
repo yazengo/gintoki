@@ -7,8 +7,13 @@
 
 #include "utils.h"
 #include "strbuf.h"
+
 #include "upnp_device.h"
 #include "upnp_util.h"
+
+#include "avconv.h"
+#include "audio_out.h"
+#include "audio_out_test.h"
 
 typedef struct {
 	strbuf_t *sb;
@@ -23,8 +28,19 @@ static uv_buf_t read_alloc_buffer(uv_handle_t *h, size_t len) {
 static void pipe_read(uv_stream_t *st, ssize_t nread, uv_buf_t buf) {
 	proc_t *p = (proc_t *)((uv_handle_t *)st)->data;
 	info("n=%d", nread);
-	if (nread > 0)
+	if (nread > 0) {
+		int end = 0;
+		char *s = (char *)buf.base;
+		int len = buf.len;
+		while (len-- && *s) {
+			if (*s == '\n') { end = 1; break; }
+			s++;
+		}
+		if (end) {
+			info("end");
+		}
 		strbuf_append_mem(p->sb, buf.base, buf.len);
+	}
 }
 
 static void proc_on_exit(uv_process_t *puv, int stat, int sig) {
@@ -46,7 +62,7 @@ static void pipe_write_done(uv_write_t *w, int stat) {
 	uv_shutdown(s, w->handle, shutdown_done);
 }
 
-static void test_uv_subprocess() {
+static void test_uv_subprocess(int hello) {
 	info("starts");
 
 	lua_State *L = luaL_newstate();
@@ -57,40 +73,70 @@ static void test_uv_subprocess() {
 	proc_t *p = (proc_t *)malloc(sizeof(proc_t));
 	p->sb = strbuf_new(4096);
 
-	uv_process_t *puv = (uv_process_t *)malloc(sizeof(uv_process_t));
-	memset(puv, 0, sizeof(uv_process_t));
+	uv_process_t *puv = (uv_process_t *)zalloc(sizeof(uv_process_t));
 	puv->data = p;
 
-	uv_pipe_t pipe[2] = {};
-	uv_pipe_init(loop, &pipe[0], 0);
-	uv_pipe_open(&pipe[0], 0);
-	pipe[0].data = p;
-	uv_pipe_init(loop, &pipe[1], 0);
-	uv_pipe_open(&pipe[1], 0);
-	pipe[1].data = p;
+	int i;
+	uv_pipe_t pipe[3] = {};
+	for (i = 0; i < 3; i++) {
+		uv_pipe_init(loop, &pipe[i], 0);
+		uv_pipe_open(&pipe[i], 0);
+		pipe[i].data = p;
+	}
 
 	uv_process_options_t opts = {};
-	uv_stdio_container_t stdio[3] = {
-		{.flags = UV_CREATE_PIPE|UV_READABLE_PIPE, .data.stream = (uv_stream_t *)&pipe[0]},
-		{.flags = UV_CREATE_PIPE|UV_READABLE_PIPE, .data.stream = (uv_stream_t *)&pipe[1]},
+
+	uv_stdio_container_t stdio_test_echo_fd[16] = {};
+	for (i = 0; i < 16; i++) {
+		uv_stdio_container_t c = { .flags = UV_IGNORE };
+		memcpy(&stdio_test_echo_fd[i], &c, sizeof(c));
+	}
+	{
+		uv_stdio_container_t c = {.flags = UV_CREATE_PIPE, .data.stream = (uv_stream_t *)&pipe[0]};
+		memcpy(&stdio_test_echo_fd[9], &c, sizeof(c));
+	}
+
+	uv_stdio_container_t stdio_test_cat[3] = {
+		{.flags = UV_CREATE_PIPE, .data.stream = (uv_stream_t *)&pipe[0]},
+		{.flags = UV_CREATE_PIPE, .data.stream = (uv_stream_t *)&pipe[1]},
 		{.flags = UV_IGNORE},
 	};
 
-	char *args[] = {"cat", NULL};
+	char *args_test_cat[] = {"cat", NULL};
+	char *args_test_echo_fd[] = {"sh", "-c", "echo {1:3,4:3} >&9; sleep 1000", NULL};
+	char **args;
+
+	if (hello == 7)
+		args = args_test_cat;
+	if (hello == 8)
+		args = args_test_echo_fd;
+
 	opts.file = args[0];
 	opts.args = args;
-	opts.stdio = stdio;
-	opts.stdio_count = 3;
+
+	if (hello == 7) {
+		opts.stdio_count = 3;
+		opts.stdio = stdio_test_cat;
+	}
+	if (hello == 8) {
+		opts.stdio_count = 16;
+		opts.stdio = stdio_test_echo_fd;
+	}
+
 	opts.exit_cb = proc_on_exit;
 
 	int r = uv_spawn(loop, puv, opts);
 	info("spawn=%d", r);
 
-	uv_write_t w = { .data = &pipe[1] };
-
-	uv_buf_t buf = { .base = "hello world", .len = 12 };
-	uv_write(&w, (uv_stream_t *)&pipe[0], &buf, 1, pipe_write_done);
-	uv_read_start((uv_stream_t *)&pipe[1], read_alloc_buffer, pipe_read);
+	if (hello == 7) {
+		uv_write_t w = { .data = &pipe[1] };
+		uv_buf_t buf = { .base = "hello world", .len = 12 };
+		uv_write(&w, (uv_stream_t *)&pipe[0], &buf, 1, pipe_write_done);
+		uv_read_start((uv_stream_t *)&pipe[1], read_alloc_buffer, pipe_read);
+	}
+	if (hello == 8) {
+		uv_read_start((uv_stream_t *)&pipe[0], read_alloc_buffer, pipe_read);
+	}
 
 	uv_run(loop, UV_RUN_DEFAULT);
 	info("exits");
@@ -247,8 +293,27 @@ static void test_buggy_call() {
 	}
 }
 
+static void avconv_read_done(avconv_t *av, int nread) {
+	info("n=%d", nread);
+
+	if (nread < 0) {
+		info("EOF");
+		return;
+	}
+
+	avconv_read(av, av->data, 1024*1024, avconv_read_done);
+}
+
+void test_avconv(uv_loop_t *loop) {
+	avconv_t *av = (avconv_t *)zalloc(sizeof(avconv_t));
+
+	av->data = malloc(1024*1024*1);
+
+	avconv_start(loop, av, "testdata/test.mp3");
+	avconv_read(av, av->data, 1024*1024, avconv_read_done);
+}
+
 void run_hello(int i) {
-	i -= 100;
 	info("run hello world #%d", i);
 	if (i == 1)
 		test_uv_send_async_before_run_loop();
@@ -262,11 +327,63 @@ void run_hello(int i) {
 		test_pthread_call_luv();
 	if (i == 6)
 		test_buggy_call();
-	if (i == 7)
-		test_uv_subprocess();
+	if (i == 7 || i == 8)
+		test_uv_subprocess(i);
+}
+
+typedef struct {
+	avconv_t *av;
+	audio_out_t *ao;
+	void *buf;
+	int len;
+} avconv_ao_test_t;
+
+static void avconv_audio_out_on_data(avconv_t *av, int nread);
+static void avconv_audio_out_play_done(audio_out_t *ao);
+
+static void avconv_audio_out_play_done(audio_out_t *ao) {
+	avconv_ao_test_t *t = (avconv_ao_test_t *)ao->data;
+
+	avconv_read(t->av, t->buf, t->len, avconv_audio_out_on_data);
+}
+
+static void avconv_audio_out_on_data(avconv_t *av, int nread) {
+	avconv_ao_test_t *t = (avconv_ao_test_t *)av->data;
+	if (nread < 0)
+		return;
+	audio_out_play(t->ao, t->buf, t->len, avconv_audio_out_play_done);
+}
+
+static void test_avconv_audio_out(uv_loop_t *loop) {
+	avconv_t *av = (avconv_t *)zalloc(sizeof(avconv_t));
+	audio_out_t *ao = (audio_out_t *)zalloc(sizeof(audio_out_t));
+	avconv_ao_test_t *t = (avconv_ao_test_t *)zalloc(sizeof(avconv_ao_test_t));
+
+	audio_out_init(loop, ao, 44100);
+
+	t->ao = ao;
+	t->av = av;
+
+	av->data = t;
+	ao->data = t;
+
+	t->len = 4096;
+	t->buf = malloc(t->len);
+
+	avconv_start(loop, av, "testdata/test.mp3");
+	avconv_read(av, t->buf, t->len, avconv_audio_out_on_data);
 }
 
 void run_test_c(int i, lua_State *L, uv_loop_t *loop) {
+	info("i=%d", i);
+	if (i == 1)
+		test_avconv(loop);
+	if (i == 2)
+		test_avconv_audio_out(loop);
+	if (i == 3)
+		test_audio_out(loop);
+	if (i == 4)
+		test_avconv_audio_out(loop);
 }
 
 void run_test_lua(int i, lua_State *L, uv_loop_t *loop) {
