@@ -5,7 +5,7 @@
 typedef struct {
 	int32_t rate;
 	float dur;
-} probe_info_t;
+} avconv_probe_t;
 
 typedef struct avconv_s {
 	void (*on_probed)(struct avconv_s *);
@@ -19,8 +19,7 @@ typedef struct avconv_s {
 	void *data_buf;
 	int data_len;
 
-	probe_info_t probe;
-
+	avconv_probe_t probe;
 } avconv_t;
 
 void avconv_start(uv_loop_t *loop, avconv_t *av, char *fname);

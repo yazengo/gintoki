@@ -1,11 +1,18 @@
 
+#include <string.h>
+
 #include <uv.h>
 #include <lua.h>
 
 #include "utils.h"
+#include "ringbuf.h"
+#include "pcm.h"
 #include "avconv.h"
 #include "audio_mixer.h"
 #include "audio_out.h"
+
+#define PLAYBUF_SIZE (1024*4)
+#define TRACKS_NR 2
 
 enum {
 	TRACK_STOPPED,
@@ -17,83 +24,6 @@ enum {
 	TRACK_FADING_OUT,
 };
 
-#define RINGBUF_SIZE (1024*16)
-#define PLAYBUF_SIZE (1024*4)
-#define TRACKS_NR 2
-
-typedef struct {
-	char buf[RINGBUF_SIZE];
-	int head, tail, len;
-} ringbuf_t;
-
-static void ringbuf_clear(ringbuf_t *b) {
-	b->head = b->tail = b->len = 0;
-}
-
-static void ringbuf_data_ahead_get(ringbuf_t *b, void **_buf, int *_len) {
-	int len = RINGBUF_SIZE - b->tail;
-	if (b->len < len)
-		len = b->len;
-	len &= ~1;
-	*_len = len;
-	*_buf = &b->buf[b->tail];
-}
-
-static void ringbuf_space_ahead_get(ringbuf_t *b, void **_buf, int *_len) {
-	int len = RINGBUF_SIZE - b->head;
-	if ((RINGBUF_SIZE - b->len) < len)
-		len = RINGBUF_SIZE - b->len;
-	len &= ~1;
-	*_len = len;
-	*_buf = &b->buf[b->head];
-}
-
-static void ringbuf_push_head(ringbuf_t *b, int len) {
-	b->head = (b->head + len) % RINGBUF_SIZE;
-	b->len += len;
-}
-
-static void ringbuf_push_tail(ringbuf_t *b, int len) {
-	b->tail = (b->head + len) % RINGBUF_SIZE;
-	b->len -= len;
-}
-
-static inline int16_t clip_int16_c(int a) {
-    if ((a+0x8000) & ~0xFFFF) return (a>>31) ^ 0x7FFF;
-    else                      return a;
-}
-
-static void pcm_do_volume(void *_out, int len, float fvol) {
-	int16_t *out = (int16_t *)_out;
-	len /= 2;
-
-	int vol = fvol * 255;
-
-	if (vol == 255)
-		return;
-	if (vol > 255)
-		vol = 255;
-	if (vol <= 0)
-		vol = 0;
-
-	while (len--) {
-		*out = clip_int16_c((*out * vol) >> 8);
-		out++;
-	}
-}
-
-static void pcm_do_mix(void *_out, void *_in, int len) {
-	int16_t *out = (int16_t *)_out;
-	int16_t *in = (int16_t *)_in;
-
-	len /= 2;
-	while (len--) {
-		*out += *in;
-		out++;
-		in++;
-	}
-}
-
 struct audio_mixer_s;
 
 typedef struct {
@@ -102,6 +32,7 @@ typedef struct {
 	int stat;
 	ringbuf_t buf;
 	float vol;
+	avconv_probe_t probe;
 } audio_track_t;
 
 typedef struct audio_mixer_s {
@@ -114,18 +45,45 @@ typedef struct audio_mixer_s {
 	lua_State *L;
 } audio_mixer_t;
 
-/*
-audio.stop = func () {
-}
-audio.pause = func () {
-}
-audio.resume = func () {
-}
-audio.play = func (url) {
-}
-*/
+static void check_all_tracks(audio_mixer_t *am);
 
-static void emit() {
+// audio.emit(arg0, arg1)
+static void audio_emit(audio_mixer_t *am, const char *arg0, const char *arg1) {
+	lua_getglobal(am->L, "audio");
+	lua_getfield(am->L, -1, "emit");
+	lua_remove(am->L, -2);
+
+	lua_pushstring(am->L, arg0);
+	lua_pushstring(am->L, arg1);
+	lua_call_or_die(am->L, 2, 0);
+}
+
+static void lua_call_play_done(audio_mixer_t *am, const char *stat) {
+	char name[64];
+	sprintf(name, "audio_mixer_play_done_%p", am);
+	lua_getglobal(am->L, name);
+
+	if (lua_isnil(am->L, -1)) {
+		lua_pop(am->L, 1);
+		return;
+	}
+
+	lua_pushstring(am->L, stat);
+	lua_call_or_die(am->L, 1, 0);
+
+	lua_pushnil(am->L);
+	lua_setglobal(am->L, name);
+}
+
+static void lua_set_play_done(audio_mixer_t *am) {
+	char name[64];
+	sprintf(name, "audio_mixer_play_done_%p", am);
+	lua_setglobal(am->L, name);
+}
+
+static void lua_pusham(lua_State *L, audio_mixer_t *am) {
+	void *ud = lua_newuserdata(L, sizeof(am));
+	memcpy(ud, &am, sizeof(am));
 }
 
 static audio_mixer_t *lua_getam(lua_State *L) {
@@ -135,20 +93,31 @@ static audio_mixer_t *lua_getam(lua_State *L) {
 	return am;
 }
 
-static void track_change_stat(audio_track_t *tr, int stat) {
-	tr->stat = stat;
-	emit(tr->am, "stat_change");
+static const char *track_stat_str(int stat) {
+	switch (stat) {
+	case TRACK_STOPPED: return "stopped";
+	case TRACK_BUFFERING: return "buffering";
+	case TRACK_PLAYING: return "playing";
+	case TRACK_PAUSED: return "paused";
+	default: return "?";
+	}
 }
 
-static void check_all_tracks(audio_mixer_t *am);
+static float track_get_pos(audio_track_t *tr) {
+	return (float)tr->buf.tailpos / (44100*2*2); // int16_t*2 per sample
+}
+
+static void track_change_stat(audio_track_t *tr, int stat) {
+	tr->stat = stat;
+	audio_emit(tr->am, "stat_change", track_stat_str(tr->stat));
+}
 
 static void avconv_on_exit(avconv_t *av) {
 	audio_track_t *tr = (audio_track_t *)av->data;
 
 	tr->av = NULL;
 	track_change_stat(tr, TRACK_STOPPED);
-
-	emit(tr->am, "done");
+	lua_call_play_done(tr->am, "done");
 }
 
 static void avconv_on_free(avconv_t *av) {
@@ -157,6 +126,8 @@ static void avconv_on_free(avconv_t *av) {
 
 static void avconv_on_probed(avconv_t *av) {
 	audio_track_t *tr = (audio_track_t *)av->data;
+
+	tr->probe = av->probe;
 }
 
 static void avconv_on_read_done(avconv_t *av, int len) {
@@ -230,10 +201,20 @@ static void check_all_tracks(audio_mixer_t *am) {
 	audio_out_play(am->ao, mixbuf, playlen, audio_out_on_play_done);
 }
 
+// audio.play(url, done)
 static int audio_play(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
 	audio_track_t *tr = &am->tracks[0];
-	char *fname = (char *)lua_tostring(L, 1);
+
+	// -1 url
+	if (!lua_isfunction(L, -1))
+		lua_pushnil(L);
+
+	// -1 done
+	// -2 url
+	char *fname = (char *)lua_tostring(L, -2);
+	lua_set_play_done(am);
+	lua_pop(L, 1);
 
 	if (tr->av) {
 		avconv_stop(tr->av);
@@ -241,6 +222,7 @@ static int audio_play(lua_State *L) {
 	}
 
 	ringbuf_clear(&tr->buf);
+	memset(&tr->probe, 0, sizeof(tr->probe));
 
 	tr->am = am;
 	tr->av = (avconv_t *)zalloc(sizeof(avconv_t));
@@ -254,6 +236,25 @@ static int audio_play(lua_State *L) {
 	check_all_tracks(am);
 
 	return 0;
+}
+
+// audio.info() = {duration=123, position=123, stat='playing/paused/stopped/buffering'}
+static int audio_info(lua_State *L) {
+	audio_mixer_t *am = lua_getam(L);
+	audio_track_t *tr = &am->tracks[0];
+
+	lua_newtable(L);
+
+	lua_pushstring(L, track_stat_str(tr->stat));
+	lua_setfield(L, -2, "stat");
+
+	lua_pushnumber(L, (int)tr->probe.dur);
+	lua_setfield(L, -2, "duration");
+
+	lua_pushnumber(L, (int)track_get_pos(tr));
+	lua_setfield(L, -2, "position");
+
+	return 1;
 }
 
 void audio_mixer_init(lua_State *L, uv_loop_t *loop) {
@@ -271,12 +272,23 @@ void audio_mixer_init(lua_State *L, uv_loop_t *loop) {
 	lua_newtable(L);
 	lua_setglobal(L, "audio");
 
+	// emitter_init(audio)
+	lua_getglobal(L, "emitter_init");
+	lua_getglobal(L, "audio");
+	lua_call_or_die(L, 1, 0);
+
 	// audio.play = [native function]
 	lua_getglobal(L, "audio");
-	void *ud = lua_newuserdata(L, sizeof(am));
-	memcpy(ud, &am, sizeof(am));
+	lua_pusham(L, am);
 	lua_pushcclosure(L, audio_play, 1);
 	lua_setfield(L, -2, "play");
+	lua_pop(L, 1);
+
+	// audio.info = [native function]
+	lua_getglobal(L, "audio");
+	lua_pusham(L, am);
+	lua_pushcclosure(L, audio_info, 1);
+	lua_setfield(L, -2, "info");
 	lua_pop(L, 1);
 }
 

@@ -339,9 +339,9 @@ typedef struct {
 } avconv_ao_test_t;
 
 static void avconv_audio_out_on_data(avconv_t *av, int nread);
-static void avconv_audio_out_play_done(audio_out_t *ao);
+static void avconv_audio_out_play_done(audio_out_t *ao, int len);
 
-static void avconv_audio_out_play_done(audio_out_t *ao) {
+static void avconv_audio_out_play_done(audio_out_t *ao, int len) {
 	avconv_ao_test_t *t = (avconv_ao_test_t *)ao->data;
 
 	avconv_read(t->av, t->buf, t->len, avconv_audio_out_on_data);

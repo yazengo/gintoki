@@ -25,7 +25,7 @@ static void fillbuf(int16_t *buf, int n) {
 	}
 }
 
-static void done(audio_out_t *ao) {
+static void done(audio_out_t *ao, int len) {
 	info("freq %d", freq_i);
 	freq_i++;
 	fillbuf(buf, sizeof(buf)/2);

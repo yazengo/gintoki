@@ -45,7 +45,7 @@ static void data_pipe_read(uv_stream_t *st, ssize_t nread, uv_buf_t buf) {
 
 	uv_read_stop(st);
 
-	info("n=%d", nread);
+	//info("n=%d", nread);
 	if (nread < 0)
 		uv_close((uv_handle_t *)st, handle_free);
 	

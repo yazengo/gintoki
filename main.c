@@ -42,9 +42,9 @@ int main(int argc, char *argv[]) {
 	luaopen_cjson_safe(L);
 
 	utils_init(L, loop);
-	audio_mixer_init(L, loop);
-
 	lua_dofile_or_die(L, "utils.lua");
+
+	audio_mixer_init(L, loop);
 	//lua_dofile_or_die(L, "radio.lua");
 
 	if (hello >= 200 && hello < 300) {
