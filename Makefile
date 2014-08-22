@@ -2,7 +2,7 @@
 cflags = -I.
 ldflags = -g -luv -lm -lao
 
-objs = utils.o main.o avconv.o strbuf.o hello.o
+objs = utils.o main.o avconv.o strbuf.o tests.o
 objs += audio_mixer.o audio_out.o audio_out_test.o
 objs += upnp_device.o upnp_util.o  
 objs += lua_cjson.o lua_cjson_fpconv.o

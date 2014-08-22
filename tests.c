@@ -313,7 +313,7 @@ void test_avconv(uv_loop_t *loop) {
 	avconv_read(av, av->data, 1024*1024, avconv_read_done);
 }
 
-void run_hello(int i) {
+void run_test_c_pre(int i) {
 	info("run hello world #%d", i);
 	if (i == 1)
 		test_uv_send_async_before_run_loop();
@@ -374,7 +374,7 @@ static void test_avconv_audio_out(uv_loop_t *loop) {
 	avconv_read(av, t->buf, t->len, avconv_audio_out_on_data);
 }
 
-void run_test_c(int i, lua_State *L, uv_loop_t *loop) {
+void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);
 	if (i == 1)
 		test_avconv(loop);
@@ -384,12 +384,5 @@ void run_test_c(int i, lua_State *L, uv_loop_t *loop) {
 		test_audio_out(loop);
 	if (i == 4)
 		test_avconv_audio_out(loop);
-}
-
-void run_test_lua(int i, lua_State *L, uv_loop_t *loop) {
-	char name[64];
-	sprintf(name, "test_%d.lua", i);
-	info("dofile %s", name);
-	lua_dofile_or_die(L, name);
 }
 
