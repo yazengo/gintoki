@@ -1,6 +1,6 @@
 #pragma once
 
-#define RINGBUF_SIZE (1024*16)
+#define RINGBUF_SIZE (1024*1024)
 
 //    >-------- tailpos ----------- headpos -------> 
 //   head == headpos % RINGBUF_SIZE

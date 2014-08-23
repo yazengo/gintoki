@@ -1,7 +1,9 @@
 
-table.add = function (a,b) 
-	for k,v in pairs(b) do
-		a[k] = v
+table.add = function (a, ...) 
+	for _,t in ipairs{...} do
+		for k,v in pairs(t) do
+			a[k] = v
+		end
 	end
 	return a
 end
@@ -36,4 +38,16 @@ emitter_init = function (t)
 	end
 end
 
+info = function (...) 
+	local s = ''
+	for _, v in ipairs{...} do
+		if type(v) == 'table' then
+			s = s .. cjson.encode(v)
+		else
+			s = s .. v
+		end
+		s = s .. ' '
+	end
+	_info(s)
+end
 

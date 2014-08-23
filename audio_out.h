@@ -18,4 +18,5 @@ typedef struct audio_out_s {
 
 void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int sample_rate);
 void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_t *, int));
+void audio_out_cancel_play(audio_out_t *ao);
 

@@ -1,7 +1,8 @@
 
 #include "ringbuf.h"
+#include "utils.h"
 
-void ringbuf_clear(ringbuf_t *b) {
+void ringbuf_init(ringbuf_t *b) {
 	b->head = b->tail = b->len = 0;
 	b->tailpos = b->headpos = 0;
 }
@@ -25,13 +26,17 @@ void ringbuf_space_ahead_get(ringbuf_t *b, void **_buf, int *_len) {
 }
 
 void ringbuf_push_head(ringbuf_t *b, int len) {
+	if (b->len + len > RINGBUF_SIZE)
+		panic("len %d too big", len);
 	b->head = (b->head + len) % RINGBUF_SIZE;
 	b->len += len;
 	b->headpos += len;
 }
 
 void ringbuf_push_tail(ringbuf_t *b, int len) {
-	b->tail = (b->head + len) % RINGBUF_SIZE;
+	if (b->len - len < 0)
+		panic("len %d too big", len);
+	b->tail = (b->tail + len) % RINGBUF_SIZE;
 	b->len -= len;
 	b->tailpos += len;
 }

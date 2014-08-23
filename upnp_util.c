@@ -218,9 +218,10 @@ char *SampleUtil_GetFirstDocumentItem(IXML_Document *doc, const char *item)
 		} else
 			info("%s(%d): ixmlNodeList_item(nodeList, 0) returned NULL",
 				__FILE__, __LINE__);
-	} else
-		info("%s(%d): Error finding %s in XML Node",
-			__FILE__, __LINE__, item);
+	} else {
+		//info("%s(%d): Error finding %s in XML Node",
+		//	__FILE__, __LINE__, item);
+	}
 
 epilogue:
 	if (nodeList)
@@ -537,9 +538,9 @@ int SampleUtil_FindAndParseService(IXML_Document *DescDoc, const char *location,
 			tempServiceType = SampleUtil_GetFirstElementItem(
 				(IXML_Element *)service, "serviceType");
 			if (tempServiceType && strcmp(tempServiceType, serviceType) == 0) {
-				info("Found service: %s", serviceType);
+				//info("Found service: %s", serviceType);
 				*serviceId = SampleUtil_GetFirstElementItem(service, "serviceId");
-				info("serviceId: %s", *serviceId);
+				//info("serviceId: %s", *serviceId);
 				relcontrolURL = SampleUtil_GetFirstElementItem(service, "controlURL");
 				releventURL = SampleUtil_GetFirstElementItem(service, "eventSubURL");
 				*controlURL = malloc(strlen(base) + strlen(relcontrolURL) + 1);
