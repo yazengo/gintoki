@@ -24,6 +24,8 @@ typedef struct avconv_s {
 	void *data_buf;
 	int data_len;
 
+	int fd_closed_nr;
+
 	avconv_probe_parser_t probe_parser;
 } avconv_t;
 

@@ -11,10 +11,6 @@
 #include "avconv.h"
 #include "utils.h"
 
-static void handle_free(uv_handle_t *h) {
-	free(h);
-}
-
 /*
  * ==================== probe data format ====================
   
@@ -58,22 +54,28 @@ static float avconv_durstr_to_float(char *s) {
 	return (float)(hh*3600 + mm*60 + ss) + (float)ms/1e3;
 }
 
-static void parser_got_token(avconv_t *av, avconv_probe_parser_t *p) {
-	//info("token=%s", p->token_buf);
+
+static void parser_get_token(avconv_t *av, avconv_probe_parser_t *p) {
+	static const char *token_durstr = "Duration:";
+
 	if (p->parse_stat == PROBE_WAIT_KEY) {
-		if (strcmp(p->token_buf, "Duration:") == 0) {
+
+		if (strncmp(p->token_buf, token_durstr, strlen(token_durstr)) == 0) {
 			p->key = KEY_DURATION;
 			p->parse_stat = PROBE_WAIT_VAL_1_1;
 		}
+
 	} else if (p->parse_stat == PROBE_WAIT_VAL_1_1) {
+
 		if (p->key == KEY_DURATION && !p->got_dur) {
 			float dur = avconv_durstr_to_float(p->token_buf);
-			//info("durstr=%s", p->token_buf);
-			av->on_probe(av, "dur", &dur);
+			if (av->on_probe)
+				av->on_probe(av, "dur", &dur);
 			p->got_dur++;
 		}
 		p->key = 0;
 		p->parse_stat = PROBE_WAIT_KEY;
+
 	}
 }
 
@@ -84,7 +86,7 @@ static void parser_eat(avconv_t *av, avconv_probe_parser_t *p, void *buf, int le
 		if (isspace(*s)) {
 			if (p->token_stat == TOKEN_READING) {
 				p->token_buf[p->token_len] = 0;
-				parser_got_token(av, p);
+				parser_get_token(av, p);
 				p->token_len = 0;
 				p->token_stat = TOKEN_SPACING;
 			}
@@ -98,6 +100,21 @@ static void parser_eat(avconv_t *av, avconv_probe_parser_t *p, void *buf, int le
 	}
 }
 
+static void handle_free(uv_handle_t *h) {
+	avconv_t *av = (avconv_t *)h->data;
+	free(h);
+
+	av->fd_closed_nr++;
+	info("closed_nr=%d", av->fd_closed_nr);
+
+	if (av->fd_closed_nr == 2) {
+		if (av->on_exit)
+			av->on_exit(av);
+		if (av->on_free)
+			av->on_free(av);
+	}
+}
+
 static uv_buf_t probe_alloc_buffer(uv_handle_t *h, size_t len) {
 	avconv_t *av = (avconv_t *)h->data;
 	return uv_buf_init(av->probe_parser.buf, sizeof(av->probe_parser.buf));
@@ -107,6 +124,7 @@ static void probe_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	avconv_t *av = (avconv_t *)st->data;
 
 	if (n < 0) {
+		info("n < 0");
 		uv_close((uv_handle_t *)st, handle_free);
 		return;
 	}
@@ -120,33 +138,24 @@ static uv_buf_t data_alloc_buffer(uv_handle_t *h, size_t len) {
 	return uv_buf_init(av->data_buf, av->data_len);
 }
 
-static void data_pipe_read(uv_stream_t *st, ssize_t nread, uv_buf_t buf) {
+static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	avconv_t *av = (avconv_t *)st->data;
 
+	if (n < 0) {
+		info("n < 0");
+		uv_close((uv_handle_t *)st, handle_free);
+		return;
+	}
+	
 	uv_read_stop(st);
 
-	//info("n=%d", nread);
-	if (nread < 0)
-		uv_close((uv_handle_t *)st, handle_free);
-	
 	av->data_buf = NULL;
-
 	if (av->on_read_done)
-		av->on_read_done(av, nread);
+		av->on_read_done(av, n);
 }
 
 static void proc_on_exit(uv_process_t *puv, int stat, int sig) {
-	avconv_t *av = (avconv_t *)puv->data;
-
 	info("sig=%d", sig);
-
-	if (av->on_exit)
-		av->on_exit(av);
-
-	if (av->on_free)
-		av->on_free(av);
-
-	uv_close((uv_handle_t *)puv, handle_free);
 }
 
 void avconv_start(uv_loop_t *loop, avconv_t *av, char *fname) {
@@ -181,17 +190,17 @@ void avconv_start(uv_loop_t *loop, avconv_t *av, char *fname) {
 	av->pid = puv->pid;
 	info("cmd=%s spawn=%d pid=%d", fname, r, av->pid);
 
-	uv_read_start((uv_stream_t *)av->pipe[0], data_alloc_buffer, data_pipe_read);
 	uv_read_start((uv_stream_t *)av->pipe[1], probe_alloc_buffer, probe_pipe_read);
-	uv_read_stop((uv_stream_t *)av->pipe[0]);
 }
 
 void avconv_read(avconv_t *av, void *buf, int len, void (*done)(avconv_t *, int)) {
 	if (av->data_buf)
 		return;
+
 	av->data_buf = buf;
 	av->data_len = len;
 	av->on_read_done = done;
+
 	uv_read_start((uv_stream_t *)av->pipe[0], data_alloc_buffer, data_pipe_read);
 }
 

@@ -336,7 +336,6 @@ static int ttyraw_open(lua_State *L) {
 void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p) {
 	char name[128];
 	sprintf(name, "%s_%p", pref, p);
-	info("-1 is nil: %d", lua_isnil(L, -1));
 	lua_setglobal(L, name);
 	lua_pushstring(L, name);
 }
