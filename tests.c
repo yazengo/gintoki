@@ -4,6 +4,7 @@
 #include <uv.h>
 #include <lua.h>
 #include <lauxlib.h>
+#include <lualib.h>
 
 #include "utils.h"
 #include "strbuf.h"
@@ -11,6 +12,7 @@
 #include "upnp_device.h"
 #include "upnp_util.h"
 
+#include "lua_cjson.h"
 #include "avconv.h"
 #include "audio_out.h"
 #include "audio_out_test.h"

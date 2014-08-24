@@ -1,7 +1,7 @@
 
 #include "ringbuf.h"
 
-void ringbuf_clear(ringbuf_t *b) {
+void ringbuf_init(ringbuf_t *b) {
 	b->head = b->tail = b->len = 0;
 	b->tailpos = b->headpos = 0;
 }

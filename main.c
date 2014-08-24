@@ -3,12 +3,14 @@
 #include <uv.h>
 #include <lua.h>
 #include <lauxlib.h>
+#include <lualib.h>
 
 #include "tests.h"
 #include "utils.h"
 #include "strbuf.h"
+#include "lua_cjson.h"
 #include "upnp_device.h"
-#include "upnp_util.h"
+#include "audio_mixer.h"
 
 static void usage(char *prog) {
 	fprintf(stderr, "Usage: %s\n", prog);

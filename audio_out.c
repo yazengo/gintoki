@@ -18,7 +18,6 @@ static void play_thread(uv_work_t *w) {
 	audio_out_t *ao = (audio_out_t *)w->data;
 
 	ao_play(ao->aodev, ao->play_buf, ao->play_len);
-	//play(ao, ao->play_buf, ao->play_len);
 }
 
 // on thread main

@@ -33,8 +33,8 @@ static void done(audio_out_t *ao, int len) {
 }
 
 void test_audio_out(uv_loop_t *loop) {
-	audio_out_t *ao = (audio_out_t *)malloc(sizeof(audio_out_t));
-
+	audio_out_t *ao = (audio_out_t *)zalloc(sizeof(audio_out_t));
+	info("init");
 	audio_out_init(loop, ao, 44100);
 
 	fillbuf(buf, sizeof(buf)/2);

@@ -221,7 +221,7 @@ static int audio_play(lua_State *L) {
 		tr->av = NULL;
 	}
 
-	ringbuf_clear(&tr->buf);
+	ringbuf_init(&tr->buf);
 	memset(&tr->probe, 0, sizeof(tr->probe));
 
 	tr->am = am;

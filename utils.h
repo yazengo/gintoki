@@ -30,3 +30,5 @@ void lua_call_or_die(lua_State *L, int nargs, int nresults);
 
 void *zalloc(int len);
 
+void utils_init(lua_State *L, uv_loop_t *loop);
+
