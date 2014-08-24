@@ -28,12 +28,14 @@ cflags-mips = $(cflags) -Ideps_mips/include/ -I$(sysroot-mips)/include/upnp
 ldflags-mips = -L deps_mips/lib -L $(sysroot-mips)/lib  $(ldflags) -llua -pthread -lupnp -lthreadutil -lixml -lrt 
 ldflags-mips += -lavcodec -lavutil -lavformat -lavdevice 
 
+hfiles = $(wildcard *.h)
+
 all: server-x86
 
 %-x86.o: %.c
 	$(CC) $(cflags-x86) -c -o $@ $<
 
-%-darwin.o: %.c
+%-darwin.o: %.c $(hfiles)
 	$(CC) $(cflags-darwin) -c -o $@ $<
 
 %-mips.o: %.c

@@ -14,14 +14,14 @@
 
 static void usage(char *prog) {
 	fprintf(stderr, "Usage: %s\n", prog);
-	fprintf(stderr, "   -test-c 101                      run C test #101              \n");
-	fprintf(stderr, "   -test-lua a.lua b.lua ...        run lua test one by one      \n");
+	fprintf(stderr, "   -test-c 101                      run C test #101          \n");
+	fprintf(stderr, "   -run a.lua b.lua ...             run lua script one by one\n");
 	exit(-1);
 }
 
 int main(int argc, char *argv[]) {
 	int test_c = -1;
-	char **test_lua = NULL;
+	char **run_lua = NULL;
 
 	int i;
 	for (i = 1; i < argc; i++) {
@@ -31,9 +31,9 @@ int main(int argc, char *argv[]) {
 			sscanf(argv[i+1], "%d", &test_c);
 			break;
 		}
-		if (!strcmp(argv[i], "-test-lua")) {
+		if (!strcmp(argv[i], "-run")) {
 			if (i+1 >= argc) usage(argv[0]);
-			test_lua = &argv[i+1];
+			run_lua = &argv[i+1];
 			break;
 		}
 	}
@@ -60,22 +60,17 @@ int main(int argc, char *argv[]) {
 	audio_mixer_init(L, loop);
 	upnp_init(L, loop);
 
-	lua_dofile_or_die(L, "radio.lua");
-
 	if (test_c >= 200 && test_c < 300) {
 		run_test_c_post(test_c-200, L, loop);
 		return uv_run(loop, UV_RUN_DEFAULT);
 	}
 
-	if (test_lua) {
-		while (*test_lua) {
-			lua_dofile_or_die(L, *test_lua);
-			test_lua++;
+	if (run_lua) {
+		while (*run_lua) {
+			lua_dofile_or_die(L, *run_lua);
+			run_lua++;
 		}
-		return uv_run(loop, UV_RUN_DEFAULT);
 	}
-
-	lua_dofile_or_die(L, "main.lua");
 
 	return uv_run(loop, UV_RUN_DEFAULT);
 }

@@ -38,14 +38,14 @@ end
 
 R.next = function ()
 	info('radio next')
-	R.playlist.next()
-	R.emit('play', R.cursong())
+	local song = R.playlist.next()
+	if song then R.emit('play', song) end
 end
 
 R.prev = function ()
 	info('radio prev')
-	R.playlist.prev()
-	R.emit('play', R.cursong())
+	local song = R.playlist.prev()
+	if song then R.emit('play', song) end
 end
 
 radio = R

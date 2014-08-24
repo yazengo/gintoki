@@ -22,8 +22,9 @@ static void play_thread(uv_work_t *w) {
 
 // on thread main
 void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_t *, int)) {
-	if (ao->play_buf)
+	if (ao->play_buf) {
 		return;
+	}
 
 	ao->play_buf = buf;
 	ao->play_len = len;

@@ -31,7 +31,7 @@ void ringbuf_push_head(ringbuf_t *b, int len) {
 }
 
 void ringbuf_push_tail(ringbuf_t *b, int len) {
-	b->tail = (b->head + len) % RINGBUF_SIZE;
+	b->tail = (b->tail + len) % RINGBUF_SIZE;
 	b->len -= len;
 	b->tailpos += len;
 }

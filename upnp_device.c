@@ -255,7 +255,7 @@ int PlayerDeviceStart(
 	int ret = UPNP_E_SUCCESS;
 	char desc_doc_url[DESC_URL_SIZE];
 
-	info("init start ip=%s port=%u", ip, port);
+	//info("init start ip=%s port=%u", ip, port);
 	ret = UpnpInit(ip, port);
 	if (ret != UPNP_E_SUCCESS) {
 		warn("UpnpInit failed: %d", ret);
@@ -266,7 +266,7 @@ int PlayerDeviceStart(
 
 	ip = UpnpGetServerIpAddress();
 	port = UpnpGetServerPort();
-	info("init done ip=%s port=%u", ip, port);
+	//info("init done ip=%s port=%u", ip, port);
 
 	if (!desc_doc_name) {
 		if (combo) {
@@ -277,12 +277,12 @@ int PlayerDeviceStart(
 		}
 	}
 
-	web_dir_path = getenv("UPNP_WEB_DIR");
+	web_dir_path = getenv("UPNP_WEBROOT");
 	if (web_dir_path == NULL) 
 		web_dir_path = "/usr/app/web";
 
 	snprintf(desc_doc_url, DESC_URL_SIZE, "http://%s:%d/%s", ip, port, desc_doc_name);
-	info("webroot=%s", web_dir_path);
+	//info("webroot=%s", web_dir_path);
 
 	ret = UpnpSetWebServerRootDir(web_dir_path);
 	if (ret != UPNP_E_SUCCESS) {
@@ -291,7 +291,7 @@ int PlayerDeviceStart(
 		return ret;
 	}
 
-	info("desc_doc_url=%s", desc_doc_url);
+	//info("desc_doc_url=%s", desc_doc_url);
 	ret = UpnpRegisterRootDevice(desc_doc_url, PlayerDeviceCallbackEventHandler, &upnp->h, &upnp->h);
 	if (ret != UPNP_E_SUCCESS) {
 		warn("UpnpRegisterRootDevice failed: %d", ret);
@@ -299,7 +299,7 @@ int PlayerDeviceStart(
 		return ret;
 	}
 	
-	info("dev reg ok");
+	//info("dev reg ok");
 	PlayerDeviceStateInit(desc_doc_url);
 
 	ret = UpnpSendAdvertisement(upnp->h, DEFAULT_ADVR_EXPIRE);
@@ -309,7 +309,7 @@ int PlayerDeviceStart(
 		return ret;
 	}
 
-	info("adv sent");
+	info("upnp init ok");
 	return UPNP_E_SUCCESS;
 }
 
