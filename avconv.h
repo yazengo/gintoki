@@ -18,6 +18,8 @@ typedef struct avconv_s {
 	void (*on_exit)(struct avconv_s *);
 	void (*on_free)(struct avconv_s *);
 
+	int closed_nr;
+
 	int pid;
 	void *data;
 

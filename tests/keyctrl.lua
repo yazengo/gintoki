@@ -2,7 +2,7 @@
 require('localmusic')
 require('radio')
 
-radio.on('play', function (song) 
+radio.play = function (song) 
 	info('play', song)
 	audio.play{
 		url = song.url,
@@ -11,9 +11,9 @@ radio.on('play', function (song)
 			radio.next()
 		end
 	}
-end)
+end
 
-radio.start()
+radio.start(localmusic)
 
 ttyraw_open(function (key)
 	if key == 'n' then

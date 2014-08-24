@@ -100,18 +100,21 @@ static void parser_eat(avconv_t *av, avconv_probe_parser_t *p, void *buf, int le
 	}
 }
 
-static void pipe_handle_free(uv_handle_t *h) {
-	avconv_t *av = (avconv_t *)h->data;
-	free(h);
-
-	if (av->pipe[0] == NULL && av->pipe[1] == NULL) {
+static void on_handle_close(avconv_t *av) {
+	av->closed_nr++;
+	if (av->closed_nr == 3) {
 		if (av->on_exit)
 			av->on_exit(av);
+		av->on_exit = NULL;
 		if (av->on_free)
 			av->on_free(av);
-		av->on_exit = NULL;
-		av->on_free = NULL;
 	}
+}
+
+static void pipe_handle_free(uv_handle_t *h) {
+	avconv_t *av = (avconv_t *)h->data;
+	on_handle_close(av);
+	free(h);
 }
 
 static uv_buf_t probe_alloc_buffer(uv_handle_t *h, size_t len) {
@@ -123,8 +126,10 @@ static void probe_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	avconv_t *av = (avconv_t *)st->data;
 
 	if (n < 0) {
-		av->pipe[1] = NULL;
-		uv_close((uv_handle_t *)st, pipe_handle_free);
+		if (av->pipe[1]) {
+			uv_close((uv_handle_t *)av->pipe[1], pipe_handle_free);
+			av->pipe[1] = NULL;
+		}
 		return;
 	}
 
@@ -141,8 +146,10 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	avconv_t *av = (avconv_t *)st->data;
 
 	if (n < 0) {
-		av->pipe[0] = NULL;
-		uv_close((uv_handle_t *)st, pipe_handle_free);
+		if (av->pipe[0]) {
+			uv_close((uv_handle_t *)av->pipe[0], pipe_handle_free);
+			av->pipe[0] = NULL;
+		}
 		return;
 	}
 	
@@ -154,6 +161,8 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 }
 
 static void proc_handle_free(uv_handle_t *h) {
+	avconv_t *av = (avconv_t *)h->data;
+	on_handle_close(av);
 	free(h);
 }
 
@@ -163,6 +172,7 @@ static void proc_on_exit(uv_process_t *proc, int stat, int sig) {
 	info("sig=%d", sig);
 
 	uv_close((uv_handle_t *)proc, proc_handle_free);
+	av->proc = NULL;
 
 	int i;
 	for (i = 0; i < 2; i++) {
@@ -220,9 +230,10 @@ void avconv_read(avconv_t *av, void *buf, int len, void (*done)(avconv_t *, int)
 }
 
 void avconv_stop(avconv_t *av) {
-	uv_process_kill(av->proc, 9);
 	av->on_read_done = NULL;
 	av->on_probe = NULL;
 	av->on_exit = NULL;
+
+	uv_process_kill(av->proc, 9);
 }
 
