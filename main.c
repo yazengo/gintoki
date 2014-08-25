@@ -9,6 +9,7 @@
 #include "utils.h"
 #include "strbuf.h"
 #include "lua_cjson.h"
+#include "lua_curl.h"
 #include "upnp_device.h"
 #include "audio_mixer.h"
 
@@ -60,6 +61,8 @@ int main(int argc, char *argv[]) {
 
 	utils_init(L, loop);
 	lua_dofile_or_die(L, "utils.lua");
+
+	lua_curl_init(L, loop);
 
 	audio_mixer_init(L, loop);
 	upnp_init(L, loop);

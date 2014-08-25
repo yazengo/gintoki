@@ -7,6 +7,7 @@ objs += audio_mixer.o audio_out.o audio_out_test.o
 objs += upnp_device.o upnp_util.o  
 objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
+objs += lua_curl.o
 
 objs-x86 = $(subst .o,-x86.o,$(objs))
 cflags-x86 = $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
@@ -56,6 +57,7 @@ darwin-install-deps:
 	brew install libupnp
 	brew install libuv
 	brew install libao
+	brew install libav
 
 clean:
 	rm -rf *.o server-mips server-x86 server-darwin
