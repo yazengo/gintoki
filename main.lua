@@ -1,17 +1,23 @@
 
+require('localmusic')
+require('radio')
+
 upnp.on('action', function (a)
 	a = a or {}
 	
-	info('upnp action: ' .. cjson.encode(a))
+	info('upnp action', a)
 
 	if a.op == 'audio.volume' then 
-		vol = muno.set_vol(a.value)
+		vol = muno.setvol(a.value)
 		return {result=vol} 
 	elseif a.op == 'audio.next' then
 		radio.next()
 		return {result=0}
 	elseif a.op == 'audio.prev' then
-		radio.next()
+		radio.prev()
+		return {result=0}
+	elseif a.op == 'audio.play_pause_toggle' then
+		audio.pause_resume_toggle()
 		return {result=0}
 	end
 
@@ -19,24 +25,27 @@ upnp.on('action', function (a)
 end)
 
 muno.on('stat_change', function () 
-	info('muno stat change: ' .. cjson.encode(muno.info()))
+	info('muno stat ->', muno.info())
 	upnp.notify{['muno.info']=muno.info()}
 end)
 
 audio.on('stat_change', function ()
-	local r = table.add(audio.info(), radio.info())
-	info('audio stat change: ' .. cjson.encode(r))
+	local ai = audio.info()
+	local ri = radio.info()
+	local r = table.add({}, ai, ri)
+	info('audio stat ->', r)
 	upnp.notify{['audio.info']=r}
 end)
 
-radio.on('play', function () 
-	info(cjson.encode(radio.info()))
-	audio.play(radio.cursong())
+radio.on('play', function (song) 
+	info('play', song)
+	audio.play{
+		url = song.url,
+		done = function () 
+			radio.next()
+		end
+	}
 end)
 
-audio.on('done', function ()
-	radio.next()
-end)
-
-audio.play(radio.cursong())
+radio.start()
 

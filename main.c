@@ -20,6 +20,9 @@ static void usage(char *prog) {
 }
 
 int main(int argc, char *argv[]) {
+
+	utils_preinit();
+
 	int test_c = -1;
 	char **run_lua = NULL;
 
@@ -29,7 +32,8 @@ int main(int argc, char *argv[]) {
 		if (!strcmp(argv[i], "-test-c")) {
 			if (i+1 >= argc) usage(argv[0]);
 			sscanf(argv[i+1], "%d", &test_c);
-			break;
+			i++;
+			continue;
 		}
 		if (!strcmp(argv[i], "-run")) {
 			if (i+1 >= argc) usage(argv[0]);
@@ -62,7 +66,6 @@ int main(int argc, char *argv[]) {
 
 	if (test_c >= 200 && test_c < 300) {
 		run_test_c_post(test_c-200, L, loop);
-		return uv_run(loop, UV_RUN_DEFAULT);
 	}
 
 	if (run_lua) {

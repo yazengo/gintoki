@@ -1,4 +1,5 @@
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -38,7 +39,7 @@ static void handle_free(uv_handle_t *h) {
  */
 
 enum {
-	KEY_DURATION,
+	KEY_DURATION = 1,
 };
 
 enum {
@@ -51,26 +52,38 @@ enum {
 	TOKEN_READING,
 };
 
+static float avconv_durstr_to_float(char *s) {
+	int hh = 0, ss = 0, mm = 0, ms = 0;
+	sscanf(s, "%d:%d:%d.%d", &hh, &mm, &ss, &ms);
+	return (float)(hh*3600 + mm*60 + ss) + (float)ms/1e3;
+}
+
 static void parser_got_token(avconv_t *av, avconv_probe_parser_t *p) {
+	//info("token=%s", p->token_buf);
 	if (p->parse_stat == PROBE_WAIT_KEY) {
-		if (strncmp(p->token_buf, "Duration:", p->token_len) == 0) {
+		if (strcmp(p->token_buf, "Duration:") == 0) {
 			p->key = KEY_DURATION;
 			p->parse_stat = PROBE_WAIT_VAL_1_1;
 		}
 	} else if (p->parse_stat == PROBE_WAIT_VAL_1_1) {
-		p->token_buf[p->token_len] = 0;
-		if (p->key == KEY_DURATION) {
-			av->on_probed(av, "duration", p->token_buf);
+		if (p->key == KEY_DURATION && !p->got_dur) {
+			float dur = avconv_durstr_to_float(p->token_buf);
+			//info("durstr=%s", p->token_buf);
+			av->on_probe(av, "dur", &dur);
+			p->got_dur++;
 		}
+		p->key = 0;
 		p->parse_stat = PROBE_WAIT_KEY;
 	}
 }
 
 static void parser_eat(avconv_t *av, avconv_probe_parser_t *p, void *buf, int len) {
 	char *s = (char *)buf;
+
 	while (len--) {
 		if (isspace(*s)) {
 			if (p->token_stat == TOKEN_READING) {
+				p->token_buf[p->token_len] = 0;
 				parser_got_token(av, p);
 				p->token_len = 0;
 				p->token_stat = TOKEN_SPACING;
@@ -87,7 +100,7 @@ static void parser_eat(avconv_t *av, avconv_probe_parser_t *p, void *buf, int le
 
 static uv_buf_t probe_alloc_buffer(uv_handle_t *h, size_t len) {
 	avconv_t *av = (avconv_t *)h->data;
-	return uv_buf_init((void *)&av->probe_parser.buf, sizeof(av->probe_parser.buf));
+	return uv_buf_init(av->probe_parser.buf, sizeof(av->probe_parser.buf));
 }
 
 static void probe_pipe_read(uv_stream_t *st, ssize_t nread, uv_buf_t buf) {
@@ -98,7 +111,7 @@ static void probe_pipe_read(uv_stream_t *st, ssize_t nread, uv_buf_t buf) {
 		return;
 	}
 
-	parser_eat(av, &av->probe_parser, buf.base, buf.len);
+	parser_eat(av, &av->probe_parser, buf.base, nread);
 }
 
 static uv_buf_t data_alloc_buffer(uv_handle_t *h, size_t len) {
@@ -185,7 +198,7 @@ void avconv_read(avconv_t *av, void *buf, int len, void (*done)(avconv_t *, int)
 void avconv_stop(avconv_t *av) {
 	kill(av->pid, 9);
 	av->on_read_done = NULL;
-	av->on_probed = NULL;
+	av->on_probe = NULL;
 	av->on_exit = NULL;
 }
 

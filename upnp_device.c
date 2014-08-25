@@ -321,6 +321,7 @@ int PlayerDeviceStop() {
 	return UPNP_E_SUCCESS;
 }
 
+// upnp.notify(table/strbuf)
 static int upnp_notify(lua_State *L) {
 	if (upnp->srv == NULL || upnp->udn == NULL) {
 		warn("failed: upnp srv or udn == NULL");
@@ -377,7 +378,7 @@ void upnp_init(lua_State *L, uv_loop_t *loop) {
 	lua_getglobal(L, "upnp");
 	lua_call_or_die(L, 1, 0);
 
-	// upnp.notify = ...
+	// upnp.notify = [native function]
 	lua_getglobal(L, "upnp");
 	lua_pushcfunction(L, upnp_notify);
 	lua_setfield(L, -2, "notify");

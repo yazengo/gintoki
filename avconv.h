@@ -9,10 +9,11 @@ typedef struct {
 	int parse_stat;
 	int token_stat;
 	int key;
+	int got_dur;
 } avconv_probe_parser_t;
 
 typedef struct avconv_s {
-	void (*on_probed)(struct avconv_s *, const char *key, void *val);
+	void (*on_probe)(struct avconv_s *, const char *key, void *val);
 	void (*on_read_done)(struct avconv_s *, int);
 	void (*on_exit)(struct avconv_s *);
 	void (*on_free)(struct avconv_s *);

@@ -295,21 +295,26 @@ static void test_buggy_call() {
 	}
 }
 
-static void avconv_read_done(avconv_t *av, int nread) {
-	info("n=%d", nread);
+static void avconv_on_probe(avconv_t *av, const char *key, void *val) {
+	float f = *(float *)val;
+	info("probe %s %f", key, f);
+}
 
+static void avconv_read_done(avconv_t *av, int nread) {
 	if (nread < 0) {
 		info("EOF");
+		exit(-1);
 		return;
 	}
 
 	avconv_read(av, av->data, 1024*1024, avconv_read_done);
 }
 
-void test_avconv(uv_loop_t *loop) {
+static void test_avconv(uv_loop_t *loop) {
 	avconv_t *av = (avconv_t *)zalloc(sizeof(avconv_t));
 
 	av->data = malloc(1024*1024*1);
+	av->on_probe = avconv_on_probe;
 
 	avconv_start(loop, av, "testdata/test.mp3");
 	avconv_read(av, av->data, 1024*1024, avconv_read_done);
@@ -376,6 +381,35 @@ static void test_avconv_audio_out(uv_loop_t *loop) {
 	avconv_read(av, t->buf, t->len, avconv_audio_out_on_data);
 }
 
+static uv_buf_t uv_malloc_buffer(uv_handle_t *h, size_t len) {
+	return uv_buf_init(malloc(len), len);
+}
+
+static void tty_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
+	info("n=%d", n);
+	if (n < 0)
+		return;
+
+	info("key=%c", *(char *)buf.base);
+
+	while (n--) {
+		if (*(char *)buf.base == 'q') {
+			uv_tty_reset_mode();
+			exit(-1);
+		}
+		buf.base++;
+	}
+}
+
+static void test_ttyraw_open(uv_loop_t *loop) {
+	uv_tty_t *tty = (uv_tty_t *)zalloc(sizeof(uv_tty_t));
+
+	uv_tty_init(loop, tty, 0, 1);
+	uv_tty_set_mode(tty, 1);
+
+	uv_read_start((uv_stream_t *)tty, uv_malloc_buffer, tty_read);
+}
+
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);
 	if (i == 1)
@@ -386,5 +420,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 		test_audio_out(loop);
 	if (i == 4)
 		test_avconv_audio_out(loop);
+	if (i == 5) 
+		test_ttyraw_open(loop);
 }
 

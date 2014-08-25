@@ -31,4 +31,9 @@ void lua_call_or_die(lua_State *L, int nargs, int nresults);
 void *zalloc(int len);
 
 void utils_init(lua_State *L, uv_loop_t *loop);
+void utils_preinit();
+
+void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p);
+void lua_set_global_callback(lua_State *L, const char *name, void *p);
+void lua_do_global_callback(lua_State *L, const char *name, void *p, int nargs, int setnil);
 
