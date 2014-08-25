@@ -94,7 +94,7 @@ static void check_close(curl_t *c) {
 
 	if (c->retsb)
 		strbuf_free(c->retsb);
-	if (c->retfp_file) {
+	if (c->retfp_req) {
 		uv_fs_req_cleanup(c->retfp_req);
 		free(c->retfp_req);
 	}
@@ -104,6 +104,8 @@ static void check_close(curl_t *c) {
 static void handle_free(uv_handle_t *h) {
 	curl_t *c = (curl_t *)h->data;
 	free(h);
+
+	debug("freed");
 	check_close(c);
 }
 
@@ -113,6 +115,7 @@ static void on_stdout_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	debug("n=%d", n);
 
 	if (n < 0) {
+		debug("free pipe_stdout");
 		uv_close((uv_handle_t *)c->pipe_stdout, handle_free);
 		c->pipe_stdout = NULL;
 		return;
@@ -147,10 +150,13 @@ static void proc_on_exit(uv_process_t *proc, int stat, int sig) {
 	c->exit_code = stat;
 
 	if (c->pipe_stdout) {
+		debug("free stdout");
+		uv_read_stop(c->pipe_stdout);
 		uv_close((uv_handle_t *)c->pipe_stdout, handle_free);
 		c->pipe_stdout = NULL;
 	}
 
+	debug("free proc");
 	uv_close((uv_handle_t *)proc, handle_free);
 }
 
@@ -246,8 +252,6 @@ static int lua_curl(lua_State *L) {
 		c->ret = RET_STRBUF;
 
 	char *req_s = (char *)lua_tostring(L, 4);
-	if (req_s == NULL)
-		req_s = "";
 
 	lua_pushvalue(L, 5);
 	lua_pushcclosure(L, curl_done, 1);
@@ -278,15 +282,22 @@ static int lua_curl(lua_State *L) {
 		{.flags = UV_IGNORE},
 	};
 
-	//char *args[] = {"sh", "-c", "curl", url, "-d", body, NULL};
-	char *args[] = {"curl", "-v", url, "-d", req_s, NULL};
+	char *args_d[] = {"curl", "-v", url, "-d", req_s, NULL};
+	char *args_without_d[] = {"curl", "-v", url, NULL};
+	char **args;
+
+	if (req_s)
+		args = args_d;
+	else
+		args = args_without_d;
+
 	opts.file = args[0];
 	opts.args = args;
 	opts.stdio = stdio;
 	opts.stdio_count = 3;
 	opts.exit_cb = proc_on_exit;
 
-	info("body=%s", req_s);
+	info("req_s=%s", req_s);
 
 	// r = {
 	// 	 cancel = [native function],
