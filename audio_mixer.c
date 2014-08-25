@@ -11,7 +11,7 @@
 #include "audio_mixer.h"
 #include "audio_out.h"
 
-#define MAX_MIXLEN 4096
+#define MAX_MIXLEN 2048
 #define TRACKS_NR 2
 
 enum {

@@ -1,6 +1,7 @@
 
 require('localmusic')
 require('radio')
+require('muno')
 
 upnp.on('action', function (a)
 	a = a or {}
@@ -48,4 +49,12 @@ radio.on('play', function (song)
 end)
 
 radio.start()
+
+ttyraw_open(function (key)
+	if key == 'n' then
+		radio.next()
+	elseif key == 'p' then
+		audio.pause_resume_toggle()
+	end
+end)
 
