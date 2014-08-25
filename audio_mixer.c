@@ -122,7 +122,7 @@ static void avconv_on_exit(avconv_t *av) {
 }
 
 static void avconv_on_free(avconv_t *av) {
-	free(av);
+	//free(av);
 }
 
 static void avconv_on_probe(avconv_t *av, const char *key, void *_val) {

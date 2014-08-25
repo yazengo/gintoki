@@ -17,14 +17,15 @@ typedef struct avconv_s {
 	void (*on_read_done)(struct avconv_s *, int);
 	void (*on_exit)(struct avconv_s *);
 	void (*on_free)(struct avconv_s *);
+
 	int pid;
 	void *data;
+
+	uv_process_t *proc;
 	uv_pipe_t *pipe[2];
 
 	void *data_buf;
 	int data_len;
-
-	int fd_closed_nr;
 
 	avconv_probe_parser_t probe_parser;
 } avconv_t;

@@ -16,6 +16,7 @@ objs-darwin = $(subst .o,-darwin.o,$(objs))
 cflags-darwin += $(cflags)
 cflags-darwin += -I/usr/local/Cellar/libupnp/1.6.19/include/upnp/
 cflags-darwin += -I/usr/local/Cellar/lua52/5.2.3/include
+ldflags-darwin += $(ldflags)
 ldflags-darwin += -L/usr/local/Cellar/libupnp/1.6.19/lib
 ldflags-darwin += -L/usr/local/Cellar/lua52/5.2.3/lib
 ldflags-darwin += -L/usr/local/Cellar/libuv/0.10.21/lib
