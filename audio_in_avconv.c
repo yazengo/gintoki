@@ -5,23 +5,23 @@
 #include "audio_in.h"
 #include "avconv.h"
 
-static void on_free(avconv_t *av) {
+static void avconv_on_free(avconv_t *av) {
 	audio_in_t *ai = (audio_in_t *)av->data;
 	free(av);
 	ai->on_free(ai);
 }
 
-static void on_exit(avconv_t *av) {
+static void avconv_on_exit(avconv_t *av) {
 	audio_in_t *ai = (audio_in_t *)av->data;
 	ai->on_exit(ai);
 }
 
-static void on_probe(avconv_t *av, const char *key, void *val) {
+static void avconv_on_probe(avconv_t *av, const char *key, void *val) {
 	audio_in_t *ai = (audio_in_t *)av->data;
 	ai->on_probe(ai, key, val);
 }
 
-static void on_read_done(avconv_t *av, int n) {
+static void avconv_on_read_done(avconv_t *av, int n) {
 	audio_in_t *ai = (audio_in_t *)av->data;
 	ai->on_read_done(ai, n);
 	ai->on_read_done = NULL;
@@ -29,7 +29,7 @@ static void on_read_done(avconv_t *av, int n) {
 
 static void read(struct audio_in_s *ai, void *buf, int len) {
 	avconv_t *av = (avconv_t *)ai->in;
-	avconv_read(av, buf, len, on_read_done);
+	avconv_read(av, buf, len, avconv_on_read_done);
 }
 
 static void stop(audio_in_t *ai) {
@@ -45,9 +45,9 @@ void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai) {
 	ai->read = read;
 	ai->stop = stop;
 
-	av->on_probe = on_probe;
-	av->on_exit = on_exit;
-	av->on_free = on_free;
+	av->on_probe = avconv_on_probe;
+	av->on_exit = avconv_on_exit;
+	av->on_free = avconv_on_free;
 
 	ai->on_start(ai, 44100);
 	avconv_start(loop, av, ai->url);
