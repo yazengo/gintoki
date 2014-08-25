@@ -56,6 +56,11 @@ static void jzcodec_set_rate(audio_out_t *ao, int rate) {
 	if (r < 0) 
 		panic("ioctl setfmt failed: %s", strerror(errno));
 
+	v = 12|(8<<16);
+	r = ioctl(ao->fd_oss, SNDCTL_DSP_SETFRAGMENT, &v);
+	if (r < 0) 
+		panic("ioctl setfragment: %s", strerror(errno));
+
 	v = 2;
 	r = ioctl(ao->fd_oss, SNDCTL_DSP_CHANNELS, &v);
 	if (r < 0) 
@@ -146,7 +151,7 @@ void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int rate) {
 	ao->play = libao_play;
 #endif
 
-	ao->play = dummy_play;
+	//ao->play = dummy_play;
 
 	ao->init(ao);
 	audio_out_set_rate(ao, rate);
