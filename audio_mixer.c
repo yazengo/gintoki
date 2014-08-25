@@ -12,7 +12,7 @@
 #include "audio_in.h"
 #include "audio_out.h"
 
-#define MAX_MIXLEN 2048
+#define MAX_MIXLEN (2048)
 #define TRACKS_NR 2
 
 enum {

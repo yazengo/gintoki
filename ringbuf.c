@@ -1,4 +1,7 @@
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "ringbuf.h"
 #include "utils.h"
 
