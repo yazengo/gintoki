@@ -207,8 +207,6 @@ static int curl_info(lua_State *L) {
 	return 1;
 }
 
-
-
 //
 // c = curl {
 // 	 url = 'http://sugrsugr.com:8083',

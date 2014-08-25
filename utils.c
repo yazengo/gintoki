@@ -173,6 +173,41 @@ void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_st
 	pthread_mutex_destroy(&p.lock);
 }
 
+struct pcall_uv_s;
+
+typedef void (*pcall_uv_cb)(struct pcall_uv_s *, void *);
+
+typedef struct pcall_uv_s {
+	pcall_uv_cb cb;
+	void *cb_p;
+	pthread_mutex_t lock;
+} pcall_uv_t;
+
+void pthread_call_uv_complete(pcall_uv_t *p) {
+	pthread_mutex_unlock(&p->lock);
+}
+
+static void pcall_uv_done(uv_async_t *as, int _) {
+	pcall_uv_t *p = (pcall_uv_t *)as->data;
+	p->cb(p, p->cb_p);
+}
+
+void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p) {
+	pcall_uv_t p = {
+		.lock = PTHREAD_MUTEX_INITIALIZER,
+		.cb_p = cb_p,
+	};
+	pthread_mutex_lock(&p.lock);
+
+	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
+	uv_async_init(loop, as, pcall_uv_done);
+	as->data = &p;
+	uv_async_send(as);
+
+	pthread_mutex_lock(&p.lock);
+	pthread_mutex_destroy(&p.lock);
+}
+
 static int timer_cb_inner(lua_State *L) {
 	//info("is_function %d", lua_isfunction(L, lua_upvalueindex(1)));
 	lua_pushvalue(L, lua_upvalueindex(1));
@@ -427,6 +462,56 @@ void utils_preinit() {
 	signal(SIGSEGV, fault);
 }
 
+typedef struct {
+	char *cmd;
+	int ret;
+	lua_State *L;
+} lua_system_t;
+
+static void lua_system_done(uv_work_t *w, int stat) {
+	lua_system_t *s = (lua_system_t *)w->data;
+
+	info("r=%d", s->ret);
+	lua_pushnumber(s->L, s->ret);
+	lua_do_global_callback(s->L, "system", s, 1, 1);
+
+	free(s->cmd);
+	free(s);
+	free(w);
+}
+
+static void lua_system_thread(uv_work_t *w) {
+	lua_system_t *s = (lua_system_t *)w->data;
+
+	info("%s", s->cmd);
+	s->ret = system(s->cmd);
+}
+
+// arg[1] = cmd
+// arg[2] = done(code)
+static int lua_system(lua_State *L) {
+	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
+	char *cmd = (char *)lua_tostring(L, 1);
+
+	info("cmd=%s", cmd);
+
+	if (cmd == NULL)
+		cmd = "";
+
+	lua_system_t *s = (lua_system_t *)zalloc(sizeof(lua_system_t));
+	s->cmd = strdup(cmd);
+	s->L = L;
+
+	lua_pushvalue(L, 2);
+	lua_set_global_callback(L, "system", s);
+
+	uv_work_t *w = (uv_work_t *)zalloc(sizeof(uv_work_t));
+	w->data = s;
+	uv_queue_work(loop, w, lua_system_thread, lua_system_done);
+
+	return 0;
+}
+
 void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, set_timeout, 1);
@@ -448,5 +533,9 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 
 	lua_pushcfunction(L, lua_setloglevel);
 	lua_setglobal(L, "setloglevel");
+
+	lua_pushuserptr(L, loop);
+	lua_pushcclosure(L, lua_system, 1);
+	lua_setglobal(L, "system");
 }
 
