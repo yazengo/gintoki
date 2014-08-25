@@ -59,6 +59,11 @@ void _log(
 	va_end(ap);
 
 	fprintf(stderr, "[%.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
+
+	if (level == LOG_PANIC) {
+		print_trackback();
+		exit(-1);
+	}
 }
 
 void log_init() {
@@ -83,10 +88,8 @@ float now() {
 
 void *zalloc(int len) {
 	void *p = malloc(len);
-	if (p == NULL) {
-		error("no memory");
-		exit(-1);
-	}
+	if (p == NULL)
+		panic("no memory");
 	memset(p, 0, len);
 	return p;
 }
@@ -333,7 +336,9 @@ static int ttyraw_open(lua_State *L) {
 void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p) {
 	char name[128];
 	sprintf(name, "%s_%p", pref, p);
+	info("-1 is nil: %d", lua_isnil(L, -1));
 	lua_setglobal(L, name);
+	lua_pushstring(L, name);
 }
 
 void lua_set_global_callback(lua_State *L, const char *pref, void *p) {
@@ -347,16 +352,18 @@ void lua_do_global_callback(lua_State *L, const char *pref, void *p, int nargs, 
 
 	lua_getglobal(L, name);
 	if (lua_isnil(L, -1)) {
+		info("%s isnil", name);
 		lua_pop(L, 1);
 		return;
 	}
-	lua_insert(L, -nargs-1);
-	lua_call_or_die(L, nargs, 0);
 
 	if (setnil) {
 		lua_pushnil(L);
 		lua_setglobal(L, name);
 	}
+
+	lua_insert(L, -nargs-1);
+	lua_call_or_die(L, nargs, 0);
 }
 
 static void fault(int sig) {

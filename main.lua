@@ -3,6 +3,18 @@ require('localmusic')
 require('radio')
 require('muno')
 
+ar_info = function ()
+	local ai = audio.info()
+	local ri = radio.info()
+	local r = table.add({}, ai, ri)
+	return r
+end
+
+upnp.on('subscribe', function (a)
+	local r = ar_info()
+	return {['muno.info']=muno.info(), ['audio.info']=r}
+end)
+
 upnp.on('action', function (a)
 	a = a or {}
 	
@@ -31,9 +43,7 @@ muno.on('stat_change', function ()
 end)
 
 audio.on('stat_change', function ()
-	local ai = audio.info()
-	local ri = radio.info()
-	local r = table.add({}, ai, ri)
+	local r = ar_info()
 	info('audio stat ->', r)
 	upnp.notify{['audio.info']=r}
 end)
@@ -43,6 +53,7 @@ radio.on('play', function (song)
 	audio.play{
 		url = song.url,
 		done = function () 
+			info('playdone')
 			radio.next()
 		end
 	}

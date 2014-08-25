@@ -117,6 +117,8 @@ static void track_change_stat(audio_track_t *tr, int stat) {
 static void avconv_on_exit(avconv_t *av) {
 	audio_track_t *tr = (audio_track_t *)av->data;
 	tr->av = NULL;
+
+	check_all_tracks(tr->am);
 }
 
 static void avconv_on_free(avconv_t *av) {
@@ -187,6 +189,8 @@ static void check_tracks_can_mix(audio_mixer_t *am) {
 	int max_mixlen = MAX_MIXLEN - am->mixbuf.len;
 	if (mixlen > max_mixlen)
 		mixlen = max_mixlen;
+	if (mixlen <= 0)
+		return;
 
 	audio_track_t *trmix[TRACKS_NR];
 	int canmix = 0;
@@ -237,7 +241,6 @@ static void check_tracks_can_play(audio_mixer_t *am) {
 	ringbuf_data_ahead_get(&am->mixbuf, &databuf, &datalen);
 	if (datalen == 0)
 		return;
-
 	audio_out_play(am->ao, databuf, datalen, audio_out_on_play_done);
 }
 
@@ -263,38 +266,38 @@ static void audio_emit(audio_mixer_t *am, const char *arg0, const char *arg1) {
 static int audio_play(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
 
-	int i;
-	lua_getfield(L, 1, "i");
-	i = lua_tonumber(L, -1);
+	lua_getfield(L, 1, "i"); // 2
+	lua_getfield(L, 1, "url"); // 3
+	lua_getfield(L, 1, "done"); // 4
 
+	int i = lua_tonumber(L, 2);
 	if (i > TRACKS_NR)
 		i = TRACKS_NR-1;
 	if (i < 0)
 		i = 0;
 
-	char *url;
-	lua_getfield(L, 1, "url");
-	url = (char *)lua_tostring(L, -1);
-
+	char *url = (char *)lua_tostring(L, 3);
 	if (url == NULL) {
 		warn("failed: url=nil");
-		return 0;
+		goto out;
 	}
 
 	audio_track_t *tr = &am->tracks[i];
 	tr->am = am;
 
-	lua_getfield(L, 1, "done");
+	lua_pushvalue(L, 4);
 	lua_set_play_done(tr);
 
 	info("url=%s i=%d", url, i);
 
+	audio_out_cancel_play(am->ao);
 	if (tr->av) {
 		avconv_stop(tr->av);
 		tr->av = NULL;
 	}
 
 	ringbuf_init(&tr->buf);
+	ringbuf_init(&am->mixbuf);
 
 	tr->av = (avconv_t *)zalloc(sizeof(avconv_t));
 	tr->av->data = tr;
@@ -308,6 +311,8 @@ static int audio_play(lua_State *L) {
 
 	check_all_tracks(am);
 
+out:
+	lua_pop(L, 3);
 	return 0;
 }
 

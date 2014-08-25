@@ -2,29 +2,30 @@
 #include "utils.h"
 
 typedef struct {
-	strbuf_t *sb;
+	strbuf_t *body_ret;
+	strbuf_t *body;
 	lua_State *L;
 	int ret;
-} proc_t;
+} curl_t;
 
 enum {
 	RET_STRBUF = 1,
 };
 
 static uv_buf_t alloc_buffer(uv_handle_t *h, size_t len) {
-	proc_t *p = (proc_t *)h->data;
-	strbuf_ensure_empty_length(p->sb, len);
-	return uv_buf_init(p->sb->buf, len);
+	curl_t *p = (curl_t *)h->data;
+	strbuf_ensure_empty_length(p->body_ret, len);
+	return uv_buf_init(p->body_ret->buf, len);
 }
 
 static void handle_free(uv_handle_t *h, int stat) {
 	free(h);
 }
 
-static void pipe_read(uv_stream_t *st, ssize_t nread, uv_buf_t buf) {
-	proc_t *p = (proc_t *)((uv_handle_t *)st)->data;
-	if (nread >= 0)
-		strbuf_append_mem(p->sb, buf.base, nread);
+static void pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
+	curl_t *p = (curl_t *)((uv_handle_t *)st)->data;
+	if (n >= 0)
+		strbuf_append_mem(p->body_ret, buf.base, n);
 	else
 		uv_close((uv_handle_t *)st, handle_free);
 }
@@ -39,7 +40,7 @@ static int curl_done(lua_State *L) {
 }
 
 static void proc_on_exit(uv_process_t *puv, int stat, int sig) {
-	proc_t *p = (proc_t *)puv->data;
+	curl_t *p = (curl_t *)puv->data;
 	
 	strbuf_append_char(p->sb, '\x00');
 	info("%s", p->sb->buf);
@@ -48,6 +49,24 @@ static void proc_on_exit(uv_process_t *puv, int stat, int sig) {
 
 	strbuf_free(p->sb);
 	free(p);
+}
+
+static strbuf_t *lua_body_to_strbuf(lua_State *L) {
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return NULL;
+	}
+
+	strbuf_t *body = strbuf_new(128);
+	if (!lua_isnil(L, -1)) {
+		if (lua_isstring(L, -1)) {
+			strbuf_append_string(body, lua_tostring(L, -1));
+		}
+		if (lua_istable(L, -1)) {
+		}
+	}
+
+	return body;
 }
 
 // curl{
@@ -70,16 +89,16 @@ static int lua_curl(lua_State *L) {
 		return 0;
 	}
 
-	proc_t *p = (proc_t *)zalloc(sizeof(proc_t));
-	p->sb = strbuf_new(4096);
+	curl_t *c = (curl_t *)zalloc(sizeof(curl_t));
+
+	lua_getfield(L, 1, "body");
+	c->body = lua_body_to_strbuf(L);
+	c->body_ret = strbuf_new(4096);
 
 	lua_getfield(L, 1, "done");
 	lua_pushcclosure(L, curl_done, 1);
-	char name[128];
-	sprintf(name, "curl_done_%p", p);
-	lua_setglobal(L, name);
+	lua_set_global_callback(L, "curl_done", p);
 
-	lua_getfield(L, 1, "body");
 	// TODO: cont
 
 	uv_pipe_t *pipe = (uv_pipe_t *)zalloc(sizeof(uv_pipe_t));

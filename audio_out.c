@@ -1,4 +1,5 @@
 
+#include <unistd.h>
 #include <ao/ao.h>
 
 #include "utils.h"
@@ -9,7 +10,10 @@ static void play_done(uv_work_t *w, int stat) {
 	audio_out_t *ao = (audio_out_t *)w->data;
 
 	ao->play_buf = NULL;
-	ao->on_play_done(ao, ao->play_len);
+
+	if (ao->on_play_done)
+		ao->on_play_done(ao, ao->play_len);
+
 	free(w);
 }
 
@@ -17,6 +21,7 @@ static void play_done(uv_work_t *w, int stat) {
 static void play_thread(uv_work_t *w) {
 	audio_out_t *ao = (audio_out_t *)w->data;
 
+	//usleep(1e6 * (ao->play_len / (44100*4.0)));
 	ao_play(ao->aodev, ao->play_buf, ao->play_len);
 }
 
@@ -25,7 +30,6 @@ void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_
 	if (ao->play_buf) {
 		return;
 	}
-
 	ao->play_buf = buf;
 	ao->play_len = len;
 	ao->on_play_done = done;
@@ -33,6 +37,10 @@ void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_
 	uv_work_t *w = (uv_work_t *)zalloc(sizeof(uv_work_t));
 	w->data = ao;
 	uv_queue_work(ao->loop, w, play_thread, play_done);
+}
+
+void audio_out_cancel_play(audio_out_t *ao) {
+	ao->on_play_done = NULL;
 }
 
 void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int sample_rate) {

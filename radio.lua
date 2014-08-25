@@ -10,7 +10,7 @@ R.cursong = function ()
 end
 
 R.info = function ()
-	local r = { type='pandora', station='POP' }
+	local r = { type='local', station='POP' }
 	return table.add(r, R.cursong() or {})
 end
 

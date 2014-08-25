@@ -103,15 +103,15 @@ static uv_buf_t probe_alloc_buffer(uv_handle_t *h, size_t len) {
 	return uv_buf_init(av->probe_parser.buf, sizeof(av->probe_parser.buf));
 }
 
-static void probe_pipe_read(uv_stream_t *st, ssize_t nread, uv_buf_t buf) {
+static void probe_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	avconv_t *av = (avconv_t *)st->data;
 
-	if (nread < 0) {
+	if (n < 0) {
 		uv_close((uv_handle_t *)st, handle_free);
 		return;
 	}
 
-	parser_eat(av, &av->probe_parser, buf.base, nread);
+	parser_eat(av, &av->probe_parser, buf.base, n);
 }
 
 static uv_buf_t data_alloc_buffer(uv_handle_t *h, size_t len) {
@@ -156,7 +156,7 @@ void avconv_start(uv_loop_t *loop, avconv_t *av, char *fname) {
 
 	int i;
 	for (i = 0; i < 2; i++) {
-		av->pipe[i] = malloc(sizeof(uv_pipe_t));
+		av->pipe[i] = zalloc(sizeof(uv_pipe_t));
 		uv_pipe_init(loop, av->pipe[i], 0);
 		uv_pipe_open(av->pipe[i], 0);
 		av->pipe[i]->data = av;
