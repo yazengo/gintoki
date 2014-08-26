@@ -65,6 +65,7 @@ upnp.on_action = function (a, done)
 		muno.do_update(done)
 	elseif a.op == 'audio.request_info' then
 		upnp.notify{['audio.info']=ar_info()}
+		done{result=0}
 	else
 		done{result=0}
 	end
