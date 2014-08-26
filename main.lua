@@ -110,9 +110,17 @@ ttyraw_onkey = function (key)
 	end
 end
 
-set_timeout(function ()
-	--radio.source_setopt{id='100'}
-end, 3000)
+on_inputevent = function (e) 
+	if e == 33 then
+		info('inputdev: keypress')
+		radio.next()
+	end
+	if e >= 0 and e <= 15 then
+		local vol = math.ceil(100*e/15)
+		info('inputdev: vol', e, '->', vol)
+		audio.setvol(vol)
+	end
+end
 
 --setloglevel(0)
 upnp.start()

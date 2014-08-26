@@ -1,4 +1,4 @@
 
-system('echo xxx > /tmp/', function (r)
+system('md5sum -c /mnt/sdcard/update.md5', function (r)
 	info(r)
 end)

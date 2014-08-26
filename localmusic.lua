@@ -23,7 +23,7 @@ P.log_list = {}
 P.log_max = 40
 P.log_i = 1
 
-P.list = P.loadlist('musics')
+P.list = P.loadlist(os.getenv('MUSIC_DIR') or '/mnt/sdcard/musics')
 P.i = 1
 
 P.setopt = function (opt, done)

@@ -1,4 +1,5 @@
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -484,7 +485,16 @@ static void lua_system_thread(uv_work_t *w) {
 	lua_system_t *s = (lua_system_t *)w->data;
 
 	info("%s", s->cmd);
+
+	typedef void (*sighandler_t)(int);
+  sighandler_t old_handler;
+				 
+	old_handler = signal(SIGCHLD, SIG_DFL);
 	s->ret = system(s->cmd);
+	signal(SIGCHLD, old_handler);
+
+	if (s->ret == -1)
+		info("ret=%d err=%s", s->ret, strerror(errno));
 }
 
 // arg[1] = cmd

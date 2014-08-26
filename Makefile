@@ -29,7 +29,7 @@ ldflags-darwin += -lshairport
 ldflags-darwin += -lupnp -llua -luv -lixml -lao
 
 objs-mips = $(subst .o,-mips.o,$(objs))
-objs-mips += input_dev.o
+objs-mips += inputdev-mips.o
 cc-mips = mipsel-linux-gcc
 sysroot-mips = ../muno-repo/app/source/system/fs_compile/
 cflags-mips = $(cflags) -Ideps_mips/include/ -I$(sysroot-mips)/include/upnp

@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
 	luaopen_cjson_safe(L);
 
 #ifdef USE_INPUTDEV
-	intputdev_init(L, loop);
+	inputdev_init(L, loop);
 #endif
 
 	utils_init(L, loop);
