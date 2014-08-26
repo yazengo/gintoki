@@ -218,6 +218,8 @@ static void *shairport_test_loop(void *_p) {
 static void *shairport_loop(void *_p) {
 	shairport_t *sp = (shairport_t *)_p;
 
+	info("airplay starts");
+
 	shairport_start_loop(sp);
 	return NULL;
 }

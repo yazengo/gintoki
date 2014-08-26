@@ -33,9 +33,13 @@ objs-mips += inputdev-mips.o
 cc-mips = mipsel-linux-gcc
 sysroot-mips = ../muno-repo/app/source/system/fs_compile/
 cflags-mips = $(cflags) -Ideps_mips/include/ -I$(sysroot-mips)/include/upnp
+cflags-mips += -I../shairport-jz
 cflags-mips += -DUSE_JZCODEC
 cflags-mips += -DUSE_INPUTDEV
-ldflags-mips = -L deps_mips/lib -L $(sysroot-mips)/lib  $(ldflags) -llua -pthread -lupnp -lthreadutil -lixml -lrt 
+ldflags-mips = -L deps_mips/lib -L $(sysroot-mips)/lib  $(ldflags)
+ldflags-mips += -L../shairport-jz
+ldflags-mips += -lshairport
+ldflags-mips += -llua -pthread -lupnp -lthreadutil -lixml -lrt 
 ldflags-mips += -lavcodec -lavutil -lavformat -lavdevice 
 
 hfiles = $(wildcard *.h)
@@ -66,6 +70,9 @@ darwin-install-deps:
 	brew install libuv
 	brew install libao
 	brew install libav
+
+inst-mips:
+	tar cvf $@.tar server-mips *.lua
 
 clean:
 	rm -rf *.o server-mips server-x86 server-darwin
