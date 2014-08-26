@@ -64,7 +64,7 @@ P.setopt = function (opt, setopt_done)
 	then
 
 		P.songs = {}
-		P.songs_i = {}
+		P.songs_i = 0
 		if P.next_callback then P.next_callback() end
 
 		P.callapi(opt, function (js)
@@ -88,8 +88,7 @@ P.cancel_fetch = function ()
 end
 
 P.cursong = function ()
-	local s = P.songs[P.songs_i]
-	return s
+	return P.songs[P.songs_i]
 end
 
 P.next = function ()

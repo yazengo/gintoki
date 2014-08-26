@@ -14,6 +14,7 @@ ar_info = function ()
 	local ai = audio.info()
 	local ri = radio.info()
 	local r = table.add({}, ai, ri)
+	if r.url then r.url = nil end
 	return r
 end
 

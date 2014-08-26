@@ -240,6 +240,7 @@ void avconv_stop(avconv_t *av) {
 	av->on_exit = NULL;
 
 	debug("stopped");
-	uv_process_kill(av->proc, 9);
+	if (av->proc)
+		uv_process_kill(av->proc, 9);
 }
 

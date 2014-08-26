@@ -44,11 +44,14 @@ static void dev_open(char *devname) {
 
 enum {
 	KEYPRESS = 33,
+	SLEEP = 34,
+	WAKEUP = 35,
 };
 
 // in main thread
 static void call_event_done(void *pcall, void *_p) {
 	int e = *(int *)_p;
+	pthread_call_uv_complete(pcall);
 
 	info("e=%d", e);
 
@@ -59,8 +62,6 @@ static void call_event_done(void *pcall, void *_p) {
 	}
 	lua_pushnumber(L, e);
 	lua_call_or_die(L, 1, 0);
-
-	pthread_call_uv_complete(pcall);
 }
 
 // in poll thread
