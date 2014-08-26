@@ -374,7 +374,6 @@ static int audio_setvol(lua_State *L) {
 
 	am->vol = vol/100.0;
 
-	lua_pop(L, 1);
 	lua_pushnumber(L, (int)(am->vol*100));
 	return 1;
 }

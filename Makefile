@@ -1,5 +1,5 @@
 
-cflags = -I.
+cflags = -g -I.
 ldflags = -g -luv -lm -lao
 
 objs = utils.o main.o avconv.o strbuf.o tests.o

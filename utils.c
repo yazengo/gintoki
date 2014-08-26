@@ -178,6 +178,7 @@ typedef struct {
 	pcall_uv_cb cb;
 	void *cb_p;
 	pthread_mutex_t lock;
+	const char *name;
 } pcall_uv_t;
 
 void pthread_call_uv_complete(void *_p) {
@@ -191,24 +192,31 @@ static void pcall_uv_handle_free(uv_handle_t *h) {
 
 static void pcall_uv_done(uv_async_t *as, int _) {
 	pcall_uv_t *p = (pcall_uv_t *)as->data;
+	debug("async_call %s:%p", p->name, as);
 	p->cb(p, p->cb_p);
 	uv_close((uv_handle_t *)as, pcall_uv_handle_free);
 }
 
-void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p) {
+void pthread_call_uv_wait_withname(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p, const char *name) {
 	pcall_uv_t p = {
 		.lock = PTHREAD_MUTEX_INITIALIZER,
 		.cb = cb, .cb_p = cb_p,
+		.name = name,
 	};
 	pthread_mutex_lock(&p.lock);
 
 	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
 	uv_async_init(loop, as, pcall_uv_done);
 	as->data = &p;
+	debug("async_send %s:%p", name, as);
 	uv_async_send(as);
 
 	pthread_mutex_lock(&p.lock);
 	pthread_mutex_destroy(&p.lock);
+}
+
+void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p) {
+	pthread_call_uv_wait_withname(loop, cb, cb_p, "normal");
 }
 
 static int timer_cb_inner(lua_State *L) {

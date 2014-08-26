@@ -47,8 +47,8 @@ enum {
 };
 
 // in main thread
-static void call_event_done(uv_async_t *as, int _) {
-	int e = (int)as->data;
+static void call_event_done(void *pcall, void *_p) {
+	int e = *(int *)_p;
 
 	info("e=%d", e);
 
@@ -59,18 +59,16 @@ static void call_event_done(uv_async_t *as, int _) {
 	}
 	lua_pushnumber(L, e);
 	lua_call_or_die(L, 1, 0);
+
+	pthread_call_uv_complete(pcall);
 }
 
 // in poll thread
 static void call_event(int e) {
-	static uv_async_t as;
-
-	uv_async_init(loop, &as, call_event_done);
-	as.data = (void *)e;
-	uv_async_send(&as);
+	pthread_call_uv_wait_withname(loop, call_event_done, &e, "vol");
 }
 
-static void *poll_gpio_thread(void *_) {
+static void poll_gpio_thread(void *_) {
 	struct input_event e = {}, last_e = {};
 	enum {
 		NONE, KEYDOWN,
@@ -102,7 +100,7 @@ static void *poll_gpio_thread(void *_) {
 	}
 }
 
-static void *poll_vol_thread(void *_) {
+static void poll_vol_thread(void *_) {
 	struct input_event e, last_e;
 
 	// fd_vol: EV_ABS

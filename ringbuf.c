@@ -114,8 +114,9 @@ static void filler_fill(ringbuf_t *rb) {
 
 static void filler_cancel(ringbuf_filler_t *rf) {
 	if (rf->done) {
-		rf->done(rf->rb, rf->len - rf->left);
+		ringbuf_done_cb cb = rf->done;
 		rf->done = NULL;
+		cb(rf->rb, rf->len - rf->left);
 	}
 }
 

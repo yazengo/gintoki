@@ -173,7 +173,7 @@ static void on_shairport_start(int rate) {
 		.type = START,
 		.rate = rate,
 	};
-	pthread_call_uv_wait(ap->loop, on_shairport_cmd, &c);
+	pthread_call_uv_wait_withname(ap->loop, on_shairport_cmd, &c, "ap.start");
 }
 
 // in shairport thread 
@@ -181,7 +181,7 @@ static void on_shairport_stop() {
 	shairport_cmd_t c = {
 		.type = STOP,
 	};
-	pthread_call_uv_wait(ap->loop, on_shairport_cmd, &c);
+	pthread_call_uv_wait_withname(ap->loop, on_shairport_cmd, &c, "ap.stop");
 }
 
 // in shairport thread 
@@ -190,7 +190,7 @@ static void on_shairport_play(short buf[], int samples) {
 		.type = PLAY,
 		.buf = buf, .samples = samples,
 	};
-	pthread_call_uv_wait(ap->loop, on_shairport_cmd, &c);
+	pthread_call_uv_wait_withname(ap->loop, on_shairport_cmd, &c, "ap.play");
 }
 
 // in shairport thread 

@@ -28,6 +28,7 @@ void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_st
 
 typedef void (*pcall_uv_cb)(void *pcall, void *p);
 void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p);
+void pthread_call_uv_wait_withname(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p, const char *name);
 void pthread_call_uv_complete(void *pcall);
 
 #define lua_dofile_or_die(L, fname) lua_dofile_or_die_at(__func__, __FILE__, __LINE__, L, fname)
