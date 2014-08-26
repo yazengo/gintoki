@@ -94,7 +94,7 @@ static int upnp_luv_action_start(lua_State *L) {
 	return 0;
 }
 
-int upnp_control_action_request(Upnp_EventType EventType, void *Event, void *Cookie) {
+static int upnp_control_action_request(Upnp_EventType EventType, void *Event, void *Cookie) {
 	struct Upnp_Action_Request *ca_event = (struct Upnp_Action_Request *)Event;
 
 	ca_event->ErrCode = 0;
@@ -129,7 +129,7 @@ int upnp_control_action_request(Upnp_EventType EventType, void *Event, void *Coo
 	return 0;
 }
 
-int upnp_subscription_request(struct Upnp_Subscription_Request *sr_event) {
+static int upnp_subscription_request(struct Upnp_Subscription_Request *sr_event) {
 	unsigned int i = 0;
 	int cmp1 = 0; 
 	int cmp2 = 0; 
@@ -165,7 +165,7 @@ int upnp_subscription_request(struct Upnp_Subscription_Request *sr_event) {
 	return 1;
 }
 
-int PlayerDeviceCallbackEventHandler(Upnp_EventType EventType, void *Event, void *Cookie) {
+static int PlayerDeviceCallbackEventHandler(Upnp_EventType EventType, void *Event, void *Cookie) {
 	switch (EventType) {
 		case UPNP_EVENT_SUBSCRIPTION_REQUEST:
 			info("UPNP_EVENT_SUBSCRIPTION_REQUEST");
@@ -200,7 +200,7 @@ int PlayerDeviceCallbackEventHandler(Upnp_EventType EventType, void *Event, void
 	return 0;
 }
 
-int PlayerDeviceStateInit(char *DescDocURL) {
+static int PlayerDeviceStateInit(char *DescDocURL) {
 	IXML_Document *DescDoc = NULL;
 	int ret = UPNP_E_SUCCESS;
 	char *evnturl_ctrl = NULL;
@@ -250,7 +250,7 @@ error_handler:
 	return ret;
 }
 
-int PlayerDeviceStart(
+static int PlayerDeviceStart(
 		char *ip, unsigned short port,
 		const char *desc_doc_name, const char *web_dir_path,
 		int combo) 
@@ -316,12 +316,23 @@ int PlayerDeviceStart(
 	return UPNP_E_SUCCESS;
 }
 
-int PlayerDeviceStop() {
+static int PlayerDeviceStop() {
 	UpnpUnRegisterRootDevice(upnp->h);
 	UpnpFinish();
 	SampleUtil_Finish();   
 
 	return UPNP_E_SUCCESS;
+}
+
+static void *upnp_thread(void *_) {
+	char *ip = NULL;
+	char *desc_doc_name = NULL;
+	char *web_dir_path = NULL;
+	unsigned short port = 49152;
+
+	PlayerDeviceStart(ip, port, desc_doc_name, web_dir_path, 0);
+
+	return NULL;
 }
 
 // upnp.notify(table/strbuf)
@@ -352,22 +363,22 @@ static int upnp_notify(lua_State *L) {
 		info("fail");
 	}
 
-	lua_pop(L, 1);
-
 	return 0;
 }
 
-static void *upnp_thread(void *_) {
-	char *ip = NULL;
-	char *desc_doc_name = NULL;
-	char *web_dir_path = NULL;
-	unsigned short port = 49152;
+// upnp.start()
+static int upnp_start(lua_State *L) {
+	// upnp.notify = [native function]
+	lua_getglobal(L, "upnp");
+	lua_pushcfunction(L, upnp_notify);
+	lua_setfield(L, -2, "notify");
+	lua_pop(L, 1);
 
-	PlayerDeviceStart(ip, port, desc_doc_name, web_dir_path, 0);
-
-	return NULL;
+	pthread_t tid;
+	pthread_create(&tid, NULL, upnp_thread, NULL);
+	return 0;
 }
-
+	
 void upnp_init(lua_State *L, uv_loop_t *loop) {
 	upnp->L = L;
 	upnp->loop = loop;
@@ -377,14 +388,9 @@ void upnp_init(lua_State *L, uv_loop_t *loop) {
 	lua_setglobal(L, "upnp");
 
 	// upnp.start = [native function]
-
-	// upnp.notify = [native function]
 	lua_getglobal(L, "upnp");
-	lua_pushcfunction(L, upnp_notify);
-	lua_setfield(L, -2, "notify");
+	lua_pushcfunction(L, upnp_start);
+	lua_setfield(L, -2, "start");
 	lua_pop(L, 1);
-
-	pthread_t tid;
-	pthread_create(&tid, NULL, upnp_thread, NULL);
 }
 
