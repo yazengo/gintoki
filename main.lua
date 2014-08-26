@@ -4,6 +4,12 @@ require('pandora')
 require('radio')
 require('muno')
 
+local M = {}
+
+M.log = function (...)
+	info('main:', ...)
+end
+
 ar_info = function ()
 	local ai = audio.info()
 	local ri = radio.info()
@@ -18,7 +24,7 @@ end
 upnp.on_action = function (a, done)
 	a = a or {}
 	
-	info('upnp action', a)
+	M.log('muno stat ->', muno.info())
 
 	if a.op == 'audio.volume' then 
 		vol = muno.setvol(a.value)
@@ -38,18 +44,18 @@ upnp.on_action = function (a, done)
 end
 
 muno.on('stat_change', function () 
-	info('muno stat ->', muno.info())
+	M.lo('muno stat ->', muno.info())
 	upnp.notify{['muno.info']=muno.info()}
 end)
 
 audio.on('stat_change', function ()
 	local r = ar_info()
-	info('audio stat ->', r)
+	M.log('audio stat ->', r)
 	upnp.notify{['audio.info']=r}
 end)
 
 radio.play = function (song) 
-	info('play', song.title)
+	M.log('play', song.title)
 	audio.play{
 		url = song.url,
 		done = function () 

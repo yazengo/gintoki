@@ -60,6 +60,8 @@ static int upnp_luv_action_done(lua_State *L) {
 	if (ul->out)
 		ul->out = strdup(ul->out);
 
+	info("call: isnil-1 %d %s %p %p", lua_isstring(L, -1), ul->out, ul->out, ul);
+
 	return 0;
 }
 
@@ -145,7 +147,7 @@ static int upnp_subscription_request(struct Upnp_Subscription_Request *sr_event)
 	};
 	info("srv=%s sid=%s udn=%s", ul.srv, ul.sid, ul.udn);
 	pthread_call_luv_sync_v2(upnp->L, upnp->loop, upnp_luv_action_start, upnp_luv_action_done, &ul);
-	info("json=%s", ul.out);
+	info("out=%s", ul.out);
 
 	const char *names[] = { "sync_data" };
 	const char *vals[] = { ul.out };
@@ -366,6 +368,22 @@ static int upnp_notify(lua_State *L) {
 	return 0;
 }
 
+static void *test_thread(void *_) {
+	for (;;) {
+		upnp_luv_t ul = {
+			.udn = "12", .srv = "34",
+			.method = "on_subscribe",
+		};
+		pthread_call_luv_sync_v2(
+			upnp->L, upnp->loop,
+			upnp_luv_action_start, upnp_luv_action_done, &ul
+		);
+		info("out=%s %s p=%p", ul.out, ul.udn, &ul);
+
+		sleep(3);
+	}
+}
+
 // upnp.start()
 static int upnp_start(lua_State *L) {
 	// upnp.notify = [native function]
@@ -376,6 +394,8 @@ static int upnp_start(lua_State *L) {
 
 	pthread_t tid;
 	pthread_create(&tid, NULL, upnp_thread, NULL);
+
+	pthread_create(&tid, NULL, test_thread, NULL);
 	return 0;
 }
 	
