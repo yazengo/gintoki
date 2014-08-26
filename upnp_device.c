@@ -60,8 +60,6 @@ static int upnp_luv_action_done(lua_State *L) {
 	if (ul->out)
 		ul->out = strdup(ul->out);
 
-	info("call: isnil-1 %d %s %p %p", lua_isstring(L, -1), ul->out, ul->out, ul);
-
 	return 0;
 }
 
@@ -88,10 +86,6 @@ static int upnp_luv_action_start(lua_State *L) {
 	if (lua_isnil(L, -1))
 		return 0;
 	lua_call_or_die(L, 2, 0);
-
-	ul->out = (char *)lua_tostring(L, -1);
-	if (ul->out)
-		ul->out = strdup(ul->out);
 
 	return 0;
 }
@@ -378,7 +372,7 @@ static void *test_thread(void *_) {
 			upnp->L, upnp->loop,
 			upnp_luv_action_start, upnp_luv_action_done, &ul
 		);
-		info("out=%s %s p=%p", ul.out, ul.udn, &ul);
+		info("out=%s %s %s p=%p", ul.out, ul.udn, ul.method, &ul);
 
 		sleep(3);
 	}
@@ -395,7 +389,7 @@ static int upnp_start(lua_State *L) {
 	pthread_t tid;
 	pthread_create(&tid, NULL, upnp_thread, NULL);
 
-	pthread_create(&tid, NULL, test_thread, NULL);
+	//pthread_create(&tid, NULL, test_thread, NULL);
 	return 0;
 }
 	

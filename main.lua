@@ -18,7 +18,7 @@ ar_info = function ()
 end
 
 upnp.on_subscribe = function (a, done)
-	done(ar_info())
+	done{['audio.info']=ar_info(), ['muno.info']=muno.info()}
 end
 
 upnp.on_action = function (a, done)
