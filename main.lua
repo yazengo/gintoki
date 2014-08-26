@@ -68,6 +68,7 @@ ttyraw_onkey = function (key)
 end
 
 upnp.start()
-radio.start(pandora)
+--radio.start(pandora)
+radio.start(localmusic)
 --ttyraw_open(ttyraw_onkey)
 

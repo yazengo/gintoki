@@ -79,7 +79,7 @@ static int upnp_luv_action_start(lua_State *L) {
 	lua_remove(L, -2);
 
 	lua_pushstring(L, ul->in);
-	lua_call_or_die(L, 1, 0);
+	lua_call_or_die(L, 1, 1);
 
 	lua_pushvalue(L, 2);
 
