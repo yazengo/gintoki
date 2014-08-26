@@ -17,7 +17,7 @@ enum {
 #define error(fmt, args...) _log(LOG_ERROR, __func__, __FILE__, __LINE__, fmt, ##args) 
 #define panic(fmt, args...) _log(LOG_PANIC, __func__, __FILE__, __LINE__, fmt, ##args) 
 
-void _log(int level, const char *, const char *, int, char *, ...);
+void _log(int level, const char *at_func, const char *at_file, int at_lineno, char *fmt, ...);
 void log_ban(const char *, const char *);
 void log_set_level(int level);
 void log_init();
@@ -26,9 +26,14 @@ float now();
 
 typedef void (*luv_cb_t)(lua_State *L, void *cb_p);
 void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_p);
+void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, luv_cb_t on_start, luv_cb_t on_done, void *cb_p);
 
-void lua_dofile_or_die(lua_State *L, char *fname);
-void lua_call_or_die(lua_State *L, int nargs, int nresults);
+#define lua_dofile_or_die(L, fname) lua_dofile_or_die_at(__func__, __FILE__, __LINE__, L, fname)
+#define lua_dostring_or_die(L, str) lua_dostring_or_die_at(__func__, __FILE__, __LINE__, L, str)
+#define lua_call_or_die(L, nargs, nresults) lua_call_or_die_at(__func__, __FILE__, __LINE__, L, nargs, nresults)
+void lua_dofile_or_die_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L, char *fname);
+void lua_dostring_or_die_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L, const char *str);
+void lua_call_or_die_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L, int nargs, int nresults);
 
 void *zalloc(int len);
 

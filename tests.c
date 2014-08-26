@@ -256,17 +256,61 @@ static void test_pthread_call_luv() {
 	pthread_t tid;
 	pthread_create(&tid, NULL, pthread_loop_1, loop);
 
-	/*
-	pthread_call_luv_sync(loop, on_done, (void *)1);
-
-	pthread_call_luv_async(loop, func (L, done) {
-		emit(done)
-	}, on_done, (void *)1);
-	*/
-
 	int i;
 	for (i = 0; i < 1000000; i++) 
 		pthread_call_luv_sync(NULL, loop, pcall_luv_cb, &i);
+}
+
+typedef struct {
+	lua_State *L;
+	uv_loop_t *loop;
+} test_pcall_v2_t;
+
+// arg[1] = done function ret value
+static void pcall_luv_v2_done_cb(lua_State *L, void *_) {
+	int i = lua_tonumber(L, 1);
+
+	info("done %d", i);
+}
+
+// arg[1] = done function
+static void pcall_luv_v2_start_cb(lua_State *L, void *_p) {
+	int i = *(int *)_p;
+
+	lua_pushnumber(L, i);
+	lua_getglobal(L, "test_pcall");
+	lua_insert(L, -3);
+	lua_call_or_die(L, 2, 0);
+}
+
+static void *pthread_loop_test_pcall_v2(void *_p) {
+	test_pcall_v2_t *t = (test_pcall_v2_t *)_p;
+
+	int i;
+	for (i = 0; i < 10; i++) {
+		info("calling %d", i);
+		pthread_call_luv_sync_v2(t->L, t->loop, pcall_luv_v2_start_cb, pcall_luv_v2_done_cb, &i);
+	}
+
+	return NULL;
+}
+
+static void test_pthread_call_luv_v2(lua_State *L, uv_loop_t *loop) {
+	lua_dostring_or_die(L,
+		"test_pcall = function (done, i) \n"
+		"  set_timeout(function ()       \n"
+		"    info(i)                     \n"
+		"    done(i)                     \n"
+		"  end, 100)                     \n"
+		"end                             \n"
+	);
+
+	test_pcall_v2_t *t = (test_pcall_v2_t *)zalloc(sizeof(test_pcall_v2_t));
+	t->loop = loop;
+	t->L = L;
+
+	pthread_t tid;
+	pthread_create(&tid, NULL, pthread_loop_test_pcall_v2, t);
 }
 
 static int buggy_func(lua_State *L) {
@@ -422,5 +466,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 		test_avconv_audio_out(loop);
 	if (i == 5) 
 		test_ttyraw_open(loop);
+	if (i == 6)
+		test_pthread_call_luv_v2(L, loop);
 }
 

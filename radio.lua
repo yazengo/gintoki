@@ -1,32 +1,38 @@
 
 local R = {}
 
-emitter_init(R)
-
-R.playlist = localmusic
+R.log = function (...)
+	info('radio:', ...)
+end
 
 R.cursong = function ()
-	return R.playlist.cur()
+	return R.source.cursong()
 end
 
 R.info = function ()
-	local r = { type='local', station='POP' }
-	return table.add(r, R.cursong() or {})
+	local r = {}
+	table.add(r, R.source.info())
+	table.add(r, R.cursong() or {})
+	return r
+end
+
+R.source_setopt = function (opt, done) 
+	R.source.setopt(opt, done)
 end
 
 R.next = function ()
-	info('radio next')
-	local song = R.playlist.next()
-	if song then R.emit('play', song) end
+	R.log('next')
+
+	local song = R.source.next()
+	if not song then return end
+	if R.play then R.play(song) end
 end
 
-R.prev = function ()
-	info('radio prev')
-	local song = R.playlist.prev()
-	if song then R.emit('play', song) end
-end
-
-R.start = function ()
+R.init = function (source)
+	R.source = source
+	source.next_callback = function ()
+		if R.source == source then R.next() end
+	end
 	R.next()
 end
 

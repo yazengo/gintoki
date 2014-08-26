@@ -11,6 +11,7 @@ M.info = function ()
 		wifi = {ssid="Sugr"},
 		firmware_version = "1.0.1",
 		firmware_need_update = true,
+		name = 'K.B.Z',
 	}
 end
 

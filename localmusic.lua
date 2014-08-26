@@ -38,8 +38,12 @@ P.prev = function ()
 	return P.cur()
 end
 
-P.cur = function () 
+P.cursong = function () 
 	return P.list[(P.i%table.maxn(P.list))+1]
+end
+
+P.info() = function ()
+	return {type='local'}
 end
 
 localmusic = P

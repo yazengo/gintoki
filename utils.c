@@ -141,7 +141,10 @@ void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_
 
 typedef struct {
 	lua_State *L;
+
+	// arg[1] = done
 	luv_cb_t on_start;
+
 	luv_cb_t on_done;
 	void *cb_p;
 	pthread_mutex_t lock;
@@ -169,6 +172,8 @@ static void pcall_luv_v2_end(uv_handle_t *h) {
 static void pcall_luv_v2_wrap(uv_async_t *as, int _) {
 	pcall_luv_v2_t *p = (pcall_luv_v2_t *)as->data;
 
+	info("");
+
 	void *ud = lua_newuserdata(p->L, sizeof(p));
 	memcpy(ud, &p, sizeof(p));
 	lua_pushcclosure(p->L, pcall_luv_v2_done, 1);
@@ -189,7 +194,7 @@ void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, luv_cb_t on_start, 
 	};
 	pthread_mutex_lock(&p.lock);
 
-	uv_async_t *as = (uv_async_t *)malloc(sizeof(uv_async_t));
+	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
 	uv_async_init(loop, as, pcall_luv_v2_wrap);
 	as->data = &p;
 	uv_async_send(as);
@@ -268,26 +273,34 @@ static int lua_docall(lua_State *L, int narg, int nres) {
   return status;
 }
 
-void lua_call_or_die(lua_State *L, int nargs, int nresults) {
-	if (lua_docall(L, nargs, nresults)) {
-		error("%s", lua_tostring(L, -1));
+void lua_dostring_or_die_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L, const char *str) {
+	if (luaL_loadstring(L, str)) {
+		_log(LOG_ERROR, at_func, at_file, at_lineno, "lua_dostring: %s", lua_tostring(L, -1));
 		print_trackback();
 		exit(-1);
 	}
 }
 
-void lua_dofile_or_die(lua_State *L, char *fname) {
+void lua_dofile_or_die_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L, char *fname) {
 	int r = luaL_loadfile(L, fname);
 	if (r) {
 		if (r == LUA_ERRFILE) 
-			error("'%s' open failed", fname);
+			_log(LOG_ERROR, at_func, at_file, at_lineno, "'%s' open failed", fname);
 		else if (r == LUA_ERRSYNTAX) 
-			error("'%s' has syntax error", fname);
+			_log(LOG_ERROR, at_func, at_file, at_lineno, "'%s' has syntax error", fname);
 		else 
-			error("'%s' has unknown error", fname);
+			_log(LOG_ERROR, at_func, at_file, at_lineno, "'%s' has unknown error", fname);
 		exit(-1);
 	}
 	lua_call_or_die(L, 0, LUA_MULTRET);
+}
+
+void lua_call_or_die_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L, int nargs, int nresults) {
+	if (lua_docall(L, nargs, nresults)) {
+		_log(LOG_ERROR, at_func, at_file, at_lineno, "lua_call: %s", lua_tostring(L, -1));
+		print_trackback();
+		exit(-1);
+	}
 }
 
 static char tty_readbuf[128];
@@ -351,7 +364,6 @@ void lua_do_global_callback(lua_State *L, const char *pref, void *p, int nargs, 
 
 	lua_getglobal(L, name);
 	if (lua_isnil(L, -1)) {
-		info("%s isnil", name);
 		lua_pop(L, 1);
 		return;
 	}

@@ -1,5 +1,6 @@
 
 require('localmusic')
+require('pandora')
 require('radio')
 require('muno')
 
@@ -23,6 +24,8 @@ upnp.on('action', function (a)
 	if a.op == 'audio.volume' then 
 		vol = muno.setvol(a.value)
 		return {result=vol} 
+	elseif a.op == 'muno.info' then
+		return muno.info()
 	elseif a.op == 'audio.next' then
 		radio.next()
 		return {result=0}

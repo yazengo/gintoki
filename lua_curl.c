@@ -22,7 +22,7 @@ enum {
 static uv_buf_t alloc_buffer(uv_handle_t *h, size_t len) {
 	curl_t *p = (curl_t *)h->data;
 	strbuf_ensure_empty_length(p->body_ret, len);
-	return uv_buf_init(p->body_ret->buf, len);
+	return uv_buf_init(p->body_ret->buf + p->body_ret->length, len);
 }
 
 static void pipe_handle_free(uv_handle_t *h) {
@@ -66,6 +66,19 @@ static int curl_done(lua_State *L) {
 	lua_pushvalue(L, lua_upvalueindex(1));
 	lua_insert(L, -2);
 	lua_call_or_die(L, 1, 0);
+	return 0;
+}
+
+// upvalue[1] = curl_t *
+// curl_cancel()
+static int curl_cancel(lua_State *L) {
+	curl_t *c;
+	void *ud = lua_touserdata(L, lua_upvalueindex(1));
+	memcpy(&c, ud, sizeof(c));
+
+	lua_pushnil(L);
+	lua_set_global_callback(L, "curl_done", c);
+
 	return 0;
 }
 
@@ -139,6 +152,15 @@ static int lua_curl(lua_State *L) {
 	info("spawn=%d pid=%d", r, c->proc->pid);
 
 	uv_read_start((uv_stream_t *)c->pipe_stdout, alloc_buffer, pipe_read);
+
+	// r = { cancel = [native function] }
+	lua_newtable(L);
+
+	ud = lua_newuserdata(L, sizeof(c));
+	memcpy(ud, &c, sizeof(c));
+	lua_pushcclosure(L, curl_cancel, 1);
+
+	lua_setfield(L, -2, "cancel");
 
 	return 1;
 }

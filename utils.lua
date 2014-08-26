@@ -40,7 +40,7 @@ end
 
 info = function (...) 
 	local s = ''
-	for _, v in ipairs{...} do
+	for k, v in ipairs{...} do
 		if type(v) == 'table' then
 			s = s .. cjson.encode(v)
 		else
