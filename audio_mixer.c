@@ -68,15 +68,11 @@ static void lua_set_play_done(audio_track_t *tr) {
 }
 
 static void lua_pusham(lua_State *L, audio_mixer_t *am) {
-	void *ud = lua_newuserdata(L, sizeof(am));
-	memcpy(ud, &am, sizeof(am));
+	lua_pushuserptr(L, am);
 }
 
 static audio_mixer_t *lua_getam(lua_State *L) {
-	audio_mixer_t *am;
-	void *ud = lua_touserdata(L, lua_upvalueindex(1));
-	memcpy(&am, ud, sizeof(am));
-	return am;
+	return (audio_mixer_t *)lua_touserptr(L, lua_upvalueindex(1));
 }
 
 static const char *track_stat_str(int stat) {

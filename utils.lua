@@ -8,10 +8,27 @@ table.add = function (a, ...)
 	return a
 end
 
-table.dump = function (t) 
-	for k,v in pairs(t) do
-		print(k,v)
+table.append = function (a, ...)
+	local i = table.maxn(a) + 1
+
+	for _,b in ipairs{...} do
+		if type(b) == 'table' then
+			for k,v in ipairs(b) do
+				if type(k) == 'number' then
+					a[i] = v
+					i = i+1
+				end
+			end
+		else
+			a[i] = b
+			i = i+1
+		end
 	end
+	return a
+end
+
+string.hasprefix = function (a, pref)
+	return string.sub(a, 1, string.len(pref)) == pref
 end
 
 clear_timeout = function (t)

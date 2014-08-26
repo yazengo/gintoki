@@ -24,9 +24,7 @@ void log_init();
 
 float now();
 
-typedef void (*luv_cb_t)(lua_State *L, void *cb_p);
-void pthread_call_luv_sync(lua_State *L, uv_loop_t *loop, luv_cb_t cb, void *cb_p);
-void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, luv_cb_t on_start, luv_cb_t on_done, void *cb_p);
+void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_start, lua_CFunction on_done, void *data);
 
 #define lua_dofile_or_die(L, fname) lua_dofile_or_die_at(__func__, __FILE__, __LINE__, L, fname)
 #define lua_dostring_or_die(L, str) lua_dostring_or_die_at(__func__, __FILE__, __LINE__, L, str)
@@ -45,4 +43,8 @@ void utils_preinit();
 void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p);
 void lua_set_global_callback(lua_State *L, const char *name, void *p);
 void lua_do_global_callback(lua_State *L, const char *name, void *p, int nargs, int setnil);
+
+void lua_pushuserptr(lua_State *L, void *p);
+void *lua_touserptr(lua_State *L, int index);
+void lua_setuserptr(lua_State *L, int index, void *p);
 

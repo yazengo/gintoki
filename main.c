@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 	info("starts");
 
 	if (test_c >= 100 && test_c < 200) {
-		run_test_c_pre(test_c);
+		run_test_c_pre(test_c-100);
 		return 0;
 	}
 

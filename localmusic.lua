@@ -30,19 +30,19 @@ P.i = 0
 -- return song or nil
 P.next = function ()
 	P.i = P.i + 1
-	return P.cur()
+	return P.cursong()
 end
 
 P.prev = function ()
 	P.i = P.i - 1
-	return P.cur()
+	return P.cursong()
 end
 
 P.cursong = function () 
 	return P.list[(P.i%table.maxn(P.list))+1]
 end
 
-P.info() = function ()
+P.info = function ()
 	return {type='local'}
 end
 

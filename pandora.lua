@@ -25,6 +25,7 @@ end
 
 P.fetch_done = function (songs) 
 	local space = table.maxn(P.songs) - P.songs_i
+	table.append(P.songs, songs)
 	if space == 0 then
 		if P.next_callback then P.next_callback() end
 	end
@@ -35,12 +36,15 @@ P.fetch = function ()
 
 	local done = function (js)
 		local songs = js.songs or {}
+		P.log('fetchdone songnr', table.maxn(songs))
 		if table.maxn(songs) == 0 then
 			set_timeout(P.fetch, 1000)
 			return
 		end
 		P.fetch_done(songs)
 	end
+
+	P.log('fetching start')
 
 	P.fetch_task = P.callapi({op='pandora.songs_list'}, done)
 end

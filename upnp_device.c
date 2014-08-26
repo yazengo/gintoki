@@ -39,38 +39,59 @@ typedef struct {
 	char *srv, *sid, *udn;
 	char *in;
 	char *out;
-} upnp_luv_subs_t;
+	const char *method;
+} upnp_luv_t;
 
-static void upnp_luv_act_cb(lua_State *L, void *_p) {
-	upnp_luv_subs_t *act = (upnp_luv_subs_t *)_p;
+// arg[1] = data
+// arg[2] = ret
+static int upnp_luv_action_done(lua_State *L) {
+	upnp_luv_t *ul = (upnp_luv_t *)lua_touserptr(L, 1);
 
-	// local in = cjson.decode(in_str)
-	// local out = upnp.emit_first('action', in)
-	// local out_str = cjson.encode(out)
-
+	// out = cjson.encode(ret)
+	
 	lua_getglobal(L, "cjson");
 	lua_getfield(L, -1, "encode");
 	lua_remove(L, -2);
 
-	lua_getglobal(L, "upnp");
-	lua_getfield(L, -1, "emit_first");
-	lua_remove(L, -2);
-	lua_pushstring(L, "action");
+	lua_pushvalue(L, 2);
+	lua_call_or_die(L, 1, 1);
 
+	ul->out = (char *)lua_tostring(L, -1);
+	if (ul->out)
+		ul->out = strdup(ul->out);
+
+	return 0;
+}
+
+// arg[1] = data
+// arg[2] = done
+static int upnp_luv_action_start(lua_State *L) {
+	upnp_luv_t *ul = (upnp_luv_t *)lua_touserptr(L, 1);
+
+	// upnp.<method>(cjson.decode(in), done)
+	
+	lua_getglobal(L, "upnp");
+	lua_getfield(L, -1, ul->method);
+	lua_remove(L, -2);
+	
 	lua_getglobal(L, "cjson");
 	lua_getfield(L, -1, "decode");
 	lua_remove(L, -2);
-	lua_pushstring(L, act->in);
 
-	lua_call_or_die(L, 1, 1);
-	lua_call_or_die(L, 2, 1);
-	lua_call_or_die(L, 1, 1);
+	lua_pushstring(L, ul->in);
+	lua_call_or_die(L, 1, 0);
 
-	char *out = (char *)lua_tostring(L, -1);
-	if (out)
-		act->out = strdup(out);
+	lua_pushvalue(L, 2);
 
-	lua_pop(L, 1);
+	if (lua_isnil(L, -1))
+		return 0;
+	lua_call_or_die(L, 2, 0);
+
+	ul->out = (char *)lua_tostring(L, -1);
+	if (ul->out)
+		ul->out = strdup(ul->out);
+
+	return 0;
 }
 
 int upnp_control_action_request(Upnp_EventType EventType, void *Event, void *Cookie) {
@@ -85,47 +106,27 @@ int upnp_control_action_request(Upnp_EventType EventType, void *Event, void *Coo
 	if (in == NULL)
 		return -1;
 
-	upnp_luv_subs_t act = {
+	upnp_luv_t ul = {
 		.udn = ca_event->DevUDN, .srv = ca_event->ServiceID,
-		.in = in,
+		.in = in, .method = "on_action",
 	};
-	pthread_call_luv_sync(upnp->L, upnp->loop, upnp_luv_act_cb, &act);
+	pthread_call_luv_sync_v2(
+		upnp->L, upnp->loop,
+		upnp_luv_action_start, upnp_luv_action_done, &ul
+	);
 
-	info("out=%s", act.out);
-	if (act.out == NULL)
+	info("out=%s", ul.out);
+	if (ul.out == NULL)
 		return -1;
 
 	UpnpAddToActionResponse(&ca_event->ActionResult, ca_event->ActionName,
 			PLAYER_SERVICE_TYPE,
-			"Result", act.out);
-	free(act.out);
+			"Result", ul.out);
+	free(ul.out);
 
 	ca_event->ErrCode = UPNP_E_SUCCESS;
 
 	return 0;
-}
-
-static void upnp_luv_subs_cb(lua_State *L, void *_p) {
-	upnp_luv_subs_t *p = (upnp_luv_subs_t *)_p;
-
-	// local out = upnp.emit_first('subscribe')
-	// local out_str = cjson.encode(out)
-
-	lua_getglobal(L, "cjson");
-	lua_getfield(L, -1, "encode");
-	lua_remove(L, -2);
-
-	lua_getglobal(L, "upnp");
-	lua_getfield(L, -1, "emit_first");
-	lua_remove(L, -2);
-	lua_pushstring(L, "subscribe");
-
-	lua_call(L, 1, 1);
-	lua_call(L, 1, 1);
-
-	p->out = strdup((char *)lua_tostring(L, -1));
-
-	lua_pop(L, 1);
 }
 
 int upnp_subscription_request(struct Upnp_Subscription_Request *sr_event) {
@@ -136,22 +137,24 @@ int upnp_subscription_request(struct Upnp_Subscription_Request *sr_event) {
 
 	// sid=urn:upnp-org:serviceId:munocontrol1 sid=uuid:3d298f70-1dd2-11b2-bba7-d2ef32984658 udn=uuid:Upnp-munoEmulator-1_0-1234567890007
 
-	upnp_luv_subs_t subs = {
+	upnp_luv_t ul = {
 		.srv = sr_event->ServiceId,
 		.udn = sr_event->UDN,
 		.sid = sr_event->Sid,
+		.in = "", .method = "on_subscribe",
 	};
-	info("srv=%s sid=%s udn=%s", subs.srv, subs.sid, subs.udn);
-	pthread_call_luv_sync(upnp->L, upnp->loop, upnp_luv_subs_cb, &subs);
-	info("json=%s", subs.out);
+	info("srv=%s sid=%s udn=%s", ul.srv, ul.sid, ul.udn);
+	pthread_call_luv_sync_v2(upnp->L, upnp->loop, upnp_luv_action_start, upnp_luv_action_done, &ul);
+	info("json=%s", ul.out);
 
 	const char *names[] = { "sync_data" };
-	const char *vals[] = { subs.out };
+	const char *vals[] = { ul.out };
 
-	ret = UpnpAcceptSubscription(upnp->h, 
-			subs.udn, subs.srv, names, vals, 1,
-			subs.sid);
-	free(subs.out);
+	if (ul.out == NULL)
+		return 1;
+
+	ret = UpnpAcceptSubscription(upnp->h, ul.udn, ul.srv, names, vals, 1, ul.sid);
+	free(ul.out);
 
 	if (ret == UPNP_E_SUCCESS) {
 		info("ok");
@@ -373,10 +376,7 @@ void upnp_init(lua_State *L, uv_loop_t *loop) {
 	lua_newtable(L);
 	lua_setglobal(L, "upnp");
 
-	// emitter_init(upnp)
-	lua_getglobal(L, "emitter_init");
-	lua_getglobal(L, "upnp");
-	lua_call_or_die(L, 1, 0);
+	// upnp.start = [native function]
 
 	// upnp.notify = [native function]
 	lua_getglobal(L, "upnp");

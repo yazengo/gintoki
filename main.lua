@@ -11,34 +11,31 @@ ar_info = function ()
 	return r
 end
 
-upnp.on('subscribe', function (a)
-	local r = ar_info()
-	return {['muno.info']=muno.info(), ['audio.info']=r}
-end)
+upnp.on_subscribe = function (a, done)
+	done(ar_info())
+end
 
-upnp.on('action', function (a)
+upnp.on_action = function (a, done)
 	a = a or {}
 	
 	info('upnp action', a)
 
 	if a.op == 'audio.volume' then 
 		vol = muno.setvol(a.value)
-		return {result=vol} 
+		done{result=vol}
 	elseif a.op == 'muno.info' then
-		return muno.info()
+		done(muno.info())
 	elseif a.op == 'audio.next' then
 		radio.next()
-		return {result=0}
-	elseif a.op == 'audio.prev' then
-		radio.prev()
-		return {result=0}
+		done{result=0}
 	elseif a.op == 'audio.play_pause_toggle' then
 		audio.pause_resume_toggle()
-		return {result=0}
+		done{result=0}
+	elseif a.op == '' then
+	else
+		done{result=0}
 	end
-
-	return {result=0}
-end)
+end
 
 muno.on('stat_change', function () 
 	info('muno stat ->', muno.info())
@@ -51,8 +48,8 @@ audio.on('stat_change', function ()
 	upnp.notify{['audio.info']=r}
 end)
 
-radio.on('play', function (song) 
-	info('play', song)
+radio.play = function (song) 
+	info('play', song.title)
 	audio.play{
 		url = song.url,
 		done = function () 
@@ -60,15 +57,16 @@ radio.on('play', function (song)
 			radio.next()
 		end
 	}
-end)
+end
 
-radio.start()
-
-ttyraw_open(function (key)
+ttyraw_onkey = function (key)
 	if key == 'n' then
 		radio.next()
 	elseif key == 'p' then
 		audio.pause_resume_toggle()
 	end
-end)
+end
+
+radio.start(pandora)
+--ttyraw_open(ttyraw_onkey)
 

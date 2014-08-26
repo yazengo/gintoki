@@ -72,9 +72,7 @@ static int curl_done(lua_State *L) {
 // upvalue[1] = curl_t *
 // curl_cancel()
 static int curl_cancel(lua_State *L) {
-	curl_t *c;
-	void *ud = lua_touserdata(L, lua_upvalueindex(1));
-	memcpy(&c, ud, sizeof(c));
+	curl_t *c = (curl_t *)lua_touserptr(L, lua_upvalueindex(1));
 
 	lua_pushnil(L);
 	lua_set_global_callback(L, "curl_done", c);
@@ -92,9 +90,7 @@ static int curl_cancel(lua_State *L) {
 // c.cancel()
 //
 static int lua_curl(lua_State *L) {
-	void *ud = lua_touserdata(L, lua_upvalueindex(1));
-	uv_loop_t *loop;
-	memcpy(&loop, ud, sizeof(loop));
+	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 
 	lua_getfield(L, 1, "url"); // 2
 	lua_getfield(L, 1, "ret"); // 3
@@ -156,8 +152,7 @@ static int lua_curl(lua_State *L) {
 	// r = { cancel = [native function] }
 	lua_newtable(L);
 
-	ud = lua_newuserdata(L, sizeof(c));
-	memcpy(ud, &c, sizeof(c));
+	lua_pushuserptr(L, c);
 	lua_pushcclosure(L, curl_cancel, 1);
 
 	lua_setfield(L, -2, "cancel");
@@ -166,8 +161,7 @@ static int lua_curl(lua_State *L) {
 }
 
 void lua_curl_init(lua_State *L, uv_loop_t *loop) {
-	void *ud = lua_newuserdata(L, sizeof(loop));
-	memcpy(ud, &loop, sizeof(loop));
+	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, lua_curl, 1);
 	lua_setglobal(L, "curl");
 }

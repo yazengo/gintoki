@@ -248,46 +248,42 @@ static void *pthread_loop_1(void *_) {
 static void pcall_luv_cb(lua_State *L, void *_) {
 }
 
-static void test_pthread_call_luv() {
-	uv_loop_t *loop = uv_loop_new();
-	uv_async_t as;
-	uv_async_init(loop, &as, NULL);
-
-	pthread_t tid;
-	pthread_create(&tid, NULL, pthread_loop_1, loop);
-
-	int i;
-	for (i = 0; i < 1000000; i++) 
-		pthread_call_luv_sync(NULL, loop, pcall_luv_cb, &i);
-}
-
 typedef struct {
 	lua_State *L;
 	uv_loop_t *loop;
 } test_pcall_v2_t;
 
-// arg[1] = done function ret value
-static void pcall_luv_v2_done_cb(lua_State *L, void *_) {
-	int i = lua_tonumber(L, 1);
+// arg[1] = data
+// arg[2] = done function ret value
+static int pcall_luv_v2_done_cb(lua_State *L) {
+	int i = lua_tonumber(L, 2);
 
 	info("done %d", i);
+
+	return 0;
 }
 
-// arg[1] = done function
-static void pcall_luv_v2_start_cb(lua_State *L, void *_p) {
-	int i = *(int *)_p;
+// arg[1] = data
+// arg[2] = done function
+static int pcall_luv_v2_start_cb(lua_State *L) {
+	
+	info("%p", lua_touserptr(L, 1));
 
-	lua_pushnumber(L, i);
+	int i = *(int *)lua_touserptr(L, 1);
+
 	lua_getglobal(L, "test_pcall");
-	lua_insert(L, -3);
+	lua_pushvalue(L, 2);
+	lua_pushnumber(L, i);
 	lua_call_or_die(L, 2, 0);
+
+	return 0;
 }
 
 static void *pthread_loop_test_pcall_v2(void *_p) {
 	test_pcall_v2_t *t = (test_pcall_v2_t *)_p;
 
 	int i;
-	for (i = 0; i < 10; i++) {
+	for (i = 0; i < 10000; i++) {
 		info("calling %d", i);
 		pthread_call_luv_sync_v2(t->L, t->loop, pcall_luv_v2_start_cb, pcall_luv_v2_done_cb, &i);
 	}
@@ -299,9 +295,9 @@ static void test_pthread_call_luv_v2(lua_State *L, uv_loop_t *loop) {
 	lua_dostring_or_die(L,
 		"test_pcall = function (done, i) \n"
 		"  set_timeout(function ()       \n"
-		"    info(i)                     \n"
+		"    info('call', i)             \n"
 		"    done(i)                     \n"
-		"  end, 100)                     \n"
+		"  end, 1)                       \n"
 		"end                             \n"
 	);
 
@@ -332,7 +328,7 @@ static void test_buggy_call() {
 	luaL_openlibs(L);
 
 	int i;
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < 100000; i++) {
 		lua_pushcfunction(L, buggy_func);
 		lua_call(L, 0, 0);
 		luaL_dostring(L, "print(1,2,3)");
@@ -374,8 +370,6 @@ void run_test_c_pre(int i) {
 		test_lua_cjson();
 	if (i == 4)
 		test_work_queue();
-	if (i == 5)
-		test_pthread_call_luv();
 	if (i == 6)
 		test_buggy_call();
 	if (i == 7 || i == 8)
