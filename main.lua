@@ -127,8 +127,7 @@ on_inputevent = function (e)
 		info('inputdev: keypress')
 		audio.pause_resume_toggle()
 	end
-	if e >= 1 and e <= 15 then
-		e = e - 1
+	if e >= 0 and e <= 15 then
 		local vol = math.ceil(100*e/15)
 		info('inputdev: vol', e, '->', vol)
 		audio.setvol(vol)
