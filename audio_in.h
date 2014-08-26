@@ -4,6 +4,10 @@
 #include <uv.h>
 #include <lua.h>
 
+struct audio_in_s;
+
+typedef void (*audio_in_read_cb)(struct audio_in_s *, int len);
+
 typedef struct audio_in_s {
 	void (*on_probe)(struct audio_in_s *ai, const char *key, void *val);
 	void (*on_start)(struct audio_in_s *ai, int rate);
@@ -11,8 +15,10 @@ typedef struct audio_in_s {
 	void (*on_free)(struct audio_in_s *ai);
 	void (*on_read_done)(struct audio_in_s *ai, int len);
 
+	int (*can_read)(struct audio_in_s *ai);
+
 	void *in;
-	void (*read)(struct audio_in_s *ai, void *buf, int len);
+	void (*read)(struct audio_in_s *ai, void *buf, int len, audio_in_read_cb done);
 	void (*stop)(struct audio_in_s *ai);
 
 	int is_reading;

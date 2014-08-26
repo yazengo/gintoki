@@ -11,6 +11,30 @@
 #include "avconv.h"
 #include "utils.h"
 
+typedef struct {
+	char token_buf[128];
+	int token_len;
+	char buf[1024];
+	int parse_stat;
+	int token_stat;
+	int key;
+	int got_dur;
+} avconv_probe_parser_t;
+
+typedef struct avconv_s {
+	void *data;
+	int stat;
+
+	uv_process_t *proc;
+	uv_pipe_t *pipe[2];
+
+	void *read_buf;
+	int   read_len;
+	audio_in_read_cb read_done;
+
+	avconv_probe_parser_t probe_parser;
+} avconv_t;
+
 /*
  * ==================== probe data format ====================
   
@@ -54,6 +78,12 @@ static float avconv_durstr_to_float(char *s) {
 	return (float)(hh*3600 + mm*60 + ss) + (float)ms/1e3;
 }
 
+static void avconv_on_probe(avconv_t *av, const char *key, void *val) {
+	audio_in_t *ai = (audio_in_t *)av->data;
+
+	if (ai->on_probe)
+		ai->on_probe(ai, key, val);
+}
 
 static void parser_get_token(avconv_t *av, avconv_probe_parser_t *p) {
 	static const char *token_durstr = "Duration:";
@@ -69,8 +99,7 @@ static void parser_get_token(avconv_t *av, avconv_probe_parser_t *p) {
 
 		if (p->key == KEY_DURATION && !p->got_dur) {
 			float dur = avconv_durstr_to_float(p->token_buf);
-			if (av->on_probe)
-				av->on_probe(av, "dur", &dur);
+			avconv_on_probe(av, "dur", &dur);
 			p->got_dur++;
 		}
 		p->key = 0;
@@ -100,30 +129,40 @@ static void parser_eat(avconv_t *av, avconv_probe_parser_t *p, void *buf, int le
 	}
 }
 
+enum {
+	INIT,
+	READING,
+	KILLING,
+	CLOSING_PROC,
+	CLOSING_FD1,
+	CLOSING_FD2
+};
+
 // can_read()
 // on_exit()
-// INIT -> KILLING -> CLOSING_FD1 -> CLOSING_FD2
+// INIT -> KILLING -> CLOSING_PROC -> CLOSING_FD1 -> CLOSING_FD2
 // data pipe read n < 0 ==> on_exit(); and kill process
 // process_exit -> close all handles one by one
 
-static void on_handle_close(avconv_t *av) {
-	av->closed_nr++;
-
-	debug("closed_nr=%d", av->closed_nr);
-
-	if (av->closed_nr == 3) {
-		if (av->on_exit)
-			av->on_exit(av);
-		av->on_exit = NULL;
-		if (av->on_free)
-			av->on_free(av);
-	}
-}
-
-static void pipe_handle_free(uv_handle_t *h) {
+static void on_handle_free_done(uv_handle_t *h) {
 	avconv_t *av = (avconv_t *)h->data;
-	on_handle_close(av);
 	free(h);
+
+	switch (av->stat) {
+	case CLOSING_PROC:
+		av->stat = CLOSING_FD1;
+		uv_close((uv_handle_t *)av->pipe[0], on_handle_free_done);
+		break;
+
+	case CLOSING_FD1:
+		av->stat = CLOSING_FD2;
+		uv_close((uv_handle_t *)av->pipe[1], on_handle_free_done);
+		break;
+
+	case CLOSING_FD2:
+		av->on_exit(av);
+		break;
+	}
 }
 
 static uv_buf_t probe_alloc_buffer(uv_handle_t *h, size_t len) {
@@ -134,13 +173,8 @@ static uv_buf_t probe_alloc_buffer(uv_handle_t *h, size_t len) {
 static void probe_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	avconv_t *av = (avconv_t *)st->data;
 
-	if (n < 0) {
-		if (av->pipe[1]) {
-			uv_close((uv_handle_t *)av->pipe[1], pipe_handle_free);
-			av->pipe[1] = NULL;
-		}
+	if (n < 0)
 		return;
-	}
 
 	parser_eat(av, &av->probe_parser, buf.base, n);
 }
@@ -158,24 +192,21 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 
 	uv_read_stop(st);
 
+	if (av->stat != READING)
+		panic("must be READING state");
+
 	if (n < 0) {
-		if (av->pipe[0]) {
-			uv_close((uv_handle_t *)av->pipe[0], pipe_handle_free);
-			av->pipe[0] = NULL;
-		}
 		n = 0;
+		uv_process_kill(av->proc, 9);
+		av->stat = KILLING;
+	} else {
+		av->stat = INIT;
 	}
 
-	if (av->on_read_done)
+	if (av->on_read_done) {
+		av->stat = INIT;
 		av->on_read_done(av, n);
-}
-
-static void proc_handle_free(uv_handle_t *h) {
-	debug("freed");
-
-	avconv_t *av = (avconv_t *)h->data;
-	on_handle_close(av);
-	free(h);
+	}
 }
 
 static void proc_on_exit(uv_process_t *proc, int stat, int sig) {
@@ -183,21 +214,47 @@ static void proc_on_exit(uv_process_t *proc, int stat, int sig) {
 
 	info("sig=%d", sig);
 
-	if (av->proc) {
-		uv_close((uv_handle_t *)av->proc, proc_handle_free);
-		av->proc = NULL;
-	}
-
-	int i;
-	for (i = 0; i < 2; i++) {
-		if (av->pipe[i]) {
-			uv_close((uv_handle_t *)av->pipe[i], pipe_handle_free);
-			av->pipe[i] = NULL;
-		}
-	}
+	av->stat = CLOSING_PROC;
+	uv_close((uv_handle_t *)proc, on_handle_free_done);
 }
 
-void avconv_start(uv_loop_t *loop, avconv_t *av, char *fname) {
+static void avconv_read(audio_in_t *ai, void *buf, int len) {
+	avconv_t *av = (avconv_t *)ai->in;
+
+	if (av->stat != INIT)
+		panic("please call can_read before read");
+	av->stat = READING;
+
+	av->data_buf = buf;
+	av->data_len = len;
+
+	debug("len=%d", len);
+
+	uv_read_start((uv_stream_t *)av->pipe[0], data_alloc_buffer, data_pipe_read);
+}
+
+static void avconv_stop(audio_in_t *ai) {
+	avconv_t *av = (avconv_t *)ai->in;
+
+	debug("stop");
+
+	if (av->stat == INIT)
+		uv_process_kill(av->proc, 9);
+}
+
+static int avconv_can_read(audio_in_t *ai) {
+	avconv_t *av = (avconv_t *)ai->in;
+
+	return av->stat == INIT;
+}
+
+void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai) {
+	ai->read = avconv_read;
+	ai->stop = avconv_stop;
+	ai->can_read = avconv_can_read;
+
+	avconv_t *av = (avconv_t *)zalloc(sizeof(avconv_t));
+	av->data = ai;
 
 	uv_process_t *proc = (uv_process_t *)zalloc(sizeof(uv_process_t));
 	proc->data = av;
@@ -221,34 +278,14 @@ void avconv_start(uv_loop_t *loop, avconv_t *av, char *fname) {
 	opts.stdio = stdio;
 	opts.stdio_count = 3;
 
-	char *args[] = {"avconv", "-i", fname, "-f", "s16le", "-ar", "44100", "-", NULL};
+	char *args[] = {"avconv", "-i", ai->url, "-f", "s16le", "-ar", "44100", "-", NULL};
 	opts.file = args[0];
 	opts.args = args;
 	opts.exit_cb = proc_on_exit;
 
 	int r = uv_spawn(loop, proc, opts);
-	info("cmd=%s spawn=%d pid=%d", fname, r, proc->pid);
+	info("url=%s spawn=%d pid=%d", ai->url, r, proc->pid);
 
 	uv_read_start((uv_stream_t *)av->pipe[1], probe_alloc_buffer, probe_pipe_read);
-}
-
-void avconv_read(avconv_t *av, void *buf, int len, void (*done)(avconv_t *, int)) {
-	av->data_buf = buf;
-	av->data_len = len;
-	av->on_read_done = done;
-
-	debug("len=%d", len);
-
-	uv_read_start((uv_stream_t *)av->pipe[0], data_alloc_buffer, data_pipe_read);
-}
-
-void avconv_stop(avconv_t *av) {
-	av->on_read_done = NULL;
-	av->on_probe = NULL;
-	av->on_exit = NULL;
-
-	debug("stopped");
-	if (av->proc)
-		uv_process_kill(av->proc, 9);
 }
 
