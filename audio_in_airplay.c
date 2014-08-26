@@ -221,6 +221,7 @@ static void *shairport_loop(void *_p) {
 	info("airplay starts");
 
 	shairport_start_loop(sp);
+
 	return NULL;
 }
 

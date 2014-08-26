@@ -72,7 +72,7 @@ darwin-install-deps:
 	brew install libav
 
 inst-mips:
-	tar cvf $@.tar server-mips *.lua
+	tar cvf $@.tar server-mips *.lua tests
 
 clean:
 	rm -rf *.o server-mips server-x86 server-darwin
