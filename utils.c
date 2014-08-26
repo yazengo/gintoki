@@ -468,9 +468,11 @@ static void fault(int sig) {
 }
 
 void utils_preinit() {
-	signal(SIGILL, fault);
-	signal(SIGBUS, fault);
-	signal(SIGSEGV, fault);
+	if (getenv("COREDUMP") == NULL) {
+		signal(SIGILL, fault);
+		signal(SIGBUS, fault);
+		signal(SIGSEGV, fault);
+	}
 
 	char *s = getenv("LOG");
 	if (s) {

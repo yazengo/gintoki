@@ -331,6 +331,11 @@ static void *upnp_thread(void *_) {
 	return NULL;
 }
 
+static void upnp_notify_thread(uv_work_t *req, int _) {
+	
+
+}
+
 // upnp.notify(table/strbuf)
 static int upnp_notify(lua_State *L) {
 	if (upnp->srv == NULL || upnp->udn == NULL) {
@@ -344,6 +349,13 @@ static int upnp_notify(lua_State *L) {
 	lua_remove(L, -2);
 	lua_insert(L, -2);
 	lua_call_or_die(L, 1, 1);
+
+	/*
+	upnp_luv_t *ul = zalloc();
+	static uv_work_t w;
+	w.data = ao;
+	uv_queue_work(ao->loop, &w, play_thread, play_done);
+	*/
 
 	char *json = (char *)lua_tostring(L, -1);
 

@@ -100,6 +100,12 @@ static void parser_eat(avconv_t *av, avconv_probe_parser_t *p, void *buf, int le
 	}
 }
 
+// can_read()
+// on_exit()
+// INIT -> KILLING -> CLOSING_FD1 -> CLOSING_FD2
+// data pipe read n < 0 ==> on_exit(); and kill process
+// process_exit -> close all handles one by one
+
 static void on_handle_close(avconv_t *av) {
 	av->closed_nr++;
 
@@ -177,8 +183,10 @@ static void proc_on_exit(uv_process_t *proc, int stat, int sig) {
 
 	info("sig=%d", sig);
 
-	uv_close((uv_handle_t *)proc, proc_handle_free);
-	av->proc = NULL;
+	if (av->proc) {
+		uv_close((uv_handle_t *)av->proc, proc_handle_free);
+		av->proc = NULL;
+	}
 
 	int i;
 	for (i = 0; i < 2; i++) {
