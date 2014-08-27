@@ -29,6 +29,8 @@ enum {
 	STOPPED, PLAYING,
 };
 
+static uv_loop_t *loop;
+static lua_State *L;
 static airplay_t _ap, *ap = &_ap;
 
 // in main uv loop
@@ -245,5 +247,18 @@ void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop) {
 		pthread_create(&tid, NULL, shairport_test_loop, sp);
 	else
 		pthread_create(&tid, NULL, shairport_loop, sp);
+}
+
+static int lua_airplay_start(lua_State *L) {
+	info("starts");
+	audio_in_airplay_start_loop(L, loop);
+}
+
+void lua_airplay_init(lua_State *_L, uv_loop_t *_loop) {
+	L = _L;
+	loop = _loop;
+
+	lua_pushcfunction(L, lua_airplay_start);
+	lua_setglobal(L, "airplay_start");
 }
 

@@ -320,20 +320,34 @@ static int PlayerDeviceStop() {
 	return UPNP_E_SUCCESS;
 }
 
-static void *upnp_thread(void *_) {
-	char *ip = NULL;
-	char *desc_doc_name = NULL;
-	char *web_dir_path = NULL;
-	unsigned short port = 49152;
+static int upnp_port = 49152;
 
-	PlayerDeviceStart(ip, port, desc_doc_name, web_dir_path, 0);
-
+static void *upnp_thread_stop(void *_) {
+	PlayerDeviceStop();
 	return NULL;
 }
 
-static void upnp_notify_thread(uv_work_t *req, int _) {
-	
+static void *upnp_thread_start(void *_) {
+	PlayerDeviceStart(NULL, upnp_port, NULL, NULL, 0);
+	return NULL;
+}
 
+static void upnp_notify_done(uv_work_t *req, int _) {
+}
+
+static void upnp_notify_thread(uv_work_t *w) {
+	upnp_luv_t *ul = (upnp_luv_t *)w->data;
+
+	const char *names[] = { "event_data" };
+	const char *vals[] = { ul->in };
+
+	int r = UpnpNotify(upnp->h, upnp->udn, upnp->srv, names, vals, 1);
+
+	if (r == UPNP_E_SUCCESS) {
+		info("ok");
+	} else {
+		info("fail");
+	}
 }
 
 // upnp.notify(table/strbuf)
@@ -350,28 +364,19 @@ static int upnp_notify(lua_State *L) {
 	lua_insert(L, -2);
 	lua_call_or_die(L, 1, 1);
 
-	/*
-	upnp_luv_t *ul = zalloc();
-	static uv_work_t w;
-	w.data = ao;
-	uv_queue_work(ao->loop, &w, play_thread, play_done);
-	*/
-
 	char *json = (char *)lua_tostring(L, -1);
-
-	const char *names[] = { "event_data" };
-	const char *vals[] = { json };
 
 	info("udn=%s srv=%s json=%s", upnp->udn, upnp->srv, json);
 
-	int r = UpnpNotify(upnp->h, upnp->udn, upnp->srv, names, vals, 1);
-	// BUG: this function may be blocked
+	if (json == NULL)
+		return 0;
 
-	if (r == UPNP_E_SUCCESS) {
-		info("ok");
-	} else {
-		info("fail");
-	}
+	upnp_luv_t *ul = (upnp_luv_t *)zalloc(sizeof(upnp_luv_t));
+	ul->in = strdup(json);
+
+	static uv_work_t w;
+	w.data = ul;
+	uv_queue_work(upnp->loop, &w, upnp_notify_thread, upnp_notify_done);
 
 	return 0;
 }
@@ -394,16 +399,15 @@ static void *test_thread(void *_) {
 
 // upnp.start()
 static int upnp_start(lua_State *L) {
-	// upnp.notify = [native function]
-	lua_getglobal(L, "upnp");
-	lua_pushcfunction(L, upnp_notify);
-	lua_setfield(L, -2, "notify");
-	lua_pop(L, 1);
-
 	pthread_t tid;
-	pthread_create(&tid, NULL, upnp_thread, NULL);
+	pthread_create(&tid, NULL, upnp_thread_start, NULL);
+	return 0;
+}
 
-	//pthread_create(&tid, NULL, test_thread, NULL);
+// upnp.stop()
+static int upnp_stop(lua_State *L) {
+	pthread_t tid;
+	pthread_create(&tid, NULL, upnp_thread_stop, NULL);
 	return 0;
 }
 	
@@ -415,10 +419,22 @@ void upnp_init(lua_State *L, uv_loop_t *loop) {
 	lua_newtable(L);
 	lua_setglobal(L, "upnp");
 
+	// upnp.notify = [native function]
+	lua_getglobal(L, "upnp");
+	lua_pushcfunction(L, upnp_notify);
+	lua_setfield(L, -2, "notify");
+	lua_pop(L, 1);
+
 	// upnp.start = [native function]
 	lua_getglobal(L, "upnp");
 	lua_pushcfunction(L, upnp_start);
 	lua_setfield(L, -2, "start");
+	lua_pop(L, 1);
+
+	// upnp.stop = [native function]
+	lua_getglobal(L, "upnp");
+	lua_pushcfunction(L, upnp_stop);
+	lua_setfield(L, -2, "stop");
 	lua_pop(L, 1);
 }
 

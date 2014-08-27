@@ -10,11 +10,13 @@
 
 static int fd_gpio;
 static int fd_vol;
+static int fd_network_notify;
+static int fd_gsensor;
 static uv_loop_t *loop;
 static lua_State *L;
 
 static void dev_open(char *devname) {
-	int fd = open(devname, O_RDWR);
+	int fd = open(devname, O_RDONLY);
 	if (fd == -1)
 		return;
 
@@ -39,6 +41,18 @@ static void dev_open(char *devname) {
 		return;
 	}
 
+	if (!strcmp(name, "network_notify")) {
+		fd_network_notify = fd;
+		info("name=%s network_notify_fd=%d", name, fd);
+		return;
+	}
+
+	if (!strcmp(name, "gsensor_dev")) {
+		fd_gsensor = fd;
+		info("name=%s fd_gsensor=%d", name, fd);
+		return;
+	}
+
 	close(fd);
 }
 
@@ -46,6 +60,11 @@ enum {
 	KEYPRESS = 33,
 	SLEEP = 34,
 	WAKEUP = 35,
+	NETWORK_UP = 36,
+	NETWORK_DOWN = 37,
+
+	PREV = 40,
+	NEXT = 41,
 };
 
 // in main thread
@@ -66,10 +85,11 @@ static void call_event_done(void *pcall, void *_p) {
 
 // in poll thread
 static void call_event(int e) {
-	pthread_call_uv_wait_withname(loop, call_event_done, &e, "vol");
+	info("e=%d", e);
+	pthread_call_uv_wait_withname(loop, call_event_done, &e, "inputdev");
 }
 
-static void poll_gpio_thread(void *_) {
+static void *poll_gpio_thread(void *_) {
 	struct input_event e = {}, last_e = {};
 	enum {
 		NONE, KEYDOWN,
@@ -99,10 +119,11 @@ static void poll_gpio_thread(void *_) {
 		}
 		last_e = e;
 	}
+	return NULL;
 }
 
-static void poll_vol_thread(void *_) {
-	struct input_event e, last_e;
+static void *poll_vol_thread(void *_) {
+	struct input_event e = {}, last_e = {};
 
 	// fd_vol: EV_ABS
 	for (;;) {
@@ -115,6 +136,47 @@ static void poll_vol_thread(void *_) {
 		}
 		last_e = e;
 	}
+	return NULL;
+}
+
+static void *poll_gsensor_thread(void *_) {
+	struct input_event e = {}, last_e = {};
+	int stat = KEY_PLAY;
+
+	for (;;) {
+		int r = read(fd_gsensor, &e, sizeof(e));
+		info("gsensor: type=%d code=%d value=%d", e.type, e.code, e.value);
+		if (r < 0)
+			panic("gsensor read failed");
+		if (e.type == EV_SYN && last_e.type != EV_SYN) {
+			if (last_e.value == 1) {
+				if (last_e.code == KEY_BACK) 
+					call_event(PREV);
+				if (last_e.code == KEY_FORWARD)
+					call_event(NEXT);
+			}
+		}
+		last_e = e;
+	}
+	return NULL;
+}
+
+
+static void *poll_network_notify_thread(void *_) {
+	struct input_event e = {}, last_e = {};
+
+	for (;;) {
+		int r = read(fd_network_notify, &e, sizeof(e));
+		info("type=%d code=%d value=%d", e.type, e.code, e.value);
+		if (r < 0)
+			panic("read failed");
+		if (e.type == EV_SYN && last_e.type != EV_SYN) {
+			if (last_e.code == 150)
+				call_event(last_e.value ? NETWORK_UP : NETWORK_DOWN);
+		}
+		last_e = e;
+	}
+	return NULL;
 }
 
 void inputdev_init(lua_State *_L, uv_loop_t *_loop) {
@@ -126,11 +188,13 @@ void inputdev_init(lua_State *_L, uv_loop_t *_loop) {
 			sprintf(name, "/dev/input/event%d", i);
 			dev_open(name);
 		}
-		if (fd_gpio == 0 || fd_vol == 0) {
-			info("unable to get fds, retry in 1s");
-			usleep(1e6 * 0.5);
+		if (!fd_gpio || !fd_vol || !fd_network_notify || !fd_gsensor) {
+			info("unable to get all fds, retry in 1s");
 			close(fd_gpio);
 			close(fd_vol);
+			close(fd_gsensor);
+			close(fd_network_notify);
+			sleep(1);
 		} else
 			break;
 	}
@@ -141,5 +205,7 @@ void inputdev_init(lua_State *_L, uv_loop_t *_loop) {
 	pthread_t tid;
 	pthread_create(&tid, NULL, poll_gpio_thread, NULL);
 	pthread_create(&tid, NULL, poll_vol_thread, NULL);
+	pthread_create(&tid, NULL, poll_network_notify_thread, NULL);
+	pthread_create(&tid, NULL, poll_gsensor_thread, NULL);
 }
 
