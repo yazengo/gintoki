@@ -13,6 +13,7 @@ P.loadlist = function (dir)
 			url = dir..'/'..fname, 
 			title = os.basename(fname),
 			id = tostring(i),
+			cover_url = '',
 		}
 	end
 	return list
@@ -21,11 +22,15 @@ end
 P.list = P.loadlist('musics')
 P.i = 0
 
-P.setopt = function (opt)
-	local i = tonumber(opt.id)
-	if i >= 0 and i < table.maxn(P.list) then
-		P.i = i
-		if P.next_callback then P.next_callback() end
+P.setopt = function (opt, done)
+	if opt.id then
+		local i = tonumber(opt.id)
+		if i >= 0 and i < table.maxn(P.list) then
+			P.i = i
+			if P.next_callback then P.next_callback() end
+		end
+	end
+	if opt.mode then
 	end
 end
 

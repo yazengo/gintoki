@@ -18,7 +18,14 @@ ar_info = function ()
 end
 
 upnp.on_subscribe = function (a, done)
-	done{['audio.info']=ar_info(), ['muno.info']=muno.info()}
+	local r = {
+		['audio.info']=ar_info(),
+		['muno.info']=muno.info(),
+	}
+	if radio.source == localmusic then
+		table.add(r, {['songs_list']=localmusic.list})
+	end
+	done(r)
 end
 
 upnp.on_action = function (a, done)
@@ -41,7 +48,7 @@ upnp.on_action = function (a, done)
 		audio.pause_resume_toggle()
 		done{result=0}
 	elseif a.op == 'local.songs_list' then
-		done(localmusic.list)
+		done{['songs_list']=localmusic.list}
 	elseif a.op == 'audio.play' then
 		radio.source_setopt({id=a.id})
 		done{result=0}

@@ -69,7 +69,7 @@ info = function (...)
 end
 
 os.basename = function (s)
-	local x = string.gsub(s, '%.[^%.]*', '')
+	local x = string.gsub(s, '%.[^%.]*$', '')
 	return x
 end
 
@@ -80,5 +80,4 @@ end
 
 prop.save = function ()
 end
-
 
