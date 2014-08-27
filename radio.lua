@@ -18,10 +18,10 @@ R.source_setopt = function (opt, done)
 	end
 end
 
-R.next = function ()
+R.next = function (opt)
 	R.log('next')
 
-	R.song = R.source.next()
+	R.song = R.source.next(opt)
 	if not R.song then return end
 	if R.play then R.play(R.song) end
 end

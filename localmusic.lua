@@ -67,16 +67,18 @@ P.setopt = function (opt, done)
 end
 
 -- return song or nil
-P.next = function ()
+P.next = function (opt)
+	if P.mode == 'repeat_one' and opt and opt.playdone then
+		return P.list[P.i]
+	end
+
 	if P.mode == 'repeat_all' then
 		P.i = P.i+1
 		if P.i > table.maxn(P.list) then
 			P.i = 1
 		end
 		return P.list[P.i]
-	elseif P.mode == 'repeat_one' then
-		return P.list[P.i]
-	elseif P.mode == 'normal' then
+	elseif P.mode == 'normal' or P.mode == 'repeat_one' then
 		P.i = P.i+1
 		if P.i > table.maxn(P.list) then
 			return nil
@@ -102,9 +104,7 @@ P.prev = function ()
 			P.i = table.maxn(P.list)
 		end
 		return P.list[P.i]
-	elseif P.mode == 'repeat_one' then
-		return P.list[P.i]
-	elseif P.mode == 'normal' then
+	elseif P.mode == 'normal' or P.mode == 'repeat_one' then
 		P.i = P.i-1
 		if P.i <= 0 then
 			return nil
@@ -122,7 +122,7 @@ P.prev = function ()
 end
 
 P.info = function ()
-	return {type='local', mode=P.mode}
+	return {type='local', play_mode=P.mode}
 end
 
 localmusic = P

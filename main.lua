@@ -73,7 +73,7 @@ radio.play = function (song)
 		url = song.url,
 		done = function () 
 			info('playdone')
-			radio.next()
+			radio.next{playdone=true}
 		end
 	}
 end
