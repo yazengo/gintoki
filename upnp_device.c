@@ -342,12 +342,13 @@ static void upnp_notify_thread(uv_work_t *w) {
 	const char *vals[] = { ul->in };
 
 	int r = UpnpNotify(upnp->h, upnp->udn, upnp->srv, names, vals, 1);
-
 	if (r == UPNP_E_SUCCESS) {
 		info("ok");
 	} else {
 		info("fail");
 	}
+
+	free(ul->in);
 }
 
 // upnp.notify(table/strbuf)
