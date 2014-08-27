@@ -81,3 +81,5 @@ end
 prop.save = function ()
 end
 
+math.randomseed(os.time())
+

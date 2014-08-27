@@ -59,7 +59,7 @@ void _log(
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
 
-	fprintf(stderr, "[%.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
+	fprintf(stdout, "[%.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
 
 	if (level == LOG_PANIC) {
 		print_trackback();

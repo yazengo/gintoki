@@ -19,10 +19,14 @@ P.loadlist = function (dir)
 	return list
 end
 
+P.log_list = {}
+P.log_max = 40
+P.log_i = 0
+
 P.list = P.loadlist('musics')
 P.i = 0
 
-P.setopt = function (opt, done)
+P.setopt = function (opt)
 	if opt.id then
 		local i = tonumber(opt.id)
 		if i >= 0 and i < table.maxn(P.list) then
@@ -30,25 +34,72 @@ P.setopt = function (opt, done)
 			if P.next_callback then P.next_callback() end
 		end
 	end
-	if opt.mode then
+
+	if opt.mode == 'repeat_all' then
+		P.mode = opt.mode
+	elseif opt.mode == 'repeat_one' then
+		P.mode = opt.mode
+	elseif opt.mode == 'normal' then
+		P.mode = opt.mode
+	elseif opt.mode == 'shuffle' then
+		P.mode = opt.mode
 	end
+
 end
 
 -- return song or nil
 P.next = function ()
-	local s = P.cursong()
-	P.i = P.i + 1
-	return s
+	if P.mode == 'repeat_all' then
+		P.i = P.i+1
+		if P.i == table.maxn(P.list) then
+			P.i = 0
+		end
+		return P.list[P.i]
+	elseif P.mode == 'repeat_one' then
+		return P.list[P.i]
+	elseif P.mode == 'normal' then
+		P.i = P.i+1
+		if P.i == table.maxn(P.list) then
+			return nil
+		end
+		return P.list[P.i]
+	elseif P.mode == 'shuffle' then
+		P.i = math.random(0, table.maxn(P.list)-1)
+
+		P.log_list[P.log_i+1] = P.list[P.i]
+		P.log_i = P.log_i+1
+		if table.maxn(P.log_list) > P.log_max then
+			P.log_list[P.log_i-P.log_max] = nil
+		end
+
+		return P.list[P.i]
+	end
 end
 
 P.prev = function ()
-	local s = P.cursong()
-	P.i = P.i - 1
-	return s
-end
-
-P.cursong = function () 
-	return P.list[(P.i%table.maxn(P.list))+1]
+	if P.mode == 'repeat_all' then
+		P.i = P.i-1
+		if P.i < 0 then
+			P.i = 0
+		end
+		return P.list[P.i]
+	elseif P.mode == 'repeat_one' then
+		return P.list[P.i]
+	elseif P.mode == 'normal' then
+		P.i = P.i-1
+		if P.i < 0 then
+			return nil
+		end
+		return P.list[P.i]
+	elseif P.mode == 'shuffle' then
+		if not P.log_list[P.log_i] then
+			P.i = math.random(0, table.maxn(P.list)-1)
+			return P.list[P.i]
+		else
+			P.log_i = P.log_i-1
+			return P.log_list[P.log_i+1]
+		end
+	end
 end
 
 P.info = function ()

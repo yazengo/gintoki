@@ -22,9 +22,6 @@ upnp.on_subscribe = function (a, done)
 		['audio.info']=ar_info(),
 		['muno.info']=muno.info(),
 	}
-	if radio.source == localmusic then
-		table.add(r, {['songs_list']=localmusic.list})
-	end
 	done(r)
 end
 
@@ -88,6 +85,7 @@ ttyraw_onkey = function (key)
 end
 
 upnp.start()
+--audio.setvol(0)
 --radio.start(pandora)
 radio.start(localmusic)
 --ttyraw_open(ttyraw_onkey)
