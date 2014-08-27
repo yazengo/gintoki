@@ -138,7 +138,6 @@ on_inputevent = function (e)
 	if e == 36 then
 		info('network up')
 		upnp.start()
-		airplay_start()
 	end
 
 	-- network down
@@ -165,7 +164,7 @@ end
 upnp.start()
 
 --setloglevel(0)
-audio.setvol(3)
+audio.setvol(0)
 --radio.start(pandora)
 radio.start(localmusic)
 --ttyraw_open(ttyraw_onkey)
