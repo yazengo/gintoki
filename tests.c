@@ -245,9 +245,6 @@ static void *pthread_loop_1(void *_) {
 	return NULL;
 }
 
-static void pcall_luv_cb(lua_State *L, void *_) {
-}
-
 typedef struct {
 	lua_State *L;
 	uv_loop_t *loop;

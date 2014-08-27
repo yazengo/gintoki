@@ -35,9 +35,11 @@ P.fetch = function ()
 	if P.fetch_task then return end
 
 	local done = function (js)
+		P.fetch_task = nil
 		local songs = js.songs or {}
 		P.log('fetchdone songnr', table.maxn(songs))
 		if table.maxn(songs) == 0 then
+			P.log('refetch after 1000ms')
 			set_timeout(P.fetch, 1000)
 			return
 		end

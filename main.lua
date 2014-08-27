@@ -31,20 +31,27 @@ upnp.on_action = function (a, done)
 		done{result=vol}
 	elseif a.op == 'muno.info' then
 		done(muno.info())
+	elseif a.op == 'audio.prev' then
+		radio.prev()
+		done{result=0}
 	elseif a.op == 'audio.next' then
 		radio.next()
 		done{result=0}
 	elseif a.op == 'audio.play_pause_toggle' then
 		audio.pause_resume_toggle()
 		done{result=0}
-	elseif a.op == '' then
+	elseif a.op == 'local.songs_list' then
+		done(localmusic.list)
+	elseif a.op == 'audio.play' then
+		radio.source_setopt({id=a.id})
+		done{result=0}
 	else
 		done{result=0}
 	end
 end
 
 muno.on('stat_change', function () 
-	M.lo('muno stat ->', muno.info())
+	M.log('muno stat ->', muno.info())
 	upnp.notify{['muno.info']=muno.info()}
 end)
 
@@ -56,7 +63,7 @@ end)
 
 radio.play = function (song) 
 	M.log('play', song.title)
-	audio.play{
+	audio.play {
 		url = song.url,
 		done = function () 
 			info('playdone')

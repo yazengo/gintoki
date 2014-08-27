@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <execinfo.h>
 #include <signal.h>
+#include <dirent.h>
 
 #include <uv.h>
 #include <lua.h>
@@ -311,6 +312,56 @@ static int ttyraw_open(lua_State *L) {
 	return 0;
 }
 
+/*
+static int prop_get(lua_State *L) {
+	return 0;
+}
+
+static int prop_set(lua_State *L) {
+	return 0;
+}
+*/
+
+// os.readdir('path', done)
+static int os_readdir(lua_State *L) {
+	const char *path = lua_tostring(L, 1);
+
+	lua_newtable(L);
+
+	DIR *dir = opendir(path);
+	if (dir) {
+		struct dirent *e;
+		int i;
+		for (i = 1; ; i++) {
+			e = readdir(dir);
+			if (e == NULL)
+				break;
+			if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) {
+				i--;
+				continue;
+			}
+			lua_pushnumber(L, i);
+			lua_pushstring(L, e->d_name);
+			lua_settable(L, -3);
+		}
+		closedir(dir);
+	}
+
+	return 1;
+}
+
+void lua_set_global_ptr(lua_State *L, const char *pref, void *p) {
+	char name[128];
+	sprintf(name, "%s_%p", pref, p);
+	lua_setglobal(L, name);
+}
+
+void lua_get_global_ptr(lua_State *L, const char *pref, void *p) {
+	char name[128];
+	sprintf(name, "%s_%p", pref, p);
+	lua_getglobal(L, name);
+}
+
 void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p) {
 	char name[128];
 	sprintf(name, "%s_%p", pref, p);
@@ -379,6 +430,13 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, ttyraw_open, 1);
 	lua_setglobal(L, "ttyraw_open");
+
+	// os.readdir = [native function]
+	lua_getglobal(L, "os");
+	lua_pushuserptr(L, loop);
+	lua_pushcclosure(L, os_readdir, 1);
+	lua_setfield(L, -2, "readdir");
+	lua_pop(L, 1);
 
 	lua_pushcfunction(L, info_lua);
 	lua_setglobal(L, "_info");

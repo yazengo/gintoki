@@ -68,3 +68,17 @@ info = function (...)
 	_info(s)
 end
 
+os.basename = function (s)
+	local x = string.gsub(s, '%.[^%.]*', '')
+	return x
+end
+
+prop = {}
+
+prop.load = function ()
+end
+
+prop.save = function ()
+end
+
+
