@@ -445,6 +445,89 @@ static void test_ttyraw_open(uv_loop_t *loop) {
 	uv_read_start((uv_stream_t *)tty, uv_malloc_buffer, tty_read);
 }
 
+#if 0
+typedef struct {
+	lua_State *L;
+	uv_loop_t *loop;
+} luv_tcp_t;
+
+static void luv_tcp_alloc(uv_handle_t *h, size_t size, uv_buf_t* buf) {
+	buf->base = malloc(size);
+	buf->len = size;
+}
+
+static void luv_tcp_alloc(uv_handle_t *h, size_t size, uv_buf_t* buf) {
+	buf->base = malloc(size);
+	buf->len = size;
+}
+
+static void luv_tcp_read(uv_stream_t *h, ssize_t n, const uv_buf_t* buf) {
+	int i;
+	write_req_t *wr;
+
+	if (n < 0) {
+		if (buf->base) {
+			free(buf->base);
+		}
+		uv_close((uv_handle_t *)h, luv_on_close);
+		return;
+	}
+
+	if (nread == 0) {
+		free(buf->base);
+		return;
+	}
+
+	if (!server_closed) {
+		for (i = 0; i < nread; i++) {
+			if (buf->base[i] == 'Q') {
+				if (i + 1 < nread && buf->base[i + 1] == 'S') {
+					free(buf->base);
+					uv_close((uv_handle_t*)handle, on_close);
+					return;
+				} else {
+					uv_close(server, on_server_close);
+					server_closed = 1;
+				}
+			}
+		}
+	}
+
+	wr = (write_req_t*) malloc(sizeof *wr);
+	ASSERT(wr != NULL);
+	wr->buf = uv_buf_init(buf->base, nread);
+
+	if (uv_write(&wr->req, handle, &wr->buf, 1, after_write)) {
+		FATAL("uv_write failed");
+	}
+}
+
+
+
+static void on_connection(uv_stream_t *srv, int status) {
+	luv_tcp_t *tcp = (luv_tcp_t *)src->data;
+
+	uv_stream_t *cli = (uv_stream_t *)zalloc(sizeof(uv_tcp_t));
+	cli->data = srv->data;
+	uv_tcp_init(loop, (uv_tcp_t *)cli);
+	uv_accept(srv, cli);
+	uv_read_start(cli, );
+}
+
+static void test_tcp(uv_loop_t *loop) {
+	luv_tcp_t *tcp = (luv_tcp_t *)zalloc(sizeof(luv_tcp_t));
+	tcp->loop = loop;
+
+	uv_tcp_t *srv = (uv_tcp_t *)zalloc(sizeof(uv_tcp_t));
+	srv->data = tcp;
+	uv_tcp_init(loop, srv);
+	struct sockaddr_in addr = uv_ip4_addr("0.0.0.0", 7000);
+	uv_tcp_bind(srv, (const struct sockaddr *)&addr, 0);
+	uv_listen((uv_stream_t *)srv, SOMAXCONN, on_connection);
+}
+
+#endif
+
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);
 	if (i == 1)

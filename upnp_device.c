@@ -97,7 +97,7 @@ static int upnp_control_action_request(Upnp_EventType EventType, void *Event, vo
 	ca_event->ActionResult = NULL;
 	// ca_event->ActionName;
 
-	char *in = SampleUtil_GetFirstDocumentItem(ca_event->ActionRequest, "params");
+	char *in = SampleUtil_GetFirstDocumentItem(ca_event->ActionRequest, "Params");
 	info("in=%s", in);
 	if (in == NULL)
 		return -1;

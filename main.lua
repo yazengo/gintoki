@@ -44,11 +44,13 @@ upnp.on_action = function (a, done)
 	elseif a.op == 'audio.play_pause_toggle' then
 		audio.pause_resume_toggle()
 		done{result=0}
-	elseif a.op == 'local.songs_list' then
-		done{['songs_list']=localmusic.list}
 	elseif a.op == 'audio.play' then
-		radio.source_setopt({id=a.id})
+		if a.id then
+			radio.source_setopt({id=a.id})
+		end
 		done{result=0}
+	elseif string.hasprefix(a.op, 'local.') then
+		radio.source_setopt(a, done)
 	else
 		done{result=0}
 	end
