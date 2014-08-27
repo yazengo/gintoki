@@ -129,6 +129,11 @@ on_inputevent = function (e)
 		audio.pause_resume_toggle()
 	end
 
+	if e == 38 then
+		info('inputdev: volend')
+		audio.setvol(0)
+	end
+
 	-- network up
 	if e == 36 then
 		info('network up')

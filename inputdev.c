@@ -58,10 +58,13 @@ static void dev_open(char *devname) {
 
 enum {
 	KEYPRESS = 33,
+
 	SLEEP = 34,
 	WAKEUP = 35,
 	NETWORK_UP = 36,
 	NETWORK_DOWN = 37,
+
+	VOLEND = 38,
 
 	PREV = 40,
 	NEXT = 41,
@@ -103,17 +106,25 @@ static void *poll_gpio_thread(void *_) {
 			panic("gpio read failed");
 		info("gpio_key: type=%x code=%x value=%x", e.type, e.code, e.value);
 		if (e.type == EV_SYN && last_e.type != EV_SYN) {
-			if (last_e.value == 0) {
-				// key down
-				switch (stat) {
-				case KEYDOWN: break;
-				case NONE: stat = KEYDOWN; break;
-				}
-			} else {
-				// key up
-				switch (stat) {
-				case KEYDOWN: stat = NONE; call_event(KEYPRESS); break;
-				case NONE: break;
+			if (last_e.code == 0x8e) {
+				call_event(VOLEND); 
+			}
+			if (last_e.code == 0xa4) {
+				if (last_e.value == 0) {
+					// key down
+					switch (stat) {
+					case KEYDOWN: break;
+					case NONE: stat = KEYDOWN; break;
+					}
+				} else {
+					// key up
+					switch (stat) {
+					case KEYDOWN: 
+						stat = NONE; 
+						call_event(KEYPRESS); 
+						break;
+					case NONE: break;
+					}
 				}
 			}
 		}
