@@ -20,6 +20,7 @@ typedef struct audio_in_s {
 
 void audio_in_read(audio_in_t *ai, void *buf, int len, void (*done)(audio_in_t *ai, int len));
 void audio_in_stop(audio_in_t *ai);
+int audio_in_is_reading(audio_in_t *ai);
 
 void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai);
 void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai);

@@ -25,7 +25,7 @@ static void fillbuf(int16_t *buf, int n, int key, int rate) {
 }
 
 void audio_out_test_fill_buf_with_key(void *buf, int len, int rate, int key) {
-	fillbuf((int16_t *)buf, len, key, rate);
+	fillbuf((int16_t *)buf, len/2, key, rate);
 }
 
 static void done(audio_out_t *ao, int len) {

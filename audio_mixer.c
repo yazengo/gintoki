@@ -316,9 +316,9 @@ static int audio_play(lua_State *L) {
 	tr->ai->url = url;
 
 //	if (strncmp(url, "airplay://", strlen("airplay://")))
-	//audio_in_airplay_init(am->loop, tr->ai);
+	audio_in_airplay_init(am->loop, tr->ai);
 	
-	audio_in_avconv_init(am->loop, tr->ai);
+	//audio_in_avconv_init(am->loop, tr->ai);
 
 	tr->stat = TRACK_BUFFERING;
 	tr->first_blood = 1; // for testing

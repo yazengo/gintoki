@@ -5,7 +5,9 @@
 
 static void read(audio_in_t *ai, void *buf, int len) {
 	audio_out_test_fill_buf_with_key(buf, len, 22050, 3);
+	info("len=%d", len);
 	ai->on_read_done(ai, len);
+	ai->on_read_done = NULL;
 }
 
 static void stop(audio_in_t *ai) {

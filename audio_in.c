@@ -1,4 +1,5 @@
 
+#include "utils.h"
 #include "audio_in.h"
 
 void audio_in_stop(audio_in_t *ai) {
