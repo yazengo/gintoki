@@ -46,6 +46,8 @@ void audio_out_cancel_play(audio_out_t *ao) {
 }
 
 void audio_out_set_rate(audio_out_t *ao, int rate) {
+	info("rate=%d", rate);
+
 	ao_sample_format fmt = {};
 	fmt.bits = 16;
 	fmt.channels = 2;

@@ -15,7 +15,7 @@ void ringbuf_data_ahead_get(ringbuf_t *b, void **_buf, int *_len) {
 	int len = RINGBUF_SIZE - b->tail;
 	if (b->len < len)
 		len = b->len;
-	len &= ~1;
+	len &= ~3;
 	*_len = len;
 	*_buf = &b->buf[b->tail];
 }
@@ -24,7 +24,7 @@ void ringbuf_space_ahead_get(ringbuf_t *b, void **_buf, int *_len) {
 	int len = RINGBUF_SIZE - b->head;
 	if ((RINGBUF_SIZE - b->len) < len)
 		len = RINGBUF_SIZE - b->len;
-	len &= ~1;
+	len &= ~3;
 	*_len = len;
 	*_buf = &b->buf[b->head];
 }

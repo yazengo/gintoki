@@ -53,7 +53,7 @@ upnp.on_action = function (a, done)
 		end
 		done{result=0}
 	elseif string.hasprefix(a.op, 'local.') then
-		radio.source_setopt(a, done)
+		localmusic.setopt(a, done)
 	elseif string.hasprefix(a.op, 'pandora.') then
 		radio.source_setopt(a, done)
 	elseif a.op == 'radio.change_type' then
@@ -107,10 +107,10 @@ ttyraw_onkey = function (key)
 end
 
 set_timeout(function ()
-	radio.source_setopt{id='100'}
+--	radio.source_setopt{id='100'}
 end, 3000)
 
-setloglevel(0)
+--setloglevel(0)
 upnp.start()
 audio.setvol(30)
 --radio.start(pandora)
