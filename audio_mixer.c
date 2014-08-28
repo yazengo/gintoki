@@ -287,7 +287,7 @@ static int audio_play(lua_State *L) {
 	char *url = (char *)lua_tostring(L, 3);
 	if (url == NULL) {
 		warn("failed: url=nil");
-		goto out;
+		return 0;
 	}
 
 	audio_track_t *tr = &am->tracks[i];
@@ -325,8 +325,6 @@ static int audio_play(lua_State *L) {
 
 	check_all_tracks(am);
 
-out:
-	lua_pop(L, 3);
 	return 0;
 }
 

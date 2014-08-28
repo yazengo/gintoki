@@ -106,9 +106,13 @@ ttyraw_onkey = function (key)
 	end
 end
 
+set_timeout(function ()
+	radio.source_setopt{id='100'}
+end, 3000)
+
 upnp.start()
 audio.setvol(30)
-radio.start(pandora)
---radio.start(localmusic)
+--radio.start(pandora)
+radio.start(localmusic)
 --ttyraw_open(ttyraw_onkey)
 
