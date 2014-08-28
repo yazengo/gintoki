@@ -9,6 +9,7 @@
 #include "pcm.h"
 #include "avconv.h"
 #include "audio_mixer.h"
+#include "audio_in.h"
 #include "audio_out.h"
 
 #define MAX_MIXLEN 2048
@@ -30,7 +31,7 @@ struct audio_mixer_s;
 
 typedef struct {
 	struct audio_mixer_s *am;
-	avconv_t *av;
+	audio_in_t *ai;
 	int stat;
 	ringbuf_t buf;
 	float vol;
@@ -110,19 +111,19 @@ static void track_change_stat(audio_track_t *tr, int stat) {
 		audio_emit(tr->am, "stat_change", track_stat_str(stat));
 }
 
-static void avconv_on_exit(avconv_t *av) {
-	audio_track_t *tr = (audio_track_t *)av->data;
-	tr->av = NULL;
+static void audio_in_on_exit(audio_in_t *ai) {
+	audio_track_t *tr = (audio_track_t *)ai->data;
+	tr->ai = NULL;
 
 	check_all_tracks(tr->am);
 }
 
-static void avconv_on_free(avconv_t *av) {
-	free(av);
+static void audio_in_on_free(audio_in_t *ai) {
+	free(ai);
 }
 
-static void avconv_on_probe(avconv_t *av, const char *key, void *_val) {
-	audio_track_t *tr = (audio_track_t *)av->data;
+static void audio_in_on_probe(audio_in_t *ai, const char *key, void *_val) {
+	audio_track_t *tr = (audio_track_t *)ai->data;
 
 	if (strcmp(key, "dur") == 0) {
 		tr->dur = *(float *)_val;
@@ -130,8 +131,8 @@ static void avconv_on_probe(avconv_t *av, const char *key, void *_val) {
 	}
 }
 
-static void avconv_on_read_done(avconv_t *av, int len) {
-	audio_track_t *tr = (audio_track_t *)av->data;
+static void audio_in_on_read_done(audio_in_t *ai, int len) {
+	audio_track_t *tr = (audio_track_t *)ai->data;
 
 	if (len < 0)
 		return;
@@ -152,7 +153,7 @@ static void check_tracks_can_close(audio_mixer_t *am) {
 	for (i = 0; i < TRACKS_NR; i++) {
 		audio_track_t *tr = &am->tracks[i];
 
-		if (!(tr->av == NULL && tr->stat != TRACK_STOPPED && tr->buf.len == 0))
+		if (!(tr->ai == NULL && tr->stat != TRACK_STOPPED && tr->buf.len == 0))
 			continue;
 
 		tr->stat = TRACK_STOPPED;
@@ -165,13 +166,13 @@ static void check_tracks_can_read(audio_mixer_t *am) {
 	for (i = 0; i < TRACKS_NR; i++) {
 		audio_track_t *tr = &am->tracks[i];
 
-		if (tr->av == NULL || tr->stat == TRACK_STOPPED)
+		if (tr->ai == NULL || tr->stat == TRACK_STOPPED)
 			continue;
 
 		void *buf; int len;
 		ringbuf_space_ahead_get(&tr->buf, &buf, &len);
 		if (len > 0)
-			avconv_read(tr->av, buf, len, avconv_on_read_done);
+			audio_in_read(tr->ai, buf, len, audio_in_on_read_done);
 	}
 }
 
@@ -287,23 +288,24 @@ static int audio_play(lua_State *L) {
 	info("url=%s i=%d", url, i);
 
 	audio_out_cancel_play(am->ao);
-	if (tr->av) {
-		avconv_stop(tr->av);
-		tr->av = NULL;
+	if (tr->ai) {
+		audio_in_stop(tr->ai);
+		tr->ai = NULL;
 	}
 
 	ringbuf_init(&tr->buf);
 	ringbuf_init(&am->mixbuf);
 
-	tr->av = (avconv_t *)zalloc(sizeof(avconv_t));
-	tr->av->data = tr;
-	tr->av->on_probe = avconv_on_probe;
-	tr->av->on_exit = avconv_on_exit;
-	tr->av->on_free = avconv_on_free;
-	avconv_start(am->loop, tr->av, url);
+	tr->ai = (audio_in_t *)zalloc(sizeof(audio_in_t));
+	tr->ai->data = tr;
+	tr->ai->on_probe = audio_in_on_probe;
+	tr->ai->on_exit = audio_in_on_exit;
+	tr->ai->on_free = audio_in_on_free;
+	tr->ai->url = url;
+	audio_in_avconv_init(am->loop, tr->ai);
 
 	tr->stat = TRACK_BUFFERING;
-	tr->first_blood = 1;
+	tr->first_blood = 1; // for testing
 
 	check_all_tracks(am);
 

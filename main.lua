@@ -31,7 +31,7 @@ upnp.on_action = function (a, done)
 	M.log('muno stat ->', muno.info())
 
 	if a.op == 'audio.volume' then 
-		vol = muno.setvol(a.value)
+		local vol = muno.setvol(a.value)
 		done{result=vol}
 	elseif a.op == 'muno.info' then
 		done(muno.info())

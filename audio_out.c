@@ -43,18 +43,24 @@ void audio_out_cancel_play(audio_out_t *ao) {
 	ao->on_play_done = NULL;
 }
 
-void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int sample_rate) {
-	ao->loop = loop;
-
-	ao_initialize();
-
+void audio_out_set_rate(audio_out_t *ao, int rate) {
 	ao_sample_format fmt = {};
 	fmt.bits = 16;
 	fmt.channels = 2;
-	fmt.rate = 44100;
+	fmt.rate = rate;
 	fmt.byte_format = AO_FMT_LITTLE;
+
+	if (ao->aodev)
+		ao_close(ao->aodev);
 
 	int drv = ao_default_driver_id();
 	ao->aodev = ao_open_live(drv, &fmt, NULL);
+}
+
+void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int rate) {
+	ao->loop = loop;
+
+	ao_initialize();
+	audio_out_set_rate(ao, 44100);
 }
 
