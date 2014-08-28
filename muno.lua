@@ -12,6 +12,7 @@ M.info = function ()
 		firmware_version = "1.0.1",
 		firmware_need_update = true,
 		name = 'K.B.Z',
+		local_music_num = table.maxn(localmusic.list),
 	}
 end
 

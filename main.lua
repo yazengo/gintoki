@@ -17,12 +17,15 @@ ar_info = function ()
 	return r
 end
 
-upnp.on_subscribe = function (a, done)
-	local r = {
+all_info = function ()
+	return {
 		['audio.info']=ar_info(),
 		['muno.info']=muno.info(),
 	}
-	done(r)
+end
+
+upnp.on_subscribe = function (a, done)
+	done(all_info())
 end
 
 upnp.on_action = function (a, done)
@@ -51,8 +54,25 @@ upnp.on_action = function (a, done)
 		done{result=0}
 	elseif string.hasprefix(a.op, 'local.') then
 		radio.source_setopt(a, done)
+	elseif string.hasprefix(a.op, 'pandora.') then
+		radio.source_setopt(a, done)
+	elseif a.op == 'radio.change_type' then
+		radio.change(a)
+		done{result=0}
 	else
 		done{result=0}
+	end
+end
+
+radio.change = function (opt)
+	local to
+	if opt.type == 'pandora' then
+		to = pandora
+	elseif opt.type == 'local' then
+		to = localmusic
+	end
+	if radio.source ~= to then
+		radio.start(to)
 	end
 end
 
@@ -87,8 +107,8 @@ ttyraw_onkey = function (key)
 end
 
 upnp.start()
---audio.setvol(0)
---radio.start(pandora)
-radio.start(localmusic)
+audio.setvol(30)
+radio.start(pandora)
+--radio.start(localmusic)
 --ttyraw_open(ttyraw_onkey)
 

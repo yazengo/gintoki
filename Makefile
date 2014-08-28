@@ -8,7 +8,8 @@ objs += upnp_device.o upnp_util.o
 objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
 objs += lua_curl.o
-objs += audio_in.o audio_in_avconv.o audio_in_airplay.o
+objs += audio_in.o audio_in_avconv.o 
+#audio_in_airplay.o
 
 objs-x86 = $(subst .o,-x86.o,$(objs))
 cflags-x86 = $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
@@ -16,12 +17,15 @@ ldflags-x86 = $(shell pkg-config --libs libupnp lua5.2) $(ldflags)
 
 objs-darwin = $(subst .o,-darwin.o,$(objs))
 cflags-darwin += $(cflags)
+cflags-darwin += -I../shairport/
 cflags-darwin += -I/usr/local/Cellar/libupnp/1.6.19/include/upnp/
 cflags-darwin += -I/usr/local/Cellar/lua52/5.2.3/include
 ldflags-darwin += $(ldflags)
 ldflags-darwin += -L/usr/local/Cellar/libupnp/1.6.19/lib
 ldflags-darwin += -L/usr/local/Cellar/lua52/5.2.3/lib
 ldflags-darwin += -L/usr/local/Cellar/libuv/0.10.21/lib
+ldflags-darwin += -L../shairport/
+ldflags-darwin += -lshairport
 ldflags-darwin += -lupnp -llua -luv -lixml -lao
 
 objs-mips = $(subst .o,-mips.o,$(objs))

@@ -53,6 +53,11 @@ end
 
 P.setopt = function (opt, setopt_done) 
 
+	if not string.hasprefix(opt.op, 'pandora.') then
+		setopt_done{}
+		return
+	end
+
 	if opt.op == 'pandora.login' or 
 		 opt.op == 'pandora.genre_choose' or
 		 opt.op == 'pandora.station_choose'
@@ -83,7 +88,11 @@ P.cancel_fetch = function ()
 end
 
 P.cursong = function ()
-	return P.songs[P.songs_i]
+	local s = P.songs[P.songs_i]
+	if s then
+		s['url'] = 'musics/SHE.mp3'
+	end
+	return s
 end
 
 P.next = function ()

@@ -41,3 +41,16 @@ void ringbuf_push_tail(ringbuf_t *b, int len) {
 	b->tailpos += len;
 }
 
+void ringbuf_data_get(ringbuf_t *rb, void *buf, int len, ringbuf_done_cb done) {
+	if (rb->on_get_done)
+		return;
+}
+
+void ringbuf_data_put(ringbuf_t *rb, void *buf, int len, ringbuf_done_cb done) {
+	if (rb->on_put_done)
+		return;
+}
+
+void ringbuf_data_cancel_get(ringbuf_t *rb) {
+}
+
