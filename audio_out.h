@@ -6,6 +6,7 @@
 typedef struct audio_out_s {
 	uv_loop_t *loop;
 
+	int is_playing;
 	void *data;
 
 	void *play_buf;

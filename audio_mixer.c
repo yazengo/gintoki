@@ -141,6 +141,8 @@ static void audio_in_on_read_done(audio_in_t *ai, int len) {
 static void audio_out_on_play_done(audio_out_t *ao, int len) {
 	audio_mixer_t *am = (audio_mixer_t *)ao->data;
 
+	debug("playdone");
+
 	ringbuf_push_tail(&am->mixbuf, len);
 	check_all_tracks(am);
 }
@@ -254,8 +256,10 @@ static void check_tracks_can_play(audio_mixer_t *am) {
 
 	debug("playlen=%d", datalen);
 
-	if (!audio_out_is_playing(am->ao))
+	if (!audio_out_is_playing(am->ao)) 
 		audio_out_play(am->ao, databuf, datalen, audio_out_on_play_done);
+	else
+		debug("playing");
 }
 
 static void check_all_tracks(audio_mixer_t *am) {

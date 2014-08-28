@@ -107,7 +107,7 @@ ttyraw_onkey = function (key)
 end
 
 set_timeout(function ()
---	radio.source_setopt{id='100'}
+	--radio.source_setopt{id='100'}
 end, 3000)
 
 --setloglevel(0)

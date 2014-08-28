@@ -220,7 +220,7 @@ static int lua_info(lua_State *L) {
 	return 0;
 }
 
-static lua_setloglevel(lua_State *L) {
+static int lua_setloglevel(lua_State *L) {
 	log_set_level(lua_tonumber(L, -1));
 	return 0;
 }
