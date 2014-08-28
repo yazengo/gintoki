@@ -155,7 +155,6 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	
 	uv_read_stop(st);
 
-	av->data_buf = NULL;
 	if (av->on_read_done)
 		av->on_read_done(av, n);
 }
@@ -219,9 +218,6 @@ void avconv_start(uv_loop_t *loop, avconv_t *av, char *fname) {
 }
 
 void avconv_read(avconv_t *av, void *buf, int len, void (*done)(avconv_t *, int)) {
-	if (av->data_buf)
-		return;
-
 	av->data_buf = buf;
 	av->data_len = len;
 	av->on_read_done = done;
