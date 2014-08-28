@@ -178,7 +178,6 @@ static void curl_thread_done(uv_work_t *w, int _) {
 
 	// 1
 	if (lc->retsb) {
-		//debug("len=%d %s", strlen(lc->retsb->buf), lc->retsb->buf);
 		strbuf_append_char(lc->retsb, 0);
 		lua_pushstring(L, lc->retsb->buf);
 	} else 
@@ -219,6 +218,16 @@ static void curl_thread(uv_work_t *w) {
 	debug("thread ends r=%d", r);
 }
 
+// upvalue[1] = done
+// upvalue[2] = luv_curl_t
+static int curl_done(lua_State *L) {
+	int n = lua_gettop(L);
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_insert(L, 1);
+	lua_call_or_die(L, n, 0);
+	return 0;
+}
+
 static int curl(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 
@@ -257,12 +266,14 @@ static int curl(lua_State *L) {
 		curl_easy_setopt(lc->c, CURLOPT_UPLOAD, 1);
 	}
 
-	lua_pushvalue(L, 6);
+	lua_pushvalue(L, 6); // done
+	lua_pushvalue(L, 2); // userdata: must save it until call done
+	lua_pushcclosure(L, curl_done, 2);
 	lua_set_global_callback(L, "curl_done", lc->c);
 
 	// return {
-	// 		cancel = [native code],
-	// 		stat = [native code],
+	// 		cancel = [native function],
+	// 		stat = [native function],
 	// }
 	lua_newtable(L);
 
@@ -284,7 +295,7 @@ static int curl(lua_State *L) {
 }
 
 void luv_curl_init(lua_State *L, uv_loop_t *loop) {
-	// curl = [native code]
+	// curl = [native function]
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, curl, 1);
 	lua_setglobal(L, "curl");

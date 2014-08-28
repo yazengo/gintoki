@@ -3,9 +3,8 @@ setloglevel(0)
 
 curl {
 	url = 'www.qq.com',
-	retfile = '/tmp/a.html',
 	done = function (ret, stat)
-		info(stat)
+		info(ret, stat)
 	end,
 }
 
