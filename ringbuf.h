@@ -6,6 +6,13 @@ struct ringbuf_s;
 
 typedef void (*ringbuf_done_cb)(struct ringbuf_s *rb, int len);
 
+typedef struct {
+	void *buf;
+	int left, len;
+	struct ringbuf_s *rb;
+	ringbuf_done_cb done;
+} ringbuf_filler_t;
+
 //    >-------- tailpos ----------- headpos -------> 
 //   head == headpos % RINGBUF_SIZE
 //   tail == tailpos % RINGBUF_SIZE
@@ -14,14 +21,7 @@ typedef struct ringbuf_s {
 	int head, tail, len;
 	int headpos, tailpos;
 
-	void *getbuf;
-	int getlen, getlen_orig;
-	ringbuf_done_cb on_get_done;
-
-	void *putbuf;
-	int putlen, putlen_orig;
-	ringbuf_done_cb on_put_done;
-
+	ringbuf_filler_t getter, putter;
 } ringbuf_t;
 
 void ringbuf_init(ringbuf_t *b);

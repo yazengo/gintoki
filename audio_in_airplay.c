@@ -1,5 +1,7 @@
 
 #include <uv.h>
+#include <lua.h>
+#include <pthread.h>
 
 #include "utils.h"
 #include "ringbuf.h"
@@ -42,18 +44,31 @@ static void play_get_buf(audio_in_t *ai, void *buf, int len) {
 	ringbuf_data_get(&ap->buf, buf, len, play_on_get_done);
 }
 
-static void stop(audio_in_t *ai) {
+static void play_stop(audio_in_t *ai) {
 	ringbuf_cancel_get(&ai->buf);
 	ringbuf_cancel_put(&ai->buf);
 	if (sp->ai == ai)
 		sp->ai = NULL;
-	ai->on_free(ai);
+	if (ai->on_exit)
+		ai->on_exit(ai);
+	if (ai->on_free)
+		ai->on_free(ai);
 }
 
 void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai) {
+	if (ap->stat != PLAYING) {
+		info("stopped");
+		ai->on_free(ai);
+		return;
+	} 
+
+	if (ap->ai)
+		ap->ai->stop(ap->ai);
+
 	ap->ai = ai;
 	ai->read = play_get_buf;
-	ai->stop = stop;
+	ai->stop = play_stop;
+	ai->on_start(ai, ap->rate);
 }
 
 enum {
@@ -73,34 +88,32 @@ static void on_shairport_cmd(pcall_uv_t *pcall, void *_p) {
 	audio_in_t *ai = sp->ai;
 
 	if (ap->stat == STOPPED) {
+
 		if (c->type == START) {
 			ap->rate = c->rate;
 			ap->stat = PLAYING;
+			//emit("airplay.on_start");
 		}
+
 	} else if (ap->stat == PLAYING) {
+
+		if (c->type == PLAY) {
+			if (ai)
+				play_put_buf(c->buf, c->samples*2, pcall);
+			else
+				play_dummy(pcall);
+			return;
+		}
+
 		if (c->type == STOP) {
 			ap->stat = STOPPED;
+			if (ai) 
+				ai->stop(ai);
 		}
+
 	}
 
-	if (ai == NULL) {
-		if (c->type == PLAY) {
-			// act as dummy
-			// sleeping set timeout
-		}
-	} else {
-		if (c->type == START) {
-			ai->on_start(ai, c->rate);
-			pthread_call_uv_complete(pcall);
-		}
-		if (c->type == STOP) {
-			ai->on_stop(ai);
-			pthread_call_uv_complete(pcall);
-		}
-		if (c->type == PLAY)
-			play_put_buf(c->buf, c->samples*2, pcall);
-	}
-
+	pthread_call_uv_complete(pcall);
 }
 
 // in shairport thread 
@@ -130,15 +143,21 @@ static void on_shairport_play(shairport_t *sp, short buf[], int samples) {
 }
 
 // in shairport thread 
-static void *shairport_loop(void *_) {
-	shairport_start_loop(ap->sp);
+static void *shairport_loop(void *_p) {
+	shairport_t *sp = (shairport_t *)_p;
+
+	//shairport_start_loop(ap->sp);
+	return NULL;
 }
 
-void audio_in_airplay_start_loop(uv_loop_t *loop) {
+void luv_airplay_init(lua_State *L, uv_loop_t *loop) {
 	ap->sp = (shairport_t *)zalloc(sizeof(shairport_t));
 	sp->on_start = on_shairport_start;
 	sp->on_stop = on_shairport_stop;
 	sp->on_play = on_shairport_play;
 	sp->data = ai;
+
+	pthread_t tid;
+	pthread_create(&tid, NULL, shairport_loop, sp);
 }
 
