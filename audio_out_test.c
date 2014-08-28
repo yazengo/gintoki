@@ -31,13 +31,22 @@ void audio_out_test_fill_buf_with_key(void *buf, int len, int rate, int key) {
 static void done(audio_out_t *ao, int len) {
 	info("freq %d", freq_i);
 	freq_i++;
-	fillbuf(buf, sizeof(buf)/2, freq_i%7, 44100);
+
+	int rate = 44100;
+
+	if (freq_i % 2) {
+		rate = 48000;
+	}
+	audio_out_set_rate(ao, rate);
+
+	fillbuf(buf, sizeof(buf)/2, freq_i%7, rate);
 	audio_out_play(ao, buf, sizeof(buf), done);
 }
 
 void test_audio_out(uv_loop_t *loop) {
 	audio_out_t *ao = (audio_out_t *)zalloc(sizeof(audio_out_t));
 	info("init");
+
 	audio_out_init(loop, ao, 44100);
 
 	fillbuf(buf, sizeof(buf)/2, 0, 44100);

@@ -48,6 +48,7 @@ void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai) {
 	av->on_exit = on_exit;
 	av->on_free = on_free;
 
+	ai->on_start(ai, 44100);
 	avconv_start(loop, av, ai->url);
 }
 

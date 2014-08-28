@@ -5,6 +5,7 @@
 
 typedef struct audio_in_s {
 	void (*on_probe)(struct audio_in_s *ai, const char *key, void *val);
+	void (*on_start)(struct audio_in_s *ai, int rate);
 	void (*on_exit)(struct audio_in_s *ai);
 	void (*on_free)(struct audio_in_s *ai);
 	void (*on_read_done)(struct audio_in_s *ai, int len);

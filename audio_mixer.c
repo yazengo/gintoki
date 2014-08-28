@@ -45,9 +45,7 @@ typedef struct audio_mixer_s {
 	audio_out_t *ao;
 	ringbuf_t mixbuf;
 	float vol;
-
-	int mode;
-
+	int rate;
 	uv_loop_t *loop;
 	lua_State *L;
 } audio_mixer_t;
@@ -146,6 +144,17 @@ static void audio_out_on_play_done(audio_out_t *ao, int len) {
 
 	ringbuf_push_tail(&am->mixbuf, len);
 	check_all_tracks(am);
+}
+
+static void audio_in_on_start(audio_in_t *ai, int rate) {
+	audio_track_t *tr = (audio_track_t *)ai->data;
+	audio_mixer_t *am = tr->am;
+
+	if (am->rate != rate) {
+		info("rate -> %d", rate);
+		audio_out_set_rate(am->ao, rate);
+		am->rate = rate;
+	}
 }
 
 static void check_tracks_can_close(audio_mixer_t *am) {
@@ -301,7 +310,12 @@ static int audio_play(lua_State *L) {
 	tr->ai->on_probe = audio_in_on_probe;
 	tr->ai->on_exit = audio_in_on_exit;
 	tr->ai->on_free = audio_in_on_free;
+	tr->ai->on_start = audio_in_on_start;
 	tr->ai->url = url;
+
+//	if (strncmp(url, "airplay://", strlen("airplay://")))
+//		audio_in_airplay_init(am->loop, tr->ai);
+	
 	audio_in_avconv_init(am->loop, tr->ai);
 
 	tr->stat = TRACK_BUFFERING;
@@ -403,7 +417,8 @@ void audio_mixer_init(lua_State *L, uv_loop_t *loop) {
 
 	am->ao = (audio_out_t *)zalloc(sizeof(audio_out_t));
 	am->ao->data = am;
-	audio_out_init(loop, am->ao, 44100);
+	am->rate = 44100;
+	audio_out_init(loop, am->ao, am->rate);
 
 	// audio = {}
 	lua_newtable(L);

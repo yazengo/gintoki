@@ -61,6 +61,6 @@ void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int rate) {
 	ao->loop = loop;
 
 	ao_initialize();
-	audio_out_set_rate(ao, 44100);
+	audio_out_set_rate(ao, rate);
 }
 
