@@ -2,18 +2,27 @@
 cflags = -g -I.
 ldflags = -g -luv -lm -lao
 
-objs = utils.o main.o avconv.o strbuf.o tests.o
+USE_AIRPLAY=1
+
+objs = utils.o main.o strbuf.o tests.o
 objs += audio_mixer.o audio_out.o audio_out_test.o
 objs += upnp_device.o upnp_util.o  
 objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
 objs += lua_curl.o
-objs += audio_in.o audio_in_avconv.o 
+objs += audio_in_avconv.o 
+
+ifdef USE_AIRPLAY
 objs += audio_in_airplay.o
+cflags += -DUSE_AIRPLAY
+endif
 
 objs-x86 = $(subst .o,-x86.o,$(objs))
 cflags-x86 = $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
+cflags-x86 += -I../shairport/
 ldflags-x86 = $(shell pkg-config --libs libupnp lua5.2) $(ldflags)
+ldflags-x86 += -L../shairport
+ldflags-x86 += -lshairport
 
 objs-darwin = $(subst .o,-darwin.o,$(objs))
 cflags-darwin += $(cflags)
@@ -71,11 +80,12 @@ darwin-install-deps:
 	brew install libao
 	brew install libav
 
-cp-minifs-mips: inst-mips
-	tar xvf inst-mips.tar -C minifs/usr/app
-
 inst-mips: server-mips
 	tar cvf $@.tar server-mips *.lua tests
+
+cp-minifs-mips: inst-mips
+ 	tar xvf inst-mips.tar -C minifs/usr/app
+
 
 clean:
 	rm -rf *.o server-mips server-x86 server-darwin
