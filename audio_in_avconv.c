@@ -24,6 +24,7 @@ static void on_probe(avconv_t *av, const char *key, void *val) {
 static void on_read_done(avconv_t *av, int n) {
 	audio_in_t *ai = (audio_in_t *)av->data;
 	ai->on_read_done(ai, n);
+	ai->on_read_done = NULL;
 }
 
 static void read(struct audio_in_s *ai, void *buf, int len) {

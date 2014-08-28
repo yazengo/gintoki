@@ -180,7 +180,7 @@ static void check_tracks_can_read(audio_mixer_t *am) {
 
 		void *buf; int len;
 		ringbuf_space_ahead_get(&tr->buf, &buf, &len);
-		if (len > 0)
+		if (len > 0 && !audio_in_is_reading(tr->ai))
 			audio_in_read(tr->ai, buf, len, audio_in_on_read_done);
 	}
 }
@@ -247,6 +247,8 @@ static void check_tracks_can_play(audio_mixer_t *am) {
 	ringbuf_data_ahead_get(&am->mixbuf, &databuf, &datalen);
 	if (datalen == 0)
 		return;
+
+	//if (!audio_out_is_playing(am->ao))
 	audio_out_play(am->ao, databuf, datalen, audio_out_on_play_done);
 }
 
@@ -314,7 +316,7 @@ static int audio_play(lua_State *L) {
 	tr->ai->url = url;
 
 //	if (strncmp(url, "airplay://", strlen("airplay://")))
-//		audio_in_airplay_init(am->loop, tr->ai);
+	//audio_in_airplay_init(am->loop, tr->ai);
 	
 	audio_in_avconv_init(am->loop, tr->ai);
 
