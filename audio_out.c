@@ -5,16 +5,18 @@
 #include "utils.h"
 #include "audio_out.h"
 
+int audio_out_is_playing(audio_out_t *ao) {
+	return ao->on_play_done != NULL;
+}
+
 // on thread main
 static void play_done(uv_work_t *w, int stat) {
 	audio_out_t *ao = (audio_out_t *)w->data;
 
-	ao->play_buf = NULL;
-
-	if (ao->on_play_done)
+	if (ao->on_play_done) {
 		ao->on_play_done(ao, ao->play_len);
-
-	free(w);
+		ao->on_play_done = NULL;
+	}
 }
 
 // on thread play
@@ -27,16 +29,16 @@ static void play_thread(uv_work_t *w) {
 
 // on thread main
 void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_t *, int)) {
-	if (ao->play_buf) {
-		return;
-	}
+	if (audio_out_is_playing(ao))
+		panic("playing not end");
+
 	ao->play_buf = buf;
 	ao->play_len = len;
 	ao->on_play_done = done;
 
-	uv_work_t *w = (uv_work_t *)zalloc(sizeof(uv_work_t));
-	w->data = ao;
-	uv_queue_work(ao->loop, w, play_thread, play_done);
+	static uv_work_t w;
+	w.data = ao;
+	uv_queue_work(ao->loop, &w, play_thread, play_done);
 }
 
 void audio_out_cancel_play(audio_out_t *ao) {

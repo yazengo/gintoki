@@ -4,11 +4,11 @@
 #include <lua.h>
 
 enum {
-	LOG_DEBUG,
-	LOG_INFO,
-	LOG_WARN,
-	LOG_ERROR,
-	LOG_PANIC,
+	LOG_DEBUG = 0,
+	LOG_INFO = 1,
+	LOG_WARN = 2,
+	LOG_ERROR = 3,
+	LOG_PANIC = 4,
 };
 
 #define debug(fmt, args...) _log(LOG_DEBUG, __func__, __FILE__, __LINE__, fmt, ##args) 

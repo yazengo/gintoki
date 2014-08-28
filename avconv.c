@@ -102,6 +102,9 @@ static void parser_eat(avconv_t *av, avconv_probe_parser_t *p, void *buf, int le
 
 static void on_handle_close(avconv_t *av) {
 	av->closed_nr++;
+
+	debug("closed_nr=%d", av->closed_nr);
+
 	if (av->closed_nr == 3) {
 		if (av->on_exit)
 			av->on_exit(av);
@@ -144,22 +147,26 @@ static uv_buf_t data_alloc_buffer(uv_handle_t *h, size_t len) {
 
 static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	avconv_t *av = (avconv_t *)st->data;
+	
+	debug("n=%d", n);
+
+	uv_read_stop(st);
 
 	if (n < 0) {
 		if (av->pipe[0]) {
 			uv_close((uv_handle_t *)av->pipe[0], pipe_handle_free);
 			av->pipe[0] = NULL;
 		}
-		return;
+		n = 0;
 	}
-	
-	uv_read_stop(st);
 
 	if (av->on_read_done)
 		av->on_read_done(av, n);
 }
 
 static void proc_handle_free(uv_handle_t *h) {
+	debug("freed");
+
 	avconv_t *av = (avconv_t *)h->data;
 	on_handle_close(av);
 	free(h);
@@ -222,6 +229,8 @@ void avconv_read(avconv_t *av, void *buf, int len, void (*done)(avconv_t *, int)
 	av->data_len = len;
 	av->on_read_done = done;
 
+	debug("len=%d", len);
+
 	uv_read_start((uv_stream_t *)av->pipe[0], data_alloc_buffer, data_pipe_read);
 }
 
@@ -230,6 +239,7 @@ void avconv_stop(avconv_t *av) {
 	av->on_probe = NULL;
 	av->on_exit = NULL;
 
+	debug("stopped");
 	uv_process_kill(av->proc, 9);
 }
 

@@ -110,6 +110,7 @@ set_timeout(function ()
 	radio.source_setopt{id='100'}
 end, 3000)
 
+setloglevel(0)
 upnp.start()
 audio.setvol(30)
 --radio.start(pandora)

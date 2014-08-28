@@ -214,9 +214,14 @@ static int set_timeout(lua_State *L) {
 	return 1;
 }
 
-static int info_lua(lua_State *L) {
+static int lua_info(lua_State *L) {
 	const char *msg = lua_tostring(L, -1);
 	info("%s", msg);
+	return 0;
+}
+
+static lua_setloglevel(lua_State *L) {
+	log_set_level(lua_tonumber(L, -1));
 	return 0;
 }
 
@@ -438,7 +443,10 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_setfield(L, -2, "readdir");
 	lua_pop(L, 1);
 
-	lua_pushcfunction(L, info_lua);
+	lua_pushcfunction(L, lua_info);
 	lua_setglobal(L, "_info");
+
+	lua_pushcfunction(L, lua_setloglevel);
+	lua_setglobal(L, "setloglevel");
 }
 

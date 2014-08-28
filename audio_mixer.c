@@ -132,8 +132,7 @@ static void audio_in_on_probe(audio_in_t *ai, const char *key, void *_val) {
 static void audio_in_on_read_done(audio_in_t *ai, int len) {
 	audio_track_t *tr = (audio_track_t *)ai->data;
 
-	if (len < 0)
-		return;
+	debug("done len=%d", len);
 
 	ringbuf_push_head(&tr->buf, len);
 	check_all_tracks(tr->am);
@@ -165,6 +164,8 @@ static void check_tracks_can_close(audio_mixer_t *am) {
 		if (!(tr->ai == NULL && tr->stat != TRACK_STOPPED && tr->buf.len == 0))
 			continue;
 
+		info("closed #%d", i);
+
 		tr->stat = TRACK_STOPPED;
 		lua_call_play_done(tr, "done");
 	}
@@ -180,8 +181,9 @@ static void check_tracks_can_read(audio_mixer_t *am) {
 
 		void *buf; int len;
 		ringbuf_space_ahead_get(&tr->buf, &buf, &len);
-		if (len > 0 && !audio_in_is_reading(tr->ai))
+		if (len > 0 && !audio_in_is_reading(tr->ai)) {
 			audio_in_read(tr->ai, buf, len, audio_in_on_read_done);
+		}
 	}
 }
 
@@ -238,6 +240,8 @@ static void check_tracks_can_mix(audio_mixer_t *am) {
 		ringbuf_push_tail(&tr->buf, mixlen);
 	}
 
+	debug("canmix=%d mixlen=%d", canmix, mixlen);
+
 	pcm_do_volume(mixbuf, mixlen, am->vol);
 	ringbuf_push_head(&am->mixbuf, mixlen);
 }
@@ -248,8 +252,10 @@ static void check_tracks_can_play(audio_mixer_t *am) {
 	if (datalen == 0)
 		return;
 
-	//if (!audio_out_is_playing(am->ao))
-	audio_out_play(am->ao, databuf, datalen, audio_out_on_play_done);
+	debug("playlen=%d", datalen);
+
+	if (!audio_out_is_playing(am->ao))
+		audio_out_play(am->ao, databuf, datalen, audio_out_on_play_done);
 }
 
 static void check_all_tracks(audio_mixer_t *am) {
@@ -299,6 +305,7 @@ static int audio_play(lua_State *L) {
 	info("url=%s i=%d", url, i);
 
 	audio_out_cancel_play(am->ao);
+
 	if (tr->ai) {
 		audio_in_stop(tr->ai);
 		tr->ai = NULL;
