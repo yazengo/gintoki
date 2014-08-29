@@ -151,7 +151,7 @@ static void proc_on_exit(uv_process_t *proc, int stat, int sig) {
 
 	if (c->pipe_stdout) {
 		debug("free stdout");
-		uv_read_stop(c->pipe_stdout);
+		uv_read_stop((uv_stream_t *)c->pipe_stdout);
 		uv_close((uv_handle_t *)c->pipe_stdout, handle_free);
 		c->pipe_stdout = NULL;
 	}

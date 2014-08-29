@@ -62,6 +62,9 @@ info = function (...)
 		local v = t[i]
 		if type(v) == 'table' then
 			s = s .. cjson.encode(v)
+		elseif type(v) == 'boolean' then
+			if v then s = s .. 'true'
+			else s = s .. 'false' end
 		elseif v == nil then
 			s = s .. 'nil'
 		else

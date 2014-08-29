@@ -59,6 +59,10 @@ upnp.on_action = function (a, done)
 	elseif a.op == 'radio.change_type' then
 		radio.change(a)
 		done{result=0}
+	elseif a.op == 'muno.check_update' then
+		muno.check_update(done)
+	elseif a.op == 'muno.do_update' then
+		muno.do_update(done)
 	else
 		done{result=0}
 	end

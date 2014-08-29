@@ -2,12 +2,9 @@
 setloglevel(0)
 
 curl {
-	url = 'www.sugrsugr.com/a.img',
-	body = cjson.encode{op='pandora.genres_list'},
+	url = 'firmware.sugrsugr.com/info',
 	done = function (ret, code)
-		--local js = cjson.decode(ret) or {}
-		info(ret)
-		info(code)
+		info(cjson.encode(ret))
 	end,
 }
 
