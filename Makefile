@@ -29,10 +29,12 @@ ldflags-darwin += -lshairport
 ldflags-darwin += -lupnp -llua -luv -lixml -lao
 
 objs-mips = $(subst .o,-mips.o,$(objs))
+objs-mips += input_dev.o
 cc-mips = mipsel-linux-gcc
 sysroot-mips = ../muno-repo/app/source/system/fs_compile/
 cflags-mips = $(cflags) -Ideps_mips/include/ -I$(sysroot-mips)/include/upnp
 cflags-mips += -DUSE_JZCODEC
+cflags-mips += -DUSE_INPUTDEV
 ldflags-mips = -L deps_mips/lib -L $(sysroot-mips)/lib  $(ldflags) -llua -pthread -lupnp -lthreadutil -lixml -lrt 
 ldflags-mips += -lavcodec -lavutil -lavformat -lavdevice 
 

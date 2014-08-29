@@ -59,6 +59,10 @@ int main(int argc, char *argv[]) {
 	luaL_openlibs(L);
 	luaopen_cjson_safe(L);
 
+#ifdef USE_INPUTDEV
+	intputdev_init(L, loop);
+#endif
+
 	utils_init(L, loop);
 	lua_dofile_or_die(L, "utils.lua");
 
