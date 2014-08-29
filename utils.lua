@@ -57,9 +57,13 @@ end
 
 info = function (...) 
 	local s = ''
-	for k, v in ipairs{...} do
+	local t = {...}
+	for i = 1,table.maxn(t) do
+		local v = t[i]
 		if type(v) == 'table' then
 			s = s .. cjson.encode(v)
+		elseif v == nil then
+			s = s .. 'nil'
 		else
 			s = s .. v
 		end
