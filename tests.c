@@ -528,16 +528,26 @@ static void test_tcp(uv_loop_t *loop) {
 
 #endif
 
-static void test_pthread_call_uv(lua_State *L, uv_loop_t *loop) {
-	test_pcall_v2_t *t = (test_pcall_v2_t *)zalloc(sizeof(test_pcall_v2_t));
-	t->loop = loop;
-	t->L = L;
-
-	pthread_t tid;
-	pthread_create(&tid, NULL, pthread_loop_test_pcall_v2, t);
+static void pcall_uv_sleep(void *pcall, void *_) {
+	sleep(1);
+	pthread_call_uv_complete(pcall);
 }
 
+static void *pthread_loop_test_pcall_uv(void *_p) {
+	uv_loop_t *loop = (uv_loop_t *)_p;
 
+	int i;
+	for (i = 0; i < 20; i++) {
+		pthread_call_uv_wait(loop, pcall_uv_sleep, NULL);
+		info("%d", i);
+	}
+	return NULL;
+}
+
+static void test_pthread_call_uv(lua_State *L, uv_loop_t *loop) {
+	pthread_t tid;
+	pthread_create(&tid, NULL, pthread_loop_test_pcall_uv, loop);
+}
 
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);

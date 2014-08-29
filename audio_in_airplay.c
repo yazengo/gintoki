@@ -89,6 +89,7 @@ typedef struct {
 } shairport_cmd_t;
 
 static void play_dummy(void *buf, int len, void *pcall) {
+	debug("len=%d", len);
 	if (ap->rate)
 		usleep(1e6 * len*1.0 / (ap->rate*4));
 	pthread_call_uv_complete(pcall);
@@ -98,6 +99,8 @@ static void play_dummy(void *buf, int len, void *pcall) {
 static void on_shairport_cmd(void *pcall, void *_p) {
 	shairport_cmd_t *c = (shairport_cmd_t *)_p;
 	audio_in_t *ai = ap->ai;
+
+	debug("cmd=%d", c->type);
 
 	if (ap->stat == STOPPED) {
 
@@ -157,18 +160,18 @@ static void on_shairport_play(short buf[], int samples) {
 // in shairport thread 
 static void *shairport_test_loop(void *_p) {
 	shairport_t *sp = (shairport_t *)_p;
-	static char buf[44100*8];
+	static char buf[44100*3];
 	int i;
 
 	for (;;) {
-		info("airplay starts");
+		debug("airplay starts");
 		sp->on_start(44100);
 		for (i = 0; ; i++) {
 			audio_out_test_fill_buf_with_key(buf, sizeof(buf), 44100, i%7);
 			sp->on_play((short *)buf, sizeof(buf)/4); 
 		}
 		sp->on_stop();
-		info("airplay ends");
+		debug("airplay ends");
 	}
 
 	return NULL;
@@ -177,6 +180,7 @@ static void *shairport_test_loop(void *_p) {
 void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop) {
 	shairport_t *sp = (shairport_t *)zalloc(sizeof(shairport_t));
 	ap->sp = sp;
+	ap->loop = loop;
 
 	sp->on_start = on_shairport_start;
 	sp->on_stop = on_shairport_stop;

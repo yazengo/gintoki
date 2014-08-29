@@ -46,6 +46,8 @@ int main(int argc, char *argv[]) {
 
 	info("starts");
 
+	setloglevel(0);
+
 	if (test_c >= 100 && test_c < 200) {
 		run_test_c_pre(test_c-100);
 		return 0;
@@ -69,7 +71,7 @@ int main(int argc, char *argv[]) {
 	inputdev_init(L, loop);
 #endif
 
-	//audio_in_airplay_start_loop(L, loop);
+	audio_in_airplay_start_loop(L, loop);
 
 	audio_mixer_init(L, loop);
 	upnp_init(L, loop);

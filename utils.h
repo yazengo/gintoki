@@ -19,7 +19,7 @@ enum {
 
 void _log(int level, const char *at_func, const char *at_file, int at_lineno, char *fmt, ...);
 void log_ban(const char *, const char *);
-void log_set_level(int level);
+void setloglevel(int level);
 void log_init();
 
 float now();

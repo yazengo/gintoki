@@ -89,9 +89,6 @@ end
 
 P.cursong = function ()
 	local s = P.songs[P.songs_i]
-	if s then
-		s['url'] = 'musics/SHE.mp3'
-	end
 	return s
 end
 

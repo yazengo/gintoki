@@ -28,7 +28,7 @@ void log_ban(const char *file, const char *func) {
 
 static int log_level = LOG_INFO;
 
-void log_set_level(int level) {
+void setloglevel(int level) {
 	log_level = level;
 }
 
@@ -259,7 +259,7 @@ static int lua_info(lua_State *L) {
 }
 
 static int lua_setloglevel(lua_State *L) {
-	log_set_level(lua_tonumber(L, -1));
+	setloglevel(lua_tonumber(L, -1));
 	return 0;
 }
 
