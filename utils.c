@@ -174,29 +174,31 @@ void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_st
 	pthread_mutex_destroy(&p.lock);
 }
 
-struct pcall_uv_s;
-
-typedef void (*pcall_uv_cb)(struct pcall_uv_s *, void *);
-
-typedef struct pcall_uv_s {
+typedef struct {
 	pcall_uv_cb cb;
 	void *cb_p;
 	pthread_mutex_t lock;
 } pcall_uv_t;
 
-void pthread_call_uv_complete(pcall_uv_t *p) {
+void pthread_call_uv_complete(void *_p) {
+	pcall_uv_t *p = (pcall_uv_t *)_p;
 	pthread_mutex_unlock(&p->lock);
+}
+
+static void pcall_uv_handle_free(uv_handle_t *h) {
+	free(h);
 }
 
 static void pcall_uv_done(uv_async_t *as, int _) {
 	pcall_uv_t *p = (pcall_uv_t *)as->data;
 	p->cb(p, p->cb_p);
+	uv_close((uv_handle_t *)as, pcall_uv_handle_free);
 }
 
 void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p) {
 	pcall_uv_t p = {
 		.lock = PTHREAD_MUTEX_INITIALIZER,
-		.cb_p = cb_p,
+		.cb = cb, .cb_p = cb_p,
 	};
 	pthread_mutex_lock(&p.lock);
 

@@ -12,6 +12,7 @@
 #include "lua_curl.h"
 #include "upnp_device.h"
 #include "audio_mixer.h"
+#include "audio_in.h"
 
 static void usage(char *prog) {
 	fprintf(stderr, "Usage: %s\n", prog);
@@ -59,14 +60,16 @@ int main(int argc, char *argv[]) {
 	luaL_openlibs(L);
 	luaopen_cjson_safe(L);
 
-#ifdef USE_INPUTDEV
-	inputdev_init(L, loop);
-#endif
-
 	utils_init(L, loop);
 	lua_dofile_or_die(L, "utils.lua");
 
 	lua_curl_init(L, loop);
+
+#ifdef USE_INPUTDEV
+	inputdev_init(L, loop);
+#endif
+
+	//audio_in_airplay_start_loop(L, loop);
 
 	audio_mixer_init(L, loop);
 	upnp_init(L, loop);

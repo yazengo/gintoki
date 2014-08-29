@@ -2,6 +2,7 @@
 #pragma once
 
 #include <uv.h>
+#include <lua.h>
 
 typedef struct audio_in_s {
 	void (*on_probe)(struct audio_in_s *ai, const char *key, void *val);
@@ -24,4 +25,6 @@ int audio_in_is_reading(audio_in_t *ai);
 
 void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai);
 void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai);
+
+void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop);
 

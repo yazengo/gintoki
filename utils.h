@@ -26,6 +26,10 @@ float now();
 
 void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_start, lua_CFunction on_done, void *data);
 
+typedef void (*pcall_uv_cb)(void *pcall, void *p);
+void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p);
+void pthread_call_uv_complete(void *pcall);
+
 #define lua_dofile_or_die(L, fname) lua_dofile_or_die_at(__func__, __FILE__, __LINE__, L, fname)
 #define lua_dostring_or_die(L, str) lua_dostring_or_die_at(__func__, __FILE__, __LINE__, L, str)
 #define lua_call_or_die(L, nargs, nresults) lua_call_or_die_at(__func__, __FILE__, __LINE__, L, nargs, nresults)

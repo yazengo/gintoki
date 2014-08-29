@@ -1,4 +1,6 @@
 
+#include <unistd.h>
+
 #include <uv.h>
 #include <lua.h>
 #include <pthread.h>
@@ -16,6 +18,7 @@ typedef struct {
 	shairport_t *sp;
 	audio_in_t *ai;
 	int stat;
+	int rate;
 } airplay_t;
 
 enum {
@@ -24,18 +27,21 @@ enum {
 
 static airplay_t _ap, *ap = &_ap;
 
+// in airplay thread
 static void play_on_put_done(ringbuf_t *rb, int len) {
-	pcall_uv_t *pcall = (pcall_uv_t *)rb->data;
-	pthread_call_uv_complete(ap->pcall);
+	void *pcall = rb->data;
+	pthread_call_uv_complete(pcall);
 }
 
-static void play_put_buf(void *buf, int len, pcall_uv_t *pcall)
+// in airplay thread
+static void play_put_buf(void *buf, int len, void *pcall) {
 	ap->buf.data = pcall;
 	ringbuf_data_put(&ap->buf, buf, len, play_on_put_done);
 }
 
+// 
 static void play_on_get_done(ringbuf_t *rb, int len) {
-	ap->ai->on_read_done(ai, len);
+	ap->ai->on_read_done(ap->ai, len);
 	ap->ai->on_read_done = NULL;
 }
 
@@ -45,10 +51,10 @@ static void play_get_buf(audio_in_t *ai, void *buf, int len) {
 }
 
 static void play_stop(audio_in_t *ai) {
-	ringbuf_cancel_get(&ai->buf);
-	ringbuf_cancel_put(&ai->buf);
-	if (sp->ai == ai)
-		sp->ai = NULL;
+	ringbuf_data_cancel_get(&ap->buf);
+	ringbuf_data_cancel_put(&ap->buf);
+	if (ap->ai == ai)
+		ap->ai = NULL;
 	if (ai->on_exit)
 		ai->on_exit(ai);
 	if (ai->on_free)
@@ -77,15 +83,21 @@ enum {
 
 typedef struct {
 	int type;
-	short buf[];
+	short *buf;
 	int samples;
 	int rate;
 } shairport_cmd_t;
 
+static void play_dummy(void *buf, int len, void *pcall) {
+	if (ap->rate)
+		usleep(1e6 * len*1.0 / (ap->rate*4));
+	pthread_call_uv_complete(pcall);
+}
+
 // in main uv loop
-static void on_shairport_cmd(pcall_uv_t *pcall, void *_p) {
+static void on_shairport_cmd(void *pcall, void *_p) {
 	shairport_cmd_t *c = (shairport_cmd_t *)_p;
-	audio_in_t *ai = sp->ai;
+	audio_in_t *ai = ap->ai;
 
 	if (ap->stat == STOPPED) {
 
@@ -99,9 +111,9 @@ static void on_shairport_cmd(pcall_uv_t *pcall, void *_p) {
 
 		if (c->type == PLAY) {
 			if (ai)
-				play_put_buf(c->buf, c->samples*2, pcall);
+				play_put_buf(c->buf, c->samples*4, pcall);
 			else
-				play_dummy(pcall);
+				play_dummy(c->buf, c->samples*4, pcall);
 			return;
 		}
 
@@ -117,7 +129,7 @@ static void on_shairport_cmd(pcall_uv_t *pcall, void *_p) {
 }
 
 // in shairport thread 
-static void on_shairport_start(shairport_t *sp, int rate) {
+static void on_shairport_start(int rate) {
 	shairport_cmd_t c = {
 		.type = START,
 		.rate = rate,
@@ -126,7 +138,7 @@ static void on_shairport_start(shairport_t *sp, int rate) {
 }
 
 // in shairport thread 
-static void on_shairport_stop(shairport_t *sp) {
+static void on_shairport_stop() {
 	shairport_cmd_t c = {
 		.type = STOP,
 	};
@@ -134,7 +146,7 @@ static void on_shairport_stop(shairport_t *sp) {
 }
 
 // in shairport thread 
-static void on_shairport_play(shairport_t *sp, short buf[], int samples) {
+static void on_shairport_play(short buf[], int samples) {
 	shairport_cmd_t c = {
 		.type = PLAY,
 		.buf = buf, .samples = samples,
@@ -143,21 +155,35 @@ static void on_shairport_play(shairport_t *sp, short buf[], int samples) {
 }
 
 // in shairport thread 
-static void *shairport_loop(void *_p) {
+static void *shairport_test_loop(void *_p) {
 	shairport_t *sp = (shairport_t *)_p;
+	static char buf[44100*8];
+	int i;
 
-	//shairport_start_loop(ap->sp);
+	for (;;) {
+		info("airplay starts");
+		sp->on_start(44100);
+		for (i = 0; ; i++) {
+			audio_out_test_fill_buf_with_key(buf, sizeof(buf), 44100, i%7);
+			sp->on_play((short *)buf, sizeof(buf)/4); 
+		}
+		sp->on_stop();
+		info("airplay ends");
+	}
+
 	return NULL;
 }
 
-void luv_airplay_init(lua_State *L, uv_loop_t *loop) {
-	ap->sp = (shairport_t *)zalloc(sizeof(shairport_t));
+void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop) {
+	shairport_t *sp = (shairport_t *)zalloc(sizeof(shairport_t));
+	ap->sp = sp;
+
 	sp->on_start = on_shairport_start;
 	sp->on_stop = on_shairport_stop;
 	sp->on_play = on_shairport_play;
-	sp->data = ai;
+	sp->data = ap;
 
 	pthread_t tid;
-	pthread_create(&tid, NULL, shairport_loop, sp);
+	pthread_create(&tid, NULL, shairport_test_loop, sp);
 }
 

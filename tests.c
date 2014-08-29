@@ -528,6 +528,17 @@ static void test_tcp(uv_loop_t *loop) {
 
 #endif
 
+static void test_pthread_call_uv(lua_State *L, uv_loop_t *loop) {
+	test_pcall_v2_t *t = (test_pcall_v2_t *)zalloc(sizeof(test_pcall_v2_t));
+	t->loop = loop;
+	t->L = L;
+
+	pthread_t tid;
+	pthread_create(&tid, NULL, pthread_loop_test_pcall_v2, t);
+}
+
+
+
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);
 	if (i == 1)
@@ -542,5 +553,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 		test_ttyraw_open(loop);
 	if (i == 6)
 		test_pthread_call_luv_v2(L, loop);
+	if (i == 7)
+		test_pthread_call_uv(L, loop);
 }
 

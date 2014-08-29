@@ -20,7 +20,7 @@ typedef struct ringbuf_s {
 	char buf[RINGBUF_SIZE];
 	int head, tail, len;
 	int headpos, tailpos;
-
+	void *data;
 	ringbuf_filler_t getter, putter;
 } ringbuf_t;
 
