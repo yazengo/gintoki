@@ -83,9 +83,10 @@ static void check_close(curl_t *c) {
 	if (c->exit_code)
 		c->code = -EINVAL;
 
-	if (c->retsb)
+	if (c->retsb) {
+		strbuf_append_mem(c->retsb, "", 1);
 		lua_pushstring(c->L, c->retsb->buf);
-	else
+	} else
 		lua_pushnil(c->L);
 
 	lua_pushnumber(c->L, c->code);
