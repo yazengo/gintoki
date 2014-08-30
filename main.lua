@@ -110,6 +110,15 @@ ttyraw_onkey = function (key)
 	end
 end
 
+on_airplay_start = function ()
+	audio.play {
+		url = 'airplay://',
+		done = function ()
+			radio.next()
+		end,
+	}
+end
+
 on_inputevent = function (e) 
 	if e == 33 then
 		info('inputdev: keypress')

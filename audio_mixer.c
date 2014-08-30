@@ -12,7 +12,8 @@
 #include "audio_in.h"
 #include "audio_out.h"
 
-#define MAX_MIXLEN (2048)
+#define MAX_MIXLEN (1024*2)
+#define MAX_TRACKBUF (1024*8)
 #define TRACKS_NR 2
 
 enum {
@@ -183,6 +184,12 @@ static void check_tracks_can_read(audio_mixer_t *am) {
 
 		void *buf; int len;
 		ringbuf_space_ahead_get(&tr->buf, &buf, &len);
+
+		if (len > MAX_TRACKBUF)
+			len = MAX_TRACKBUF;
+
+		debug("len=%d is reading=%d", len, audio_in_is_reading(tr->ai));
+
 		if (len > 0 && !audio_in_is_reading(tr->ai)) {
 			audio_in_read(tr->ai, buf, len, audio_in_on_read_done);
 		}
@@ -308,15 +315,12 @@ static int audio_play(lua_State *L) {
 
 	info("url=%s i=%d", url, i);
 
-	audio_out_cancel_play(am->ao);
-
 	if (tr->ai) {
 		audio_in_stop(tr->ai);
 		tr->ai = NULL;
 	}
 
 	ringbuf_init(&tr->buf);
-	ringbuf_init(&am->mixbuf);
 
 	tr->ai = (audio_in_t *)zalloc(sizeof(audio_in_t));
 	tr->ai->data = tr;
@@ -326,10 +330,10 @@ static int audio_play(lua_State *L) {
 	tr->ai->on_start = audio_in_on_start;
 	tr->ai->url = url;
 
-	//if (strncmp(url, "airplay://", strlen("airplay://")))
-	//	audio_in_airplay_init(am->loop, tr->ai);
-	
-	audio_in_avconv_init(am->loop, tr->ai);
+	if (!strncmp(url, "airplay://", strlen("airplay://")))
+		audio_in_airplay_init(am->loop, tr->ai);
+	else
+		audio_in_avconv_init(am->loop, tr->ai);
 
 	tr->stat = TRACK_BUFFERING;
 	tr->first_blood = 1; // for testing

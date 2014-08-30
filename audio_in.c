@@ -7,11 +7,11 @@ void audio_in_stop(audio_in_t *ai) {
 }
 
 int audio_in_is_reading(audio_in_t *ai) {
-	return ai->on_read_done != NULL;
+	return ai->is_reading;
 }
 
 void audio_in_read(audio_in_t *ai, void *buf, int len, void (*done)(audio_in_t *ai, int len)) {
-	if (ai->on_read_done)
+	if (ai->is_reading)
 		panic("last reading is not end");
 	ai->on_read_done = done;
 	ai->read(ai, buf, len);

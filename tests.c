@@ -8,6 +8,7 @@
 
 #include "utils.h"
 #include "strbuf.h"
+#include "ringbuf.h"
 
 #include "upnp_device.h"
 #include "upnp_util.h"
@@ -357,6 +358,21 @@ static void test_avconv(uv_loop_t *loop) {
 	avconv_read(av, av->data, 1024*1024, avconv_read_done);
 }
 
+static void ringbuf_get_done(ringbuf_t *rb, int len) {
+	info("get %d", len);
+}
+
+static void test_ringbuf() {
+	ringbuf_t rb;
+	static char buf[176400];
+
+	ringbuf_init(&rb);
+
+	ringbuf_data_get(&rb, buf, 24576, ringbuf_get_done);
+	ringbuf_data_put(&rb, buf, sizeof(buf), NULL);
+	ringbuf_data_get(&rb, buf, 2048, ringbuf_get_done);
+}
+
 void run_test_c_pre(int i) {
 	info("run hello world #%d", i);
 	if (i == 1)
@@ -371,6 +387,8 @@ void run_test_c_pre(int i) {
 		test_buggy_call();
 	if (i == 7 || i == 8)
 		test_uv_subprocess(i);
+	if (i == 9)
+		test_ringbuf();
 }
 
 typedef struct {
@@ -565,5 +583,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 		test_pthread_call_luv_v2(L, loop);
 	if (i == 7)
 		test_pthread_call_uv(L, loop);
+	if (i == 8)
+		test_ringbuf();
 }
 

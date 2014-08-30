@@ -15,6 +15,8 @@ typedef struct audio_in_s {
 	void (*read)(struct audio_in_s *ai, void *buf, int len);
 	void (*stop)(struct audio_in_s *ai);
 
+	int is_reading;
+
 	void *data;
 	char *url;
 } audio_in_t;

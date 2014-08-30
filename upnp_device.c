@@ -353,6 +353,8 @@ static int upnp_notify(lua_State *L) {
 	info("udn=%s srv=%s json=%s", upnp->udn, upnp->srv, json);
 
 	int r = UpnpNotify(upnp->h, upnp->udn, upnp->srv, names, vals, 1);
+	// BUG: this function may be blocked
+
 	if (r == UPNP_E_SUCCESS) {
 		info("ok");
 	} else {

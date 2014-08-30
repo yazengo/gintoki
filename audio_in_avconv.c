@@ -23,12 +23,13 @@ static void avconv_on_probe(avconv_t *av, const char *key, void *val) {
 
 static void avconv_on_read_done(avconv_t *av, int n) {
 	audio_in_t *ai = (audio_in_t *)av->data;
+	ai->is_reading = 0;
 	ai->on_read_done(ai, n);
-	ai->on_read_done = NULL;
 }
 
 static void read(struct audio_in_s *ai, void *buf, int len) {
 	avconv_t *av = (avconv_t *)ai->in;
+	ai->is_reading = 1;
 	avconv_read(av, buf, len, avconv_on_read_done);
 }
 

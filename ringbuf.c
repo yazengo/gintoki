@@ -56,7 +56,8 @@ static void filler_init(ringbuf_filler_t *rf, void *buf, int len, ringbuf_done_c
 	rf->done = done;
 }
 
-static void filler_get(ringbuf_filler_t *rf) {
+static int filler_get(ringbuf_filler_t *rf) {
+	int adv = 0;
 	for (;;) {
 		void *buf; int len;
 		ringbuf_data_ahead_get(rf->rb, &buf, &len);
@@ -67,15 +68,19 @@ static void filler_get(ringbuf_filler_t *rf) {
 		memcpy(rf->buf, buf, len);
 		rf->left -= len;
 		rf->buf += len;
+		adv += len;
 		ringbuf_push_tail(rf->rb, len);
 	}
 	if (rf->left == 0 && rf->done) {
-		rf->done(rf->rb, rf->len - rf->left);
+		ringbuf_done_cb cb = rf->done;
 		rf->done = NULL;
+		cb(rf->rb, rf->len - rf->left);
 	}
+	return adv;
 }
 
-static void filler_put(ringbuf_filler_t *rf) {
+static int filler_put(ringbuf_filler_t *rf) {
+	int adv = 0;
 	for (;;) {
 		void *buf; int len;
 		ringbuf_space_ahead_get(rf->rb, &buf, &len);
@@ -86,11 +91,24 @@ static void filler_put(ringbuf_filler_t *rf) {
 		memcpy(buf, rf->buf, len);
 		rf->left -= len;
 		rf->buf += len;
+		adv += len;
 		ringbuf_push_head(rf->rb, len);
 	}
 	if (rf->left == 0 && rf->done) {
-		rf->done(rf->rb, rf->len - rf->left);
+		ringbuf_done_cb cb = rf->done;
 		rf->done = NULL;
+		cb(rf->rb, rf->len - rf->left);
+	}
+	return adv;
+}
+
+static void filler_fill(ringbuf_t *rb) {
+	for (;;) {
+		int len = 0;
+		len += filler_get(&rb->getter);
+		len += filler_put(&rb->putter);
+		if (len == 0)
+			break;
 	}
 }
 
@@ -103,14 +121,12 @@ static void filler_cancel(ringbuf_filler_t *rf) {
 
 void ringbuf_data_get(ringbuf_t *rb, void *buf, int len, ringbuf_done_cb done) {
 	filler_init(&rb->getter, buf, len, done);
-	filler_get(&rb->getter);
-	filler_put(&rb->putter);
+	filler_fill(rb);
 }
 
 void ringbuf_data_put(ringbuf_t *rb, void *buf, int len, ringbuf_done_cb done) {
 	filler_init(&rb->putter, buf, len, done);
-	filler_put(&rb->putter);
-	filler_get(&rb->getter);
+	filler_fill(rb);
 }
 
 void ringbuf_data_cancel_get(ringbuf_t *rb) {

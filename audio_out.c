@@ -90,8 +90,7 @@ int audio_out_is_playing(audio_out_t *ao) {
 static void play_done(uv_work_t *w, int stat) {
 	audio_out_t *ao = (audio_out_t *)w->data;
 
-	debug("playdone");
-
+	debug("playdone cb=%p", ao->on_play_done);
 	ao->is_playing = 0;
 
 	if (ao->on_play_done)

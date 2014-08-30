@@ -463,6 +463,13 @@ void utils_preinit() {
 	signal(SIGILL, fault);
 	signal(SIGBUS, fault);
 	signal(SIGSEGV, fault);
+
+	char *s = getenv("LOG");
+	if (s) {
+		int v = 1;
+		sscanf(s, "%d", &v);
+		setloglevel(v);
+	}
 }
 
 typedef struct {
