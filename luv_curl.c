@@ -41,6 +41,8 @@ typedef struct {
 	FILE *retfp;
 	strbuf_t *retsb;
 
+	int curl_ret;
+
 	long code;
 	double size;
 	double progress;
@@ -69,6 +71,11 @@ static void getinfo(luv_curl_t *lc) {
 		lc->progress = 1.0;
 	else if (lc->size > 0)
 		lc->progress = lc->rx / lc->size;
+
+	if (lc->curl_ret) {
+		lc->stat = ERROR;
+		lc->err = "libcurl error";
+	}
 }
 
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *data) {
@@ -142,6 +149,8 @@ static void push_curl_stat(luv_curl_t *lc) {
 	lua_setfield(L, -2, "speed");
 	lua_pushnumber(L, lc->size);
 	lua_setfield(L, -2, "size");
+	lua_pushnumber(L, lc->curl_ret);
+	lua_setfield(L, -2, "curl_ret");
 
 	if (lc->stat == ERROR) {
 		lua_pushstring(L, lc->err);
@@ -225,7 +234,7 @@ static void curl_thread(uv_work_t *w) {
 		}
 	}
 
-	CURLcode r = curl_easy_perform(lc->c);
+	lc->curl_ret = curl_easy_perform(lc->c);
 
 	if (lc->headers)
 		curl_slist_free_all(lc->headers);
@@ -233,7 +242,7 @@ static void curl_thread(uv_work_t *w) {
 	if (lc->proxy)
 		free(lc->proxy);
 
-	debug("thread ends r=%d", r);
+	debug("thread ends r=%d", lc->curl_ret);
 }
 
 // upvalue[1] = done
@@ -266,7 +275,7 @@ static void curl_setproxy(luv_curl_t *lc, char *proxy) {
 			found++;
 			break;
 		}
-		if (!isnumber(*s))
+		if (!(*s >= '0' && *s <= '9'))
 			break;
 		s--;
 	}
@@ -338,6 +347,7 @@ static int curl(lua_State *L) {
 	curl_easy_setopt(lc->c, CURLOPT_WRITEFUNCTION, write_data);
 	curl_easy_setopt(lc->c, CURLOPT_WRITEDATA, lc);
 
+	curl_easy_setopt(lc->c, CURLOPT_SSL_VERIFYPEER, 0);
 	//curl_easy_setopt(lc->c, CURLOPT_VERBOSE, 1);
 
 	lc->reqstr = (char *)lua_tostring(L, 5);

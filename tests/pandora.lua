@@ -1,8 +1,8 @@
 
-
 local P = pandora
 
-P.verbose = 1
+-- setloglevel(0)
+--P.verbose = 1
 P.cookie = P.loadcookie()
 P.start()
 
@@ -14,6 +14,7 @@ if input then
 		[[ info(pandora.next()) ]],
 		[[ pandora.setopt{op='pandora.login', username='enliest@qq.com', password='enliest1653'} ]],
 		[[ pandora.setopt{op='pandora.login', username='cfanfrank@gmail.com', password='enliest1653'} ]],
+		[[ pandora.setopt{op='pandora.login', username='fake', password='fake'} ]],
 		[[ pandora.setopt{op='pandora.genres_list'} ]],
 		[[ pandora.setopt{op='pandora.stations_list'} ]],
 		[[ pandora.setopt{op='pandora.songs_list'} ]],

@@ -55,9 +55,11 @@ have time to provide unpaid support for everyone who uses this code.
                                              -- Paul Kocher
 */
 
+#include <stdlib.h>
+#include <string.h>
+
 #include <lua.h>
 #include <uv.h>
-#include <stdlib.h>
 
 #include "blowfish.h"
 

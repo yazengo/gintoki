@@ -17,6 +17,7 @@ end
 
 local loadjson = function (fname) 
 	local f = io.open(fname, 'r')
+	if f == nil then return {} end
 	local s = f:read('*a')
 	f:close()
 	return cjson.decode(s) or {}
@@ -152,8 +153,6 @@ end
 
 P.user_login = function (cookie, done)
 	local log = logger('user_login')
-
-	log('time_offset', cookie.partner_time_offset)
 
 	return P.call {
 		proto = 'https',
@@ -336,7 +335,7 @@ end
 --
 -- err = 'auth_failed/need_station_id/server_error'
 --
-P.auto_auth = function (cookie, cb, done)
+P.auto_auth = function (cookie, cb, done, cancel)
 	local log = logger('auto_auth:')
 	local handle
 
@@ -344,7 +343,7 @@ P.auto_auth = function (cookie, cb, done)
 		cancel = function ()
 			if handle.task then
 				log('cancelled')
-				handle.task.cancel()
+				handle.task.cancel(cancel)
 				handle.task = nil
 			end
 		end
@@ -358,15 +357,24 @@ P.auto_auth = function (cookie, cb, done)
 		end
 	end
 
+	function fail(err)
+		log('err', err)
+		done(cookie, nil, err)
+	end
+
 	function on_done(func, r, stat)
 		if r then on_ok(func, r, stat) else on_error(func, r, stat) end
 	end
 
 	function on_ok(func, r, stat)
-		log(funcname(func), '-> ok', r)
+		log(funcname(func), 'ok')
 
 		if func == P.partner_login then
 			table.add(cookie, r)
+			if not cookie.username or not cookie.password then
+				fail('need_auth')
+				return
+			end
 			handle.task = P.user_login(cookie, function (...) on_done(P.user_login, ...) end)
 		elseif func == P.user_login then
 			table.add(cookie, r)
@@ -377,19 +385,19 @@ P.auto_auth = function (cookie, cb, done)
 	end
 
 	function on_error(func, r, stat)
-		log(funcname(func), '-> error')
+		log(funcname(func), 'error')
 
 		if func == P.partner_login then
-			done(cookie, nil, 'auth_failed')
+			fail('auth_failed')
 		elseif func == P.user_login then
-			done(cookie, nil, 'auth_failed')
+			fail('auth_failed')
 		else 
-			if stat.code == 1001 or stat.code == 1010 then
+			if stat.code == 1001 or stat.code == 1010 or stat.code == 13 then
 				handle.task = P.partner_login(cookie, function (...) on_done(P.partner_login, ...) end)
 			elseif func == P.choose_genres or func == P.songs_list then
-				done(cookie, nil, 'need_station_id')
+				fail('need_station_id')
 			else
-				done(cookie, nil, 'server_error')
+				fail('server_error')
 			end
 		end
 	end
@@ -399,7 +407,7 @@ P.auto_auth = function (cookie, cb, done)
 	then
 		handle.task = P.partner_login(cookie, function (...) on_done(P.partner_login, ...) end)
 	elseif func == P.songs_list and not cookie.station_id then
-		done(cookie, nil, 'need_station_id')
+		fail('need_station_id')
 	else
 		handle.task = cb(cookie, function (...) on_done(cb, ...) end)
 	end
@@ -415,6 +423,11 @@ end
 
 P.setopt = function (o, done)
 	done = done or function () end
+
+	local on_cancel = function ()
+		P.log('cancelled')
+		done{result=1, err='cancelled'}
+	end
 
 	P.log('setopt', o)
 
@@ -453,8 +466,8 @@ P.setopt = function (o, done)
 					P.stat = err
 					done{result=1, err=err}
 				end
-			end)
-		end)
+			end, on_cancel)
+		end, on_cancel)
 
 	elseif o.op == 'pandora.station_choose' then
 
@@ -481,7 +494,7 @@ P.setopt = function (o, done)
 				P.stat = err
 				done{result=1, err=err}
 			end
-		end)
+		end, on_cancel)
 
 	elseif o.op == 'pandora.login' then
 
@@ -523,8 +536,8 @@ P.setopt = function (o, done)
 					P.stat = err
 					done{err=1}
 				end
-			end)
-		end)
+			end, on_cancel)
+		end, on_cancel)
 
 	elseif o.op == 'pandora.genres_list' then
 		local c = table.copy(P.cookie)
