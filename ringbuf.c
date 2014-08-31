@@ -5,7 +5,8 @@
 #include "ringbuf.h"
 #include "utils.h"
 
-void ringbuf_init(ringbuf_t *b) {
+void ringbuf_init(ringbuf_t *b, uv_loop_t *loop) {
+	b->loop = loop;
 	b->head = b->tail = b->len = 0;
 	b->tailpos = b->headpos = 0;
 	memset(&b->getter, 0, sizeof(b->getter));

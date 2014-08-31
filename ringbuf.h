@@ -1,5 +1,7 @@
 #pragma once
 
+#include <uv.h>
+
 #define RINGBUF_SIZE (1024*24)
 
 struct ringbuf_s;
@@ -22,9 +24,10 @@ typedef struct ringbuf_s {
 	int headpos, tailpos;
 	void *data;
 	ringbuf_filler_t getter, putter;
+	uv_loop_t *loop;
 } ringbuf_t;
 
-void ringbuf_init(ringbuf_t *b);
+void ringbuf_init(ringbuf_t *b, uv_loop_t *loop);
 void ringbuf_data_ahead_get(ringbuf_t *b, void **_buf, int *_len);
 void ringbuf_space_ahead_get(ringbuf_t *b, void **_buf, int *_len);
 void ringbuf_push_head(ringbuf_t *b, int len);

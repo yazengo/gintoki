@@ -336,11 +336,11 @@ static void ringbuf_get_done(ringbuf_t *rb, int len) {
 	info("get %d", len);
 }
 
-static void test_ringbuf() {
+static void test_ringbuf(uv_loop_t *loop) {
 	ringbuf_t rb;
 	static char buf[176400];
 
-	ringbuf_init(&rb);
+	ringbuf_init(&rb, loop);
 
 	ringbuf_data_get(&rb, buf, 24576, ringbuf_get_done);
 	ringbuf_data_put(&rb, buf, sizeof(buf), NULL);
@@ -361,8 +361,6 @@ void run_test_c_pre(int i) {
 		test_buggy_call();
 	if (i == 7 || i == 8)
 		test_uv_subprocess(i);
-	if (i == 9)
-		test_ringbuf();
 }
 
 static uv_buf_t uv_malloc_buffer(uv_handle_t *h, size_t len) {
@@ -527,7 +525,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	if (i == 7)
 		test_pthread_call_uv(L, loop);
 	if (i == 8)
-		test_ringbuf();
+		test_ringbuf(loop);
 	if (i == 9)
 		test_stdin(loop);
 }

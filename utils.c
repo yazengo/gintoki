@@ -219,6 +219,25 @@ void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p) {
 	pthread_call_uv_wait_withname(loop, cb, cb_p, "normal");
 }
 
+typedef struct {
+	void (*cb)(void *);
+	void *p;
+} call_soon_t;
+
+static void call_soon(uv_async_t *as, int _) {
+	call_sonn_t *c = (call_soon_t *)as->data;
+	uv_close((uv_handle_t *)as, pcall_uv_handle_free);
+}
+
+void uv_call_soon(uv_loop_t *loop, void (*done)(void *), void *p) {
+	call_soon();
+
+	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
+	uv_async_init(loop, as, pcall_luv_v2_start);
+	as->data = &p;
+	uv_async_send(as);
+}
+
 static int timer_cb_inner(lua_State *L) {
 	//info("is_function %d", lua_isfunction(L, lua_upvalueindex(1)));
 	lua_pushvalue(L, lua_upvalueindex(1));

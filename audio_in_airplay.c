@@ -16,100 +16,163 @@
 typedef struct {
 	lua_State *L;
 	uv_loop_t *loop;
+	int stat;
+	void *wait;
 
-	int cli_stat;
+	shairport_t *sp;
+	int rate;
+} airplay_srv_t;
+
+typedef void (*write_done_cb)(int len, void *_p);
+
+typedef struct {
+	int stat;
 	audio_in_t *ai;
 
-	int srv_stat;
-	shairport_t *sp;
-	void *buf;
-	int len;
-	int rate;
+	write_done_cb on_write_done;
+	void *data;
 
-} airplay_t;
+	audio_in_read_cb on_read_done;
+	audio_in_close_cb on_closed;
 
-// srv_stat
+	ringbuf_t buf;
+} airplay_cli_t;
+
 enum {
-	SRV_STOPPED, SRV_PLAYING,
+	SRV_STOPPED,
+	SRV_PLAYING,
 };
 
-// cli_stat
 enum {
-	CLI_STOPPED, CLI_INIT, CLI_READING, CLI_STOPPING,
+	CLI_STOPPED,
+	CLI_INIT,
+	CLI_READING,
+	CLI_CLOSING,
 };
 
-static airplay_t _ap, *ap = &_ap;
+static airplay_srv_t _srv, *srv = &_srv;
+static airplay_cli_t *cli;
 
-// in main uv loop
-static void play_put_buf_done(ringbuf_t *rb, int len) {
-	void *pcall = rb->data;
-	pthread_call_uv_complete(pcall);
+static void cli_write(void *buf, int len, write_done_cb done, void *p);
+static void cli_stop();
+
+static void on_srv_start() {
+	if (cli == NULL)
+		return;
+
+	if (cli->stat == CLI_STOPPED) {
+		cli->ai->on_start(cli->ai, srv->rate);
+		cli->stat = CLI_INIT;
+	}
+}
+
+static void on_srv_write_done(int len, void *wait) {
+	pthread_call_uv_complete(wait);
 }
 
 // in main uv loop
-static void play_put_buf(void *buf, int len, void *pcall) {
-	debug("len=%d", len);
-	ap->buf.data = pcall;
-	ringbuf_data_put(&ap->buf, buf, len, play_put_buf_done);
+static void on_srv_write(void *buf, int len, void *wait) {
+	if (cli) 
+		cli_write(buf, len, on_srv_write_done, wait);
+	else
+		dummy_write(buf, len, on_srv_write_done, wait);
 }
 
-// in main uv loop
-static void play_get_buf_done(ringbuf_t *rb, int len) {
-	debug("getbuf done");
-	ap->ai->is_reading = 0;
-	ap->ai->on_read_done(ap->ai, len);
+static void on_srv_stop() {
+	if (cli)
+		cli_stop();
 }
 
-// in main uv loop
-static void cli_read(audio_in_t *ai, void *buf, int len) {
-	debug("len=%d", len);
-	ap->ai->is_reading = 1;
-	ringbuf_data_get(&ap->buf, buf, len, play_get_buf_done);
+static void cli_ringbuf_put_done(ringbuf_t *rb, int len) {
+	cli->on_write_done(len, cli->data);
 }
 
-static void cli_stop(audio_in_t *ai) {
-	debug("stopped");
-	ringbuf_data_cancel_get(&ap->buf);
-	ringbuf_data_cancel_put(&ap->buf);
-
-	if (ap->ai == ai)
-		ap->ai = NULL;
-
-	if (ai->on_exit)
-		ai->on_exit(ai);
-
-	ringbuf_init(&ap->buf);
+static void cli_write(void *buf, int len, write_done_cb done, void *p) {
+	cli->on_write_done = done;
+	cli->data = p;
+	ringbuf_data_put(&cli->buf, buf, len, cli_ringbuf_put_done);
 }
 
-static void cli_close(audio_in_t *ai) {
+static void cli_stop() {
+	switch (cli->stat) {
+	case CLI_INIT:
+	case CLI_READING:
+		ringbuf_data_cancel_put(&cli->buf);
+		ringbuf_data_cancel_get(&cli->buf);
+		cli->stat = CLI_CLOSING;
+		break;
+	case CLI_CLOSING:
+		break;
+	default:
+		panic("invalid stat=%d", cli->stat);
+	}
 }
 
-static int cli_is_eof(audio_in_t *ai) {
-	return ap->cli_stat > CLI_READING;
+static void cli_ringbuf_get_done(ringbuf_t *rb, int len) {
+	switch (cli->stat) {
+	case CLI_READING:
+	case CLI_CLOSING:
+		cli->stat = CLI_INIT;
+		break;
+	default:
+		panic("stat=%d invalid: must be READING or CLOSING", cli->stat);
+	}
+	cli->on_read_done(cli->ai, len);
+}
+
+static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb done) {
+	if (cli->stat != CLI_INIT)
+		panic("stat=%d invalid: must be INIT", cli->stat);
+
+	cli->stat = CLI_READING;
+	cli->on_read_done = done;
+	ringbuf_data_get(&cli->buf, buf, len, done);
+}
+
+static void audio_in_stop(audio_in_t *ai) {
+	cli_stop();
+}
+
+static void audio_in_closed(void *_p) {
+	audio_in_t *ai = (audio_in_t *)_p;
+	cli->on_closed(ai);
+	free(cli);
+	cli = NULL;
+}
+
+static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
+	if (cli->stat != CLI_CLOSING)
+		panic("call stop() and check is_eof() before close()");
+	cli->on_closed = done;
+	uv_call_soon(srv->loop, audio_in_closed, ai);
+}
+
+static int audio_in_is_eof(audio_in_t *ai) {
+	return cli->stat > CLI_READING;
 }
 
 static int cli_can_read(audio_in_t *ai) {
-	return ap->cli_stat == CLI_INIT;
+	return cli->stat == CLI_INIT;
 }
 
 void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai) {
-	ai->read = cli_read;
-	ai->stop = cli_stop;
-	ai->close = cli_close;
-
-	ai->is_eof = cli_is_eof;
-	ai->can_read = cli_can_read;
-
-	if (ap->cli_stat != CLI_STOPPED)
+	if (cli)
 		panic("only one airplay audio_in can exist");
 
-	ap->ai = ai;
+	ai->read = audio_in_read;
+	ai->stop = audio_in_stop;
+	ai->close = audio_in_close;
 
-	if (ap->srv_stat == SRV_STOPPED)
-		ap->cli_stat = CLI_STOPPING;
-	else {
-		ap->cli_stat = CLI_INIT;
-		ai->on_start(ai, ap->rate);
+	ai->is_eof = audio_in_is_eof;
+	ai->can_read = audio_in_can_read;
+
+	cli = (airplay_cli_t *)zalloc(sizeof(airplay_cli_t));
+
+	if (srv->stat != SRV_PLAYING) {
+		cli->stat = CLI_CLOSING;
+	} else {
+		cli->stat = CLI_INIT;
+		ai->on_start(ai, srv->rate);
 	}
 }
 
@@ -124,30 +187,8 @@ typedef struct {
 	int rate;
 } shairport_cmd_t;
 
-static void play_dummy_done(uv_timer_t *t, int _) {
-	void *pcall = t->data;
-
-	uv_timer_stop(t);
-	pthread_call_uv_complete(pcall);
-}
-
 // in main uv loop
-static void play_dummy(void *buf, int len, void *pcall) {
-	debug("len=%d", len);
-
-	if (ap->rate == 0)
-		panic("rate == 0");
-
-	int timeout = 1000 * len*1.0 / (ap->rate*4);
-
-	static uv_timer_t t;
-	t.data = pcall;
-	uv_timer_init(ap->loop, &t);
-	uv_timer_start(&t, play_dummy_done, timeout, timeout);
-}
-
-// in main uv loop
-void call_airplay_start() {
+void lua_call_airplay_start() {
 	lua_getglobal(ap->L, "on_airplay_start");
 	if (lua_isnil(ap->L, -1)) {
 		lua_pop(ap->L, 1);
@@ -159,29 +200,23 @@ void call_airplay_start() {
 // in main uv loop
 static void on_shairport_cmd(void *pcall, void *_p) {
 	shairport_cmd_t *c = (shairport_cmd_t *)_p;
-	audio_in_t *ai = ap->ai;
 
 	debug("stat=%d cmd=%d", ap->stat, c->type);
 
-	if (ap->srv_stat == SRV_STOPPED) {
+	if (srv->stat == SRV_STOPPED) {
 		if (c->type == START) {
-			ap->rate = c->rate;
-			ap->srv_stat = SRV_PLAYING;
-			call_airplay_start();
+			srv->rate = c->rate;
+			srv->stat = SRV_PLAYING;
+			lua_call_airplay_start();
 		}
-	} else if (ap->srv_stat == SRV_PLAYING) {
+	} else if (srv->stat == SRV_PLAYING) {
 		if (c->type == PLAY) {
-			if (ai)
-				play_put_buf(c->buf, c->samples*4, pcall);
-			else
-				play_dummy(c->buf, c->samples*4, pcall);
+			on_srv_write(c->buf, c->samples*4, pcall);
 			return;
 		}
 		if (c->type == STOP) {
-			ap->srv_stat = SRV_STOPPED;
-			debug("stopped");
-			if (ai) 
-				ai->stop(ai);
+			on_srv_stop();
+			srv->stat = SRV_STOPPED;
 		}
 	}
 
@@ -247,19 +282,17 @@ static void *shairport_loop(void *_p) {
 }
 
 void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop) {
-	ap->loop = loop;
-	ap->L = L;
-
-	ringbuf_init(&ap->buf);
+	srv->loop = loop;
+	srv->L = L;
 
 	shairport_t *sp = (shairport_t *)zalloc(sizeof(shairport_t));
 	sp->name = "Airplay on Muno";
-	ap->sp = sp;
+	srv->sp = sp;
 
 	sp->on_start = on_shairport_start;
 	sp->on_stop = on_shairport_stop;
 	sp->on_play = on_shairport_play;
-	sp->data = ap;
+	sp->data = srv;
 
 	pthread_t tid;
 	if (getenv("AIRPLAY_TEST"))

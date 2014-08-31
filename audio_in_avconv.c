@@ -141,12 +141,6 @@ enum {
 	CLOSING_FD2
 };
 
-// can_read()
-// on_exit()
-// INIT -> READING -> STOPPING -> CLOSING_FD1 -> CLOSING_FD2 -> CLOSING_PROC
-// data pipe read n < 0 ==> on_exit(); and kill process
-// process_exit -> close all handles one by one
-
 static void on_handle_closed(uv_handle_t *h) {
 	avconv_t *av = (avconv_t *)h->data;
 	free(h);
