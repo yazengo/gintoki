@@ -172,10 +172,10 @@ static void check_tracks_can_close(audio_mixer_t *am) {
 		audio_track_t *tr = &am->tracks[i];
 		audio_in_t *ai = tr->ai;
 
-		if (!(tr->stat != TRACK_STOPPED && tr->stat != TRACK_CLOSING && ai->is_eof(ai) && tr->buf.len == 0))
+		if (!((tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING) && ai->is_eof(ai) && tr->buf.len == 0))
 			continue;
 
-		info("closed #%d", i);
+		info("closed #%d stat=%d", i, tr->stat);
 
 		tr->stat = TRACK_CLOSING;
 		ai->close(ai, audio_in_on_closed);
@@ -188,7 +188,7 @@ static void check_tracks_can_read(audio_mixer_t *am) {
 		audio_track_t *tr = &am->tracks[i];
 		audio_in_t *ai = tr->ai;
 
-		if (!(tr->stat != TRACK_STOPPED && ai->can_read(ai)))
+		if (!((tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING || tr->stat == TRACK_PAUSED) && ai->can_read(ai)))
 			continue;
 
 		void *buf; int len;
@@ -222,7 +222,7 @@ static void check_tracks_can_mix(audio_mixer_t *am) {
 	for (i = 0; i < TRACKS_NR; i++) {
 		audio_track_t *tr = &am->tracks[i];
 
-		if (tr->stat == TRACK_STOPPED || tr->stat == TRACK_PAUSED)
+		if (!(tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING))
 			continue;
 
 		void *databuf; int datalen;

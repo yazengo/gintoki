@@ -5,10 +5,11 @@ audio.play {
 }
 
 set_timeout(function ()
+	info('play track2')
 	audio.play {
 		track = 1,
 		url = 'testaudios/hello-world.mp3'
 	}
-end, 500)
+end, 1000)
 
 
