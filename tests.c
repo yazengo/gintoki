@@ -498,6 +498,24 @@ static void test_pthread_call_uv(lua_State *L, uv_loop_t *loop) {
 	pthread_create(&tid, NULL, pthread_loop_test_pcall_uv, loop);
 }
 
+static void tty_stdin_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
+	info("n=%d", n);
+	if (n < 0)
+		return;
+
+	info("%s", buf.base);
+}
+
+static void test_stdin(uv_loop_t *loop) {
+	info("test tty stdin");
+
+	uv_tty_t *tty = (uv_tty_t *)zalloc(sizeof(uv_tty_t));
+
+	uv_tty_init(loop, tty, 0, 1);
+
+	uv_read_start((uv_stream_t *)tty, uv_malloc_buffer, tty_stdin_read);
+}
+
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);
 	if (i == 3)
@@ -510,5 +528,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 		test_pthread_call_uv(L, loop);
 	if (i == 8)
 		test_ringbuf();
+	if (i == 9)
+		test_stdin(loop);
 }
 

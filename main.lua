@@ -106,13 +106,34 @@ radio.play = function (song)
 	}
 end
 
-ttyraw_onkey = function (key)
-	if key == 'n' then
-		radio.next()
-	elseif key == 'p' then
-		audio.pause_resume_toggle()
+local I = {}
+
+I.cmds = {
+	[[ audio.pause_resume_toggle() ]],
+	[[ radio.next() ]],
+}
+
+I.handle = function (line) 
+	if line == '' then
+		I.usage()
+		return
+	end
+	local i = tonumber(line)
+	if i >= 1 and i <= table.maxn(I.cmds) then
+		local cmd = I.cmds[i]
+		print('dostring: ' .. cmd)
+		loadstring(cmd)()
 	end
 end
+
+I.usage = function ()
+	print('--- select command ---')
+	for k,v in pairs(I.cmds) do
+		print(k .. ' ' .. v)
+	end
+end
+
+input = I
 
 on_airplay_start = function ()
 	audio.play {
@@ -137,6 +158,7 @@ end
 
 --setloglevel(0)
 upnp.start()
+stdin_open(input.handle)
 --audio.setvol(3)
 --radio.start(pandora)
 radio.start(localmusic)
