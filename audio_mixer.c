@@ -306,11 +306,11 @@ static int audio_on_done(lua_State *L) {
 	return 0;
 }
 
-// audio.play({url='filename',i=0/1,done=function})
+// audio.play({url='filename',track=0/1,done=function})
 static int audio_play(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
 
-	lua_getfield(L, 1, "i"); // 2
+	lua_getfield(L, 1, "track"); // 2
 	lua_getfield(L, 1, "url"); // 3
 	lua_getfield(L, 1, "done"); // 4
 
