@@ -7,10 +7,9 @@
 #include "utils.h"
 #include "ringbuf.h"
 #include "pcm.h"
-#include "avconv.h"
-#include "audio_mixer.h"
 #include "audio_in.h"
 #include "audio_out.h"
+#include "audio_mixer.h"
 
 #define MAX_MIXLEN (1024*2)
 #define MAX_TRACKBUF (1024*8)
@@ -21,11 +20,7 @@ enum {
 	TRACK_BUFFERING,
 	TRACK_PLAYING,
 	TRACK_PAUSED,
-};
-
-enum {
-	TRACK_CLOSE_FADING_OUT = 1,
-	TRACK_OPEN_FADING_IN,
+	TRACK_STOPPING,
 };
 
 struct audio_mixer_s;
@@ -110,17 +105,6 @@ static void track_change_stat(audio_track_t *tr, int stat) {
 		audio_emit(tr->am, "stat_change", track_stat_str(stat));
 }
 
-static void audio_in_on_exit(audio_in_t *ai) {
-	audio_track_t *tr = (audio_track_t *)ai->data;
-	tr->ai = NULL;
-
-	check_all_tracks(tr->am);
-}
-
-static void audio_in_on_free(audio_in_t *ai) {
-	free(ai);
-}
-
 static void audio_in_on_probe(audio_in_t *ai, const char *key, void *_val) {
 	audio_track_t *tr = (audio_track_t *)ai->data;
 
@@ -159,17 +143,24 @@ static void audio_in_on_start(audio_in_t *ai, int rate) {
 	}
 }
 
+static void audio_in_on_closed(audio_in_t *ai) {
+	free(ai);
+}
+
 static void check_tracks_can_close(audio_mixer_t *am) {
 	int i;
 	for (i = 0; i < TRACKS_NR; i++) {
 		audio_track_t *tr = &am->tracks[i];
+		audio_in_t *ai = tr->ai;
 
-		if (!(tr->ai == NULL && tr->stat != TRACK_STOPPED && tr->buf.len == 0))
+		if (!(tr->stat != TRACK_STOPPED && ai->is_eof(ai) && tr->buf.len == 0))
 			continue;
 
 		info("closed #%d", i);
 
 		tr->stat = TRACK_STOPPED;
+		tr->ai = NULL;
+		ai->close(ai, audio_in_on_closed);
 		lua_call_play_done(tr, "done");
 	}
 }
@@ -178,8 +169,9 @@ static void check_tracks_can_read(audio_mixer_t *am) {
 	int i;
 	for (i = 0; i < TRACKS_NR; i++) {
 		audio_track_t *tr = &am->tracks[i];
+		audio_in_t *ai = tr->ai;
 
-		if (tr->ai == NULL || tr->stat == TRACK_STOPPED)
+		if (!(tr->stat != TRACK_STOPPED && ai->can_read(ai)))
 			continue;
 
 		void *buf; int len;
@@ -188,11 +180,8 @@ static void check_tracks_can_read(audio_mixer_t *am) {
 		if (len > MAX_TRACKBUF)
 			len = MAX_TRACKBUF;
 
-		debug("len=%d is reading=%d", len, audio_in_is_reading(tr->ai));
-
-		if (len > 0 && !audio_in_is_reading(tr->ai)) {
-			audio_in_read(tr->ai, buf, len, audio_in_on_read_done);
-		}
+		if (len > 0)
+			ai->read(ai, buf, len, audio_in_on_read_done);
 	}
 }
 
@@ -287,6 +276,19 @@ static void audio_emit(audio_mixer_t *am, const char *arg0, const char *arg1) {
 	lua_call_or_die(am->L, 2, 0);
 }
 
+// upvalue[1] = {url='filename',i=0/1,done=function}
+static int audio_on_done(lua_State *L) {
+	lua_getglobal(L, "audio");
+	lua_getfield(L, -1, "play");
+	lua_remove(L, -2);
+	
+	lua_pushvalue(L, lua_upvalueindex(1));
+
+	lua_call_or_die(L, 1, 0);
+
+	return 0;
+}
+
 // audio.play({url='filename',i=0/1,done=function})
 static int audio_play(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
@@ -309,34 +311,40 @@ static int audio_play(lua_State *L) {
 
 	audio_track_t *tr = &am->tracks[i];
 	tr->am = am;
+	
+	if (tr->stat != TRACK_STOPPED) {
+		tr->ai->stop(tr->ai);
+		tr->stat = TRACK_STOPPING;
+		ringbuf_init(&tr->buf);
+
+		lua_pushvalue(L, 1);
+		lua_pushcclosure(L, audio_on_done, 1);
+		lua_set_play_done(tr);
+
+		return 0;
+	}
+
+	tr->stat = TRACK_BUFFERING;
+	tr->first_blood = 1; // for testing
 
 	lua_pushvalue(L, 4);
 	lua_set_play_done(tr);
 
 	info("url=%s i=%d", url, i);
 
-	if (tr->ai) {
-		audio_in_stop(tr->ai);
-		tr->ai = NULL;
-	}
+	audio_in_t *ai = (audio_in_t *)zalloc(sizeof(audio_in_t));
+	tr->ai = ai;
+	ai->data = tr;
+	ai->on_probe = audio_in_on_probe;
+	ai->on_start = audio_in_on_start;
+	ai->url = url;
 
-	ringbuf_init(&tr->buf);
-
-	tr->ai = (audio_in_t *)zalloc(sizeof(audio_in_t));
-	tr->ai->data = tr;
-	tr->ai->on_probe = audio_in_on_probe;
-	tr->ai->on_exit = audio_in_on_exit;
-	tr->ai->on_free = audio_in_on_free;
-	tr->ai->on_start = audio_in_on_start;
-	tr->ai->url = url;
-
+#ifdef USE_AIRPLAY
 	if (!strncmp(url, "airplay://", strlen("airplay://")))
-		audio_in_airplay_init(am->loop, tr->ai);
+		audio_in_airplay_init(am->loop, ai);
 	else
-		audio_in_avconv_init(am->loop, tr->ai);
-
-	tr->stat = TRACK_BUFFERING;
-	tr->first_blood = 1; // for testing
+#endif
+		audio_in_avconv_init(am->loop, ai);
 
 	check_all_tracks(am);
 

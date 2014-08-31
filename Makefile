@@ -2,14 +2,14 @@
 cflags = -g -I.
 ldflags = -g -luv -lm -lao
 
-objs = utils.o main.o avconv.o strbuf.o tests.o
+objs = utils.o main.o strbuf.o tests.o
 objs += audio_mixer.o audio_out.o audio_out_test.o
 objs += upnp_device.o upnp_util.o  
 objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
 objs += lua_curl.o
-objs += audio_in.o audio_in_avconv.o 
-objs += audio_in_airplay.o
+objs += audio_in_avconv.o 
+#objs += audio_in_airplay.o
 
 objs-x86 = $(subst .o,-x86.o,$(objs))
 cflags-x86 = $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 

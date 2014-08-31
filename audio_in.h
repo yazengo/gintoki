@@ -7,32 +7,31 @@
 struct audio_in_s;
 
 typedef void (*audio_in_read_cb)(struct audio_in_s *, int len);
+typedef void (*audio_in_close_cb)(struct audio_in_s *);
 
 typedef struct audio_in_s {
 	void (*on_probe)(struct audio_in_s *ai, const char *key, void *val);
 	void (*on_start)(struct audio_in_s *ai, int rate);
-	void (*on_exit)(struct audio_in_s *ai);
-	void (*on_free)(struct audio_in_s *ai);
-	void (*on_read_done)(struct audio_in_s *ai, int len);
 
 	int (*can_read)(struct audio_in_s *ai);
+	int (*is_eof)(struct audio_in_s *ai);
 
-	void *in;
 	void (*read)(struct audio_in_s *ai, void *buf, int len, audio_in_read_cb done);
 	void (*stop)(struct audio_in_s *ai);
+	void (*close)(struct audio_in_s *ai, audio_in_close_cb done);
 
-	int is_reading;
-
+	void *in;
 	void *data;
 	char *url;
 } audio_in_t;
 
-void audio_in_read(audio_in_t *ai, void *buf, int len, void (*done)(audio_in_t *ai, int len));
-void audio_in_stop(audio_in_t *ai);
-int audio_in_is_reading(audio_in_t *ai);
-
 void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai);
-void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai);
 
+void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai);
 void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop);
+
+/*
+ * init() -> [ can_read() -> read() ] -> is_eof() -> close()
+ *                   stop()
+ */
 

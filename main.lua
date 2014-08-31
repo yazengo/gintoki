@@ -137,7 +137,7 @@ end
 
 --setloglevel(0)
 upnp.start()
-audio.setvol(3)
+--audio.setvol(3)
 --radio.start(pandora)
 radio.start(localmusic)
 --ttyraw_open(ttyraw_onkey)

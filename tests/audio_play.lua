@@ -1,6 +1,8 @@
 
 info('-- test audio mixer on done --')
 
+setloglevel(0)
+
 i = 0
 audio.play{
 	url = 'testdata/10s-2.mp3',

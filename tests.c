@@ -14,7 +14,6 @@
 #include "upnp_util.h"
 
 #include "lua_cjson.h"
-#include "avconv.h"
 #include "audio_out.h"
 #include "audio_out_test.h"
 
@@ -333,31 +332,6 @@ static void test_buggy_call() {
 	}
 }
 
-static void avconv_on_probe(avconv_t *av, const char *key, void *val) {
-	float f = *(float *)val;
-	info("probe %s %f", key, f);
-}
-
-static void avconv_read_done(avconv_t *av, int nread) {
-	if (nread < 0) {
-		info("EOF");
-		exit(-1);
-		return;
-	}
-
-	avconv_read(av, av->data, 1024*1024, avconv_read_done);
-}
-
-static void test_avconv(uv_loop_t *loop) {
-	avconv_t *av = (avconv_t *)zalloc(sizeof(avconv_t));
-
-	av->data = malloc(1024*1024*1);
-	av->on_probe = avconv_on_probe;
-
-	avconv_start(loop, av, "testdata/test.mp3");
-	avconv_read(av, av->data, 1024*1024, avconv_read_done);
-}
-
 static void ringbuf_get_done(ringbuf_t *rb, int len) {
 	info("get %d", len);
 }
@@ -389,49 +363,6 @@ void run_test_c_pre(int i) {
 		test_uv_subprocess(i);
 	if (i == 9)
 		test_ringbuf();
-}
-
-typedef struct {
-	avconv_t *av;
-	audio_out_t *ao;
-	void *buf;
-	int len;
-} avconv_ao_test_t;
-
-static void avconv_audio_out_on_data(avconv_t *av, int nread);
-static void avconv_audio_out_play_done(audio_out_t *ao, int len);
-
-static void avconv_audio_out_play_done(audio_out_t *ao, int len) {
-	avconv_ao_test_t *t = (avconv_ao_test_t *)ao->data;
-
-	avconv_read(t->av, t->buf, t->len, avconv_audio_out_on_data);
-}
-
-static void avconv_audio_out_on_data(avconv_t *av, int nread) {
-	avconv_ao_test_t *t = (avconv_ao_test_t *)av->data;
-	if (nread < 0)
-		return;
-	audio_out_play(t->ao, t->buf, t->len, avconv_audio_out_play_done);
-}
-
-static void test_avconv_audio_out(uv_loop_t *loop) {
-	avconv_t *av = (avconv_t *)zalloc(sizeof(avconv_t));
-	audio_out_t *ao = (audio_out_t *)zalloc(sizeof(audio_out_t));
-	avconv_ao_test_t *t = (avconv_ao_test_t *)zalloc(sizeof(avconv_ao_test_t));
-
-	audio_out_init(loop, ao, 44100);
-
-	t->ao = ao;
-	t->av = av;
-
-	av->data = t;
-	ao->data = t;
-
-	t->len = 4096;
-	t->buf = malloc(t->len);
-
-	avconv_start(loop, av, "testdata/test.mp3");
-	avconv_read(av, t->buf, t->len, avconv_audio_out_on_data);
 }
 
 static uv_buf_t uv_malloc_buffer(uv_handle_t *h, size_t len) {
@@ -569,14 +500,8 @@ static void test_pthread_call_uv(lua_State *L, uv_loop_t *loop) {
 
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);
-	if (i == 1)
-		test_avconv(loop);
-	if (i == 2)
-		test_avconv_audio_out(loop);
 	if (i == 3)
 		test_audio_out(loop);
-	if (i == 4)
-		test_avconv_audio_out(loop);
 	if (i == 5) 
 		test_ttyraw_open(loop);
 	if (i == 6)

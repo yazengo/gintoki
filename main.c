@@ -70,7 +70,10 @@ int main(int argc, char *argv[]) {
 #endif
 
 	audio_mixer_init(L, loop);
+
+#ifdef USE_AIRPLAY
 	audio_in_airplay_start_loop(L, loop);
+#endif
 
 	upnp_init(L, loop);
 
