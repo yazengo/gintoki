@@ -119,7 +119,7 @@ I.handle = function (line)
 		return
 	end
 	local i = tonumber(line)
-	if i >= 1 and i <= table.maxn(I.cmds) then
+	if i and i >= 1 and i <= table.maxn(I.cmds) then
 		local cmd = I.cmds[i]
 		print('dostring: ' .. cmd)
 		loadstring(cmd)()

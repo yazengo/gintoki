@@ -6,6 +6,7 @@ P = {}
 P.mode = 'repeat_all'
 
 P.loadlist = function (dir) 
+	info('loading musics from', dir)
 	local list = {}
 	local files = os.readdir(dir)
 	for i,fname in ipairs(files) do
@@ -16,6 +17,7 @@ P.loadlist = function (dir)
 			cover_url = '',
 		}
 	end
+	info('total', table.maxn(list), 'songs')
 	return list
 end
 
