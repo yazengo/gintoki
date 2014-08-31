@@ -1,6 +1,6 @@
 
 cflags = -g -I.
-ldflags = -g -luv -lm -lao
+ldflags = -g -luv -lm
 
 USE_AIRPLAY = 1
 USE_CURL = 1
@@ -27,7 +27,7 @@ endif
 objs-x86 += $(subst .o,-x86.o,$(objs))
 cflags-x86 += $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
 cflags-x86 += -I../shairport/
-ldflags-x86 += $(shell pkg-config --libs libupnp lua5.2) $(ldflags)
+ldflags-x86 += $(shell pkg-config --libs libupnp lua5.2) $(ldflags) -lao
 ldflags-x86 += -L../shairport
 ldflags-x86 += -lshairport
 
