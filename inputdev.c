@@ -221,32 +221,152 @@ void inputdev_init(lua_State *_L, uv_loop_t *_loop) {
 	pthread_create(&tid, NULL, poll_gsensor_thread, NULL);
 }
 
+typedef struct inotify_s {
+	int fd;
+	uv_fs_t *req;
+	uv_pipe_t *pipe;
+	char buf[512];
+	void *data;
+	void (*on_create)(struct inotify_s *in, char *name);
+	void (*on_delete)(struct inotify_s *in, char *name);
+} fsevent_t;
+
+static uv_buf_t fsevent_allocbuf(uv_handle_t *h, size_t len) {
+	fsevent_t *in = h->data;
+	return uv_buf_init(in->buf, sizeof(in->buf));
+}
+
+static void fsevent_read(uv_stream_t *h, ssize_t nread, uv_buf_t buf) {
+	fsevent_t *in = h->data;
+
+	debug("read=%d", nread);
+	if (nread <= sizeof(struct inotify_event))
+		return;
+
+	struct inotify_event *ie = (struct inotify_event *)buf.base;
+	if (ie->mask & IN_CREATE) {
+		debug("create name=%s", ie->name);
+		if (in->on_create)
+			in->on_create(in, ie->name);
+	}
+	if (ie->mask & IN_DELETE) {
+		debug("delete name=%s", ie->name);
+		if (in->on_delete)
+			in->on_delete(in, ie->name);
+	}
+}
+
+static void fsevent_init(uv_loop_t *loop, fsevent_t *in, char *path) {
+	in->fd = inotify_init();
+
+	debug("fd=%d", in->fd);
+
+	int r = inotify_add_watch(in->fd, path, IN_DELETE|IN_CREATE);
+	if (r < 0)
+		panic("add watch failed");
+
+	in->req = zalloc(sizeof(uv_fs_t));
+	in->req->data = in;
+
+	in->pipe = zalloc(sizeof(uv_pipe_t));
+	in->pipe->data = in;
+	uv_pipe_init(in->loop, in->pipe, 0);
+	uv_pipe_open(in->pipe, in->fd);
+
+	uv_read_start((uv_stream_t *)in->pipe, fsevent_allocbuf, fsevent_read);
+}
+
+enum {
+	GPIO, VOL, NETWORK, GSENSOR,
+	INPUTDEV_NR,
+};
+
+static const char *inputdev_names[] = {
+	"gpio-keys", "Sugr_Volume", "network_notify", "gesensor_dev",
+};
+
 typedef struct {
 	lua_State *L;
 	uv_loop_t *loop;
-	int fd_inotify;
-	uv_fs_t *req_read;
-	char buf_inotify[1024];
+	fsevent_t *fsevent;
+
+	uv_pipe_t *pipes[INPUTDEV_NR];
+	char buf[INPUTDEV_NR][sizeof(struct input_event)];
 } inputdev_t;
+
+static uv_buf_t inputdev_allocbuf(uv_handle_t *h, size_t len) {
+	int i = (int)h->data;
+	return uv_buf_init(dev->buf[i], sizeof(dev->buf[i]));
+}
+
+static void gpiokeys_read(uv_stream_t *h, ssize_t nread, uv_buf_t buf) {
+}
+
+static void sugrvol_read(uv_stream_t *h, ssize_t nread, uv_buf_t buf) {
+}
+
+static void netnotify_read(uv_stream_t *h, ssize_t nread, uv_buf_t buf) {
+}
+
+static void gsensor_read(uv_stream_t *h, ssize_t nread, uv_buf_t buf) {
+}
+
+static uv_read_cb inputdev_readcbs[] = {
+	gpiokeys_read, sugrvol_read, netnotify_read, gsensor_read,
+};
 
 static inputdev_t _dev, *dev = &_dev;
 
-static void on_inotify_event(uv_fs_t *req) {
-	uv_fs_req_cleanup(req);
-	debug("r=%d", req->result);
-
-	if (req->result < 0)
+static void inputdev_open(char *path) {
+	if (dev->pipes[i])
 		return;
 
-	struct inotify_event *ie = (struct inotify_event *)dev->buf_inotify;
+	int fd = open(path, O_RDONLY);
+	if (fd == -1)
+		return;
 
-	if (ie->mask & IN_CREATE) {
-		debug("create %s", ie->name);
-	} else {
-		debug("delete %s", ie->name);
+	char name[80];
+	char location[80];
+	char idstr[80];
+	if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name) < 1) {
+		close(fd);
+		return;
 	}
 
-	uv_fs_read(loop, dev->req_read, dev->fd_inotify, dev->buf_inotify, sizeof(dev->buf_inotify), 0, on_inotify_event);
+	debug("name=%s", name);
+
+	int i;
+	for (i = 0; i < INPUTDEV_NR; i++) {
+		if (!strcmp(name, inputdev_names[i]))
+			break;
+	}
+
+	if (i == INPUTDEV_NR) {
+		close(fd);
+		return;
+	}
+
+	dev->pipes[i] = zalloc(sizeof(uv_pipe_t));
+	dev->pipes[i]->data = (void *)i;
+	uv_pipe_init(dev->loop, dev->pipes[i], 0);
+	uv_pipe_open(dev->pipes[i], fd);
+	uv_read_start((uv_stream_t *)in->pipes[i], inputdev_allocbuf, inputdev_readcbs[i]);
+}
+
+static void inputdev_scan() {
+	int i;
+	for (i = 0; i < 10; i++) {
+		char path[512];
+		sprintf(path, "/dev/input/event%d", i);
+		inputdev_open(path);
+	}
+}
+
+static void inputdev_on_create(fsevent_t *e, char *name) {
+	info("name=%s", name);
+	char path[512];
+	sprintf(path, "/dev/input/%s", name);
+	inputdev_open(path);
 }
 
 void luv_inputdev_init(lua_State *L, uv_loop_t *loop) {
@@ -255,13 +375,10 @@ void luv_inputdev_init(lua_State *L, uv_loop_t *loop) {
 	dev->L = L;
 	dev->loop = loop;
 
-	dev->fd_inotify = inotify_init();
-	r = inotify_add_watch(dev->fd_inotify, "/dev/input", IN_DELETE|IN_CREATE);
-	if (r < 0)
-		panic("add watch failed");
+	dev->fsevent = zalloc(sizeof(fsevent_t));
+	dev->fsevent->on_create = inputdev_on_create;
+	fsevent_init(dev->fsevent, "/dev/input");
 
-	dev->req_read = zalloc(sizeof(uv_fs_t));
-
-	uv_fs_read(loop, dev->req_read, dev->fd_inotify, dev->buf_inotify, sizeof(dev->buf_inotify), 0, on_inotify_event);
+	inputdev_scan();
 }
 
