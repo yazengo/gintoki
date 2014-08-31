@@ -1,6 +1,9 @@
 #pragma once
 
+#ifndef USE_JZCODEC
 #include <ao/ao.h>
+#endif
+
 #include <uv.h>
 
 typedef struct audio_out_s {
@@ -16,8 +19,11 @@ typedef struct audio_out_s {
 
 	void (*on_play_done)(struct audio_out_s *ao, int len);
 
+#ifndef USE_JZCODEC
 	ao_device *aodev;
+#else
 	int fd_oss;
+#endif
 
 	void (*init)(struct audio_out_s *ao);
 	void (*set_rate)(struct audio_out_s *ao, int rate);

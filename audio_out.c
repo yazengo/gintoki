@@ -1,6 +1,6 @@
 
 #include <unistd.h>
-#include <ao/ao.h>
+#include <errno.h>
 
 #ifdef USE_JZCODEC
 #include <sys/soundcard.h>
@@ -8,6 +8,10 @@
 
 #include "utils.h"
 #include "audio_out.h"
+
+#ifndef USE_JZCODEC
+
+#include <ao/ao.h>
 
 static void libao_init(audio_out_t *ao) {
 	ao_initialize();
@@ -30,6 +34,8 @@ static void libao_set_rate(audio_out_t *ao, int rate) {
 static void libao_play(audio_out_t *ao, void *buf, int len) {
 	ao_play(ao->aodev, buf, len);
 }
+
+#endif
 
 static void dummy_play(audio_out_t *ao, void *buf, int len) {
 	usleep(1e6 * (len / (ao->rate*4.0)));
