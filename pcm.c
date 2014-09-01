@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <math.h>
 #include "pcm.h"
+#include "utils.h"
 
 static inline int16_t clip_int16_c(int a) {
     if ((a+0x8000) & ~0xFFFF) return (a>>31) ^ 0x7FFF;
@@ -19,7 +20,8 @@ void pcm_do_volume(void *_out, int len, float fvol) {
 	len /= 2;
 
 	if (mode == DIV) {
-		int div = (int)powf(10.0, ((100 - fvol) * 1.0 / 100.0) * 50.0 / 10.0);
+		int div = (int)powf(10.0, (1.0 - fvol) * 45.0 / 10.0);
+
 		while (len--) {
 			*out = *out / div;
 			out++;
@@ -52,7 +54,12 @@ void pcm_do_mix(void *_out, void *_in, int len) {
 }
 
 void pcm_init() {
-	if (getenv("VOL_SHIFT8"))
+	if (getenv("VOL_DIV") == NULL) {
 		mode = SHIFT8;
+		info("vol: use shift8");
+	} else {
+		mode = DIV;
+		info("vol: use div");
+	}
 }
 
