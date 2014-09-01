@@ -363,6 +363,33 @@ static int ttyraw_open(lua_State *L) {
 	return 0;
 }
 
+static void stdin_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
+	lua_State *L = (lua_State *)st->data;
+
+	if (n <= 0)
+		return;
+
+	debug("n=%d", n);
+	buf.base[n-1] = 0;
+	lua_pushstring(L, buf.base);
+	lua_do_global_callback(L, "stdin_read", st, 1, 0);
+}
+
+static int stdin_open(lua_State *L) {
+	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
+
+	uv_tty_t *tty = (uv_tty_t *)zalloc(sizeof(uv_tty_t));
+	tty->data = L;
+
+	uv_tty_init(loop, tty, 0, 1);
+
+	uv_read_start((uv_stream_t *)tty, ttyread_alloc, stdin_read);
+
+	lua_set_global_callback(L, "stdin_read", tty);
+
+	return 0;
+}
+
 /*
 static int prop_get(lua_State *L) {
 	return 0;
@@ -565,5 +592,9 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, lua_system, 1);
 	lua_setglobal(L, "system");
+
+	lua_pushuserptr(L, loop);
+	lua_pushcclosure(L, stdin_open, 1);
+	lua_setglobal(L, "stdin_open");
 }
 

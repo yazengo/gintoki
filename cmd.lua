@@ -4,6 +4,8 @@ local I = {}
 I.cmds = {
 	[[ audio.pause_resume_toggle() ]],
 	[[ radio.next() ]],
+	[[ audio.setvol(audio.getvol() - 10); print(audio.getvol()) ]],
+	[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
 }
 
 I.handle = function (line) 
@@ -28,5 +30,5 @@ end
 
 input = I
 
-
+stdin_open(input.handle)
 
