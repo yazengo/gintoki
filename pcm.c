@@ -1,5 +1,7 @@
 
+#include <stdlib.h>
 #include <stdint.h>
+#include <math.h>
 #include "pcm.h"
 
 static inline int16_t clip_int16_c(int a) {

@@ -13,6 +13,7 @@
 #include "upnp_device.h"
 #include "audio_mixer.h"
 #include "audio_in.h"
+#include "pcm.h"
 
 static void usage(char *prog) {
 	fprintf(stderr, "Usage: %s\n", prog);

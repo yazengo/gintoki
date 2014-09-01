@@ -252,6 +252,7 @@ void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop) {
 static int lua_airplay_start(lua_State *L) {
 	info("starts");
 	audio_in_airplay_start_loop(L, loop);
+	return 0;
 }
 
 void lua_airplay_init(lua_State *_L, uv_loop_t *_loop) {
