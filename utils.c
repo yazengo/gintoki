@@ -509,60 +509,44 @@ void utils_preinit() {
 	}
 }
 
-typedef struct {
-	char *cmd;
-	int ret;
-	lua_State *L;
-} lua_system_t;
-
-static void lua_system_done(uv_work_t *w, int stat) {
-	lua_system_t *s = (lua_system_t *)w->data;
-
-	info("r=%d", s->ret);
-	lua_pushnumber(s->L, s->ret);
-	lua_do_global_callback(s->L, "system", s, 1, 1);
-
-	free(s->cmd);
-	free(s);
-	free(w);
+static void lua_system_handle_free(uv_handle_t *h) {
+	free(h);
 }
 
-static void lua_system_thread(uv_work_t *w) {
-	lua_system_t *s = (lua_system_t *)w->data;
+static void lua_system_on_exit(uv_process_t *proc, int stat, int sig) {
+	lua_State *L = (lua_State *)proc->data;
 
-	info("%s", s->cmd);
+	lua_pushnumber(L, stat);
+	lua_do_global_callback(L, "system_done", proc, 1, 1);
 
-	typedef void (*sighandler_t)(int);
-  sighandler_t old_handler;
-				 
-	signal(SIGCHLD, SIG_DFL);
-	s->ret = system(s->cmd);
-
-	if (s->ret == -1)
-		info("ret=%d err=%s", s->ret, strerror(errno));
+	uv_close((uv_handle_t *)proc, lua_system_handle_free);
 }
 
 // arg[1] = cmd
 // arg[2] = done(code)
 static int lua_system(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
+
 	char *cmd = (char *)lua_tostring(L, 1);
-
 	info("cmd=%s", cmd);
-
 	if (cmd == NULL)
-		cmd = "";
+		return 0;
 
-	lua_system_t *s = (lua_system_t *)zalloc(sizeof(lua_system_t));
-	s->cmd = strdup(cmd);
-	s->L = L;
+	uv_process_t *proc = (uv_process_t *)zalloc(sizeof(uv_process_t));
+	proc->data = L;
+
+	uv_process_options_t opts = {};
+
+	char *args[] = {"sh", "-c", cmd, NULL};
+	opts.file = args[0];
+	opts.args = args;
+	opts.exit_cb = lua_system_on_exit;
 
 	lua_pushvalue(L, 2);
-	lua_set_global_callback(L, "system", s);
+	lua_set_global_callback(L, "system_done", proc);
 
-	uv_work_t *w = (uv_work_t *)zalloc(sizeof(uv_work_t));
-	w->data = s;
-	uv_queue_work(loop, w, lua_system_thread, lua_system_done);
+	int r = uv_spawn(loop, proc, opts);
+	info("cmd=%s spawn=%d pid=%d", cmd, r, proc->pid);
 
 	return 0;
 }
