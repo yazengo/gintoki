@@ -69,6 +69,7 @@ int main(int argc, char *argv[]) {
 	inputdev_init(L, loop);
 #endif
 
+	pcm_init();
 	audio_mixer_init(L, loop);
 	audio_in_airplay_start_loop(L, loop);
 
