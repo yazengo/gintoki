@@ -60,7 +60,7 @@ void _log(
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
 
-	fprintf(stdout, "[%.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
+	fprintf(stderr, "[%.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
 
 	if (level == LOG_PANIC) {
 		print_trackback();
@@ -508,9 +508,8 @@ static void lua_system_thread(uv_work_t *w) {
 	typedef void (*sighandler_t)(int);
   sighandler_t old_handler;
 				 
-	old_handler = signal(SIGCHLD, SIG_DFL);
+	signal(SIGCHLD, SIG_DFL);
 	s->ret = system(s->cmd);
-	signal(SIGCHLD, old_handler);
 
 	if (s->ret == -1)
 		info("ret=%d err=%s", s->ret, strerror(errno));

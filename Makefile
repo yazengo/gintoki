@@ -71,7 +71,7 @@ darwin-install-deps:
 	brew install libao
 	brew install libav
 
-inst-mips:
+inst-mips: server-mips
 	tar cvf $@.tar server-mips *.lua tests
 
 clean:
