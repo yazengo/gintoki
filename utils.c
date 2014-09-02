@@ -244,15 +244,38 @@ void uv_call_soon(uv_loop_t *loop, void (*done)(void *), void *p) {
 	uv_async_send(as);
 }
 
+static void timer_free(uv_handle_t *t) {
+	free(t);
+}
+
+typedef struct {
+	void (*cb)(void *p);
+	void *p;
+} uv_timeout_t;
+
+static void timeout_alarm(uv_timer_t *t, int _) {
+	uv_timeout_t *to = (uv_timeout_t *)t->data;
+	uv_timer_stop(t);
+	to->cb(to->p);
+	uv_close((uv_handle_t *)t, timer_free);
+}
+
+void uv_set_timeout(uv_loop_t *loop, int timeout, void (*cb)(void *), void *p) {
+	uv_timeout_t *to = (uv_timeout_t *)zalloc(sizeof(uv_timeout_t));
+	to->cb = cb;
+	to->p = p;
+
+	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
+	t->data = to;
+	uv_timer_init(loop, t);
+	uv_timer_start(t, timeout_alarm, timeout, timeout);
+}
+
 static int timer_cb_inner(lua_State *L) {
 	//info("is_function %d", lua_isfunction(L, lua_upvalueindex(1)));
 	lua_pushvalue(L, lua_upvalueindex(1));
 	lua_call_or_die(L, 0, 0);
 	return 0;
-}
-
-static void timer_free(uv_handle_t *t) {
-	free(t);
 }
 
 static void timer_cb(uv_timer_t *t, int _) {
@@ -272,7 +295,7 @@ static int set_timeout(lua_State *L) {
 	int timeout = lua_tonumber(L, -1);
 	lua_pop(L, 1);
 
-	uv_timer_t *t = (uv_timer_t *)malloc(sizeof(uv_timer_t));
+	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
 	t->data = L;
 	uv_timer_init(loop, t);
 	uv_timer_start(t, timer_cb, timeout, timeout);
