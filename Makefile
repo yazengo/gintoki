@@ -84,8 +84,7 @@ inst-mips: server-mips
 	tar cvf $@.tar server-mips *.lua tests
 
 cp-minifs-mips: inst-mips
- 	tar xvf inst-mips.tar -C minifs/usr/app
-
+	tar xvf inst-mips.tar -C minifs/usr/app
 
 clean:
 	rm -rf *.o server-mips server-x86 server-darwin
