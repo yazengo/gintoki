@@ -168,6 +168,7 @@ static void audio_in_close_called(uv_call_t *c) {
 	cli->on_closed(ai);
 	free(cli);
 	cli = NULL;
+	info("closed");
 }
 
 static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
@@ -191,7 +192,7 @@ static int audio_in_can_read(audio_in_t *ai) {
 
 void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai) {
 	if (cli)
-		panic("only one airplay audio_in can exist");
+		panic("only one airplay audio_in can exist. stat=%d", cli->stat);
 
 	ai->read = audio_in_read;
 	ai->stop = audio_in_stop;
@@ -201,6 +202,7 @@ void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai) {
 	ai->can_read = audio_in_can_read;
 
 	cli = (airplay_cli_t *)zalloc(sizeof(airplay_cli_t));
+	cli->ai = ai;
 
 	if (srv->stat != SRV_PLAYING) {
 		cli->stat = CLI_CLOSING;
@@ -288,7 +290,7 @@ static void on_shairport_play(short buf[], int samples) {
 // in shairport thread 
 static void *shairport_test_loop(void *_p) {
 	shairport_t *sp = (shairport_t *)_p;
-	static char buf[44100*4];
+	static char buf[44100/10];
 	int i;
 
 	for (;;) {

@@ -206,7 +206,10 @@ void pthread_call_uv_wait_withname(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p, 
 	pthread_mutex_lock(&p.lock);
 
 	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
-	uv_async_init(loop, as, pcall_uv_done);
+
+	if (uv_async_init(loop, as, pcall_uv_done))
+		panic("async_init failed");
+
 	as->data = &p;
 	debug("async_send %s:%p", name, as);
 	uv_async_send(as);

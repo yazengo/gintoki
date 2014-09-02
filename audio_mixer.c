@@ -143,8 +143,25 @@ static void audio_in_on_start(audio_in_t *ai, int rate) {
 	}
 }
 
+static void audio_in_on_closed_call_play_done(uv_call_t *c) {
+	audio_track_t *tr = (audio_track_t *)c->data;
+
+	lua_call_play_done(tr, "done");
+	free(c);
+}
+
 static void audio_in_on_closed(audio_in_t *ai) {
+	audio_track_t *tr = (audio_track_t *)ai->data;
+
+	info("closed");
+
 	free(ai);
+	tr->ai = NULL;
+
+	uv_call_t *c = zalloc(sizeof(uv_call_t));
+	c->data = tr;
+	c->done_cb = audio_in_on_closed_call_play_done;
+	uv_call(tr->am->loop, c);
 }
 
 static void check_tracks_can_close(audio_mixer_t *am) {
@@ -159,9 +176,7 @@ static void check_tracks_can_close(audio_mixer_t *am) {
 		info("closed #%d", i);
 
 		tr->stat = TRACK_STOPPED;
-		tr->ai = NULL;
 		ai->close(ai, audio_in_on_closed);
-		lua_call_play_done(tr, "done");
 	}
 }
 
@@ -313,6 +328,8 @@ static int audio_play(lua_State *L) {
 	tr->am = am;
 	
 	if (tr->stat != TRACK_STOPPED) {
+		info("wait for stop");
+
 		tr->ai->stop(tr->ai);
 		tr->stat = TRACK_STOPPING;
 		ringbuf_init(&tr->buf, am->loop);
