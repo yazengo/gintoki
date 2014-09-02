@@ -66,6 +66,25 @@ static void on_srv_start() {
 	}
 }
 
+typedef struct {
+	int len;
+	write_done_cb done;
+	void *p;
+} dummy_write_t;
+
+static void dummy_write_done(void *_p) {
+	dummy_write_t *w = (dummy_write_t *)_p;
+	w->done(w->len, w->p);
+}
+
+static void dummy_write(void *buf, int len, write_done_cb done, void *wait) {
+	static dummy_write_t w;
+	w.done = done;
+	w.len = len;
+	w.p = wait;
+	uv_set_timeout(srv->loop, dummy_write_done, &w);
+}
+
 static void on_srv_write_done(int len, void *wait) {
 	pthread_call_uv_complete(wait);
 }
@@ -126,7 +145,7 @@ static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb d
 
 	cli->stat = CLI_READING;
 	cli->on_read_done = done;
-	ringbuf_data_get(&cli->buf, buf, len, done);
+	ringbuf_data_get(&cli->buf, buf, len, cli_ringbuf_get_done);
 }
 
 static void audio_in_stop(audio_in_t *ai) {
@@ -151,7 +170,7 @@ static int audio_in_is_eof(audio_in_t *ai) {
 	return cli->stat > CLI_READING;
 }
 
-static int cli_can_read(audio_in_t *ai) {
+static int audio_in_can_read(audio_in_t *ai) {
 	return cli->stat == CLI_INIT;
 }
 
@@ -189,19 +208,19 @@ typedef struct {
 
 // in main uv loop
 void lua_call_airplay_start() {
-	lua_getglobal(ap->L, "on_airplay_start");
-	if (lua_isnil(ap->L, -1)) {
-		lua_pop(ap->L, 1);
+	lua_getglobal(srv->L, "on_airplay_start");
+	if (lua_isnil(srv->L, -1)) {
+		lua_pop(srv->L, 1);
 		return;
 	}
-	lua_call_or_die(ap->L, 0, 0);
+	lua_call_or_die(srv->L, 0, 0);
 }
 
 // in main uv loop
 static void on_shairport_cmd(void *pcall, void *_p) {
 	shairport_cmd_t *c = (shairport_cmd_t *)_p;
 
-	debug("stat=%d cmd=%d", ap->stat, c->type);
+	debug("stat=%d cmd=%d", srv->stat, c->type);
 
 	if (srv->stat == SRV_STOPPED) {
 		if (c->type == START) {
@@ -229,7 +248,7 @@ static void on_shairport_start(int rate) {
 		.type = START,
 		.rate = rate,
 	};
-	pthread_call_uv_wait_withname(ap->loop, on_shairport_cmd, &c, "ap.start");
+	pthread_call_uv_wait_withname(srv->loop, on_shairport_cmd, &c, "ap.start");
 }
 
 // in shairport thread 
@@ -237,7 +256,7 @@ static void on_shairport_stop() {
 	shairport_cmd_t c = {
 		.type = STOP,
 	};
-	pthread_call_uv_wait_withname(ap->loop, on_shairport_cmd, &c, "ap.stop");
+	pthread_call_uv_wait_withname(srv->loop, on_shairport_cmd, &c, "ap.stop");
 }
 
 // in shairport thread 
@@ -246,7 +265,7 @@ static void on_shairport_play(short buf[], int samples) {
 		.type = PLAY,
 		.buf = buf, .samples = samples,
 	};
-	pthread_call_uv_wait_withname(ap->loop, on_shairport_cmd, &c, "ap.play");
+	pthread_call_uv_wait_withname(srv->loop, on_shairport_cmd, &c, "ap.play");
 }
 
 // in shairport thread 
