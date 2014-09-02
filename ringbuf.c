@@ -73,6 +73,8 @@ static void filler_done_called(uv_call_t *c) {
 static void filler_call_done(ringbuf_t *rb, ringbuf_done_cb done, int len) {
 	uv_call_t *c = (uv_call_t *)zalloc(sizeof(uv_call_t));
 	filler_done_t *d = (filler_done_t *)zalloc(sizeof(filler_done_t));
+	c->done_cb = filler_done_called;
+	c->data = d;
 	d->done = done;
 	d->len = len;
 	d->rb = rb;
@@ -135,9 +137,8 @@ static void filler_fill(ringbuf_t *rb) {
 
 static void filler_cancel(ringbuf_filler_t *rf) {
 	if (rf->done) {
-		ringbuf_done_cb cb = rf->done;
+		filler_call_done(rf->rb, rf->done, rf->len - rf->left);
 		rf->done = NULL;
-		cb(rf->rb, rf->len - rf->left);
 	}
 }
 
