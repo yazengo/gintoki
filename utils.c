@@ -224,17 +224,23 @@ typedef struct {
 	void *p;
 } call_soon_t;
 
-static void call_soon(uv_async_t *as, int _) {
-	call_sonn_t *c = (call_soon_t *)as->data;
-	uv_close((uv_handle_t *)as, pcall_uv_handle_free);
+static void call_soon_handle_free(uv_handle_t *h) {
+	free(h);
+}
+
+static void call_soon_done(uv_async_t *as, int _) {
+	call_soon_t *c = (call_soon_t *)as->data;
+	c->cb(c->p);
+	free(c);
+	uv_close((uv_handle_t *)as, call_soon_handle_free);
 }
 
 void uv_call_soon(uv_loop_t *loop, void (*done)(void *), void *p) {
-	call_soon();
+	call_soon_t *c = (call_soon_t *)zalloc(sizeof(call_soon_t));
 
 	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
-	uv_async_init(loop, as, pcall_luv_v2_start);
-	as->data = &p;
+	uv_async_init(loop, as, call_soon_done);
+	as->data = c;
 	uv_async_send(as);
 }
 
