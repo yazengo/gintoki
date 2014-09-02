@@ -248,61 +248,48 @@ static void timer_free(uv_handle_t *t) {
 	free(t);
 }
 
-typedef struct {
-	void (*cb)(void *p);
-	void *p;
-} uv_timeout_t;
-
 static void timeout_alarm(uv_timer_t *t, int _) {
 	uv_timeout_t *to = (uv_timeout_t *)t->data;
 	uv_timer_stop(t);
-	to->cb(to->p);
+	to->timeout_cb(to);
 	uv_close((uv_handle_t *)t, timer_free);
 }
 
-void uv_set_timeout(uv_loop_t *loop, int timeout, void (*cb)(void *), void *p) {
-	uv_timeout_t *to = (uv_timeout_t *)zalloc(sizeof(uv_timeout_t));
-	to->cb = cb;
-	to->p = p;
-
+void uv_set_timeout(uv_loop_t *loop, uv_timeout_t *to) {
 	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
 	t->data = to;
 	uv_timer_init(loop, t);
-	uv_timer_start(t, timeout_alarm, timeout, timeout);
+	uv_timer_start(t, timeout_alarm, to->timeout, to->timeout);
 }
 
-static int timer_cb_inner(lua_State *L) {
+static int luv_timeout_cb_inner(lua_State *L) {
 	//info("is_function %d", lua_isfunction(L, lua_upvalueindex(1)));
 	lua_pushvalue(L, lua_upvalueindex(1));
 	lua_call_or_die(L, 0, 0);
 	return 0;
 }
 
-static void timer_cb(uv_timer_t *t, int _) {
-	lua_State *L = (lua_State *)t->data;
-
-	uv_timer_stop(t);
-	uv_close((uv_handle_t *)t, timer_free);
-
-	lua_do_global_callback(L, "timer", t, 0, 1);
+static void luv_timeout_cb(uv_timeout_t *to) {
+	lua_State *L = (lua_State *)to->data;
+	lua_do_global_callback(L, "timer", to, 0, 1);
+	free(to);
 }
 
-static int set_timeout(lua_State *L) {
+// arg[1] = callback
+// arg[2] = timeout
+static int luv_set_timeout(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
+	uv_timeout_t *to = (uv_timeout_t *)zalloc(sizeof(uv_timeout_t));
 
-	//   -1  timeout
-	//   -2  callback
-	int timeout = lua_tonumber(L, -1);
-	lua_pop(L, 1);
+	to->timeout = lua_tonumber(L, 2);
+	to->timeout_cb = luv_timeout_cb;
+	to->data = L;
 
-	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
-	t->data = L;
-	uv_timer_init(loop, t);
-	uv_timer_start(t, timer_cb, timeout, timeout);
+	uv_set_timeout(loop, to);
 
-	//   -1  callback
-	lua_pushcclosure(L, timer_cb_inner, 1);
-	lua_set_global_callback_and_pushname(L, "timer", t);
+	lua_pushvalue(L, 1);
+	lua_pushcclosure(L, luv_timeout_cb_inner, 1);
+	lua_set_global_callback_and_pushname(L, "timer", to);
 
 	// return timer_xxx
 	return 1;
@@ -621,7 +608,7 @@ static int lua_system(lua_State *L) {
 
 void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, set_timeout, 1);
+	lua_pushcclosure(L, luv_set_timeout, 1);
 	lua_setglobal(L, "set_timeout");
 
 	lua_pushuserptr(L, loop);

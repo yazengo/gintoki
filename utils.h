@@ -24,7 +24,12 @@ void log_init();
 
 float now();
 
-void uv_set_timeout(uv_loop_t *loop, int timeout, void (*cb)(void *), void *p);
+typedef struct uv_timeout_s {
+	void (*timeout_cb)(struct uv_timeout_s *to);
+	void *data;
+	int timeout;
+} uv_timeout_t;
+void uv_set_timeout(uv_loop_t *loop, uv_timeout_t *to);
 
 void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_start, lua_CFunction on_done, void *data);
 
