@@ -219,27 +219,19 @@ void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p) {
 	pthread_call_uv_wait_withname(loop, cb, cb_p, "normal");
 }
 
-typedef struct {
-	void (*cb)(void *);
-	void *p;
-} call_soon_t;
-
-static void call_soon_handle_free(uv_handle_t *h) {
+static void uv_call_free(uv_handle_t *h) {
 	free(h);
 }
 
-static void call_soon_done(uv_async_t *as, int _) {
-	call_soon_t *c = (call_soon_t *)as->data;
-	c->cb(c->p);
-	free(c);
-	uv_close((uv_handle_t *)as, call_soon_handle_free);
+static void uv_call_done(uv_async_t *as, int _) {
+	uv_call_t *c = (uv_call_t *)as->data;
+	c->done_cb(c);
+	uv_close((uv_handle_t *)as, uv_call_free);
 }
 
-void uv_call_soon(uv_loop_t *loop, void (*done)(void *), void *p) {
-	call_soon_t *c = (call_soon_t *)zalloc(sizeof(call_soon_t));
-
+void uv_call(uv_loop_t *loop, uv_call_t *c) {
 	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
-	uv_async_init(loop, as, call_soon_done);
+	uv_async_init(loop, as, uv_call_done);
 	as->data = c;
 	uv_async_send(as);
 }

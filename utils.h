@@ -31,6 +31,12 @@ typedef struct uv_timeout_s {
 } uv_timeout_t;
 void uv_set_timeout(uv_loop_t *loop, uv_timeout_t *to);
 
+typedef struct uv_call_s {
+	void (*done_cb)(struct uv_call_s *);
+	void *data;
+} uv_call_t;
+void uv_call(uv_loop_t *loop, uv_call_t *c);
+
 void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_start, lua_CFunction on_done, void *data);
 
 typedef void (*pcall_uv_cb)(void *pcall, void *p);
