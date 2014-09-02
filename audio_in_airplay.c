@@ -208,6 +208,8 @@ void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai) {
 		cli->stat = CLI_INIT;
 		ai->on_start(ai, srv->rate);
 	}
+
+	ringbuf_init(&cli->buf, srv->loop);
 }
 
 enum {

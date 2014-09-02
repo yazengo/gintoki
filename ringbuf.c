@@ -57,6 +57,28 @@ static void filler_init(ringbuf_filler_t *rf, void *buf, int len, ringbuf_done_c
 	rf->done = done;
 }
 
+typedef struct {
+	ringbuf_t *rb;
+	ringbuf_done_cb done;
+	int len;
+} filler_done_t;
+
+static void filler_done_called(uv_call_t *c) {
+	filler_done_t *d = (filler_done_t *)c->data;
+	d->done(d->rb, d->len);
+	free(d);
+	free(c);
+}
+
+static void filler_call_done(ringbuf_t *rb, ringbuf_done_cb done, int len) {
+	uv_call_t *c = (uv_call_t *)zalloc(sizeof(uv_call_t));
+	filler_done_t *d = (filler_done_t *)zalloc(sizeof(filler_done_t));
+	d->done = done;
+	d->len = len;
+	d->rb = rb;
+	uv_call(rb->loop, c);
+}
+
 static int filler_get(ringbuf_filler_t *rf) {
 	int adv = 0;
 	for (;;) {
@@ -73,9 +95,8 @@ static int filler_get(ringbuf_filler_t *rf) {
 		ringbuf_push_tail(rf->rb, len);
 	}
 	if (rf->left == 0 && rf->done) {
-		ringbuf_done_cb cb = rf->done;
+		filler_call_done(rf->rb, rf->done, rf->len - rf->left);
 		rf->done = NULL;
-		cb(rf->rb, rf->len - rf->left);
 	}
 	return adv;
 }
@@ -96,9 +117,8 @@ static int filler_put(ringbuf_filler_t *rf) {
 		ringbuf_push_head(rf->rb, len);
 	}
 	if (rf->left == 0 && rf->done) {
-		ringbuf_done_cb cb = rf->done;
+		filler_call_done(rf->rb, rf->done, rf->len - rf->left);
 		rf->done = NULL;
-		cb(rf->rb, rf->len - rf->left);
 	}
 	return adv;
 }
