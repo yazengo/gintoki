@@ -66,6 +66,3 @@ void lua_pushuserptr(lua_State *L, void *p);
 void *lua_touserptr(lua_State *L, int index);
 void lua_setuserptr(lua_State *L, int index, void *p);
 
-void lua_set_global_ptr(lua_State *L, const char *pref, void *p);
-void lua_get_global_ptr(lua_State *L, const char *pref, void *p);
-

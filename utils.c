@@ -458,18 +458,6 @@ static int os_readdir(lua_State *L) {
 	return 1;
 }
 
-void lua_set_global_ptr(lua_State *L, const char *pref, void *p) {
-	char name[128];
-	sprintf(name, "%s_%p", pref, p);
-	lua_setglobal(L, name);
-}
-
-void lua_get_global_ptr(lua_State *L, const char *pref, void *p) {
-	char name[128];
-	sprintf(name, "%s_%p", pref, p);
-	lua_getglobal(L, name);
-}
-
 void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p) {
 	char name[128];
 	sprintf(name, "%s_%p", pref, p);
