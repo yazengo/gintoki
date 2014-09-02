@@ -72,8 +72,8 @@ typedef struct {
 	void *p;
 } dummy_write_t;
 
-static void dummy_write_done(void *_p) {
-	dummy_write_t *w = (dummy_write_t *)_p;
+static void dummy_write_done(uv_timeout_t *to) {
+	dummy_write_t *w = (dummy_write_t *)to->data;
 	w->done(w->len, w->p);
 }
 
@@ -82,7 +82,16 @@ static void dummy_write(void *buf, int len, write_done_cb done, void *wait) {
 	w.done = done;
 	w.len = len;
 	w.p = wait;
-	uv_set_timeout(srv->loop, dummy_write_done, &w);
+
+	if (srv->rate == 0)
+		panic("invalid sample rate");
+
+	static uv_timeout_t to;
+	to.data = &w;
+	to.timeout = (int)(len / 4.0 / srv->rate * 1000);
+	to.timeout_cb = dummy_write_done;
+
+	uv_set_timeout(srv->loop, &to);
 }
 
 static void on_srv_write_done(int len, void *wait) {
@@ -152,8 +161,10 @@ static void audio_in_stop(audio_in_t *ai) {
 	cli_stop();
 }
 
-static void audio_in_closed(void *_p) {
-	audio_in_t *ai = (audio_in_t *)_p;
+static void audio_in_close_called(uv_call_t *c) {
+	audio_in_t *ai = (audio_in_t *)c->data;
+	free(c);
+
 	cli->on_closed(ai);
 	free(cli);
 	cli = NULL;
@@ -163,7 +174,11 @@ static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 	if (cli->stat != CLI_CLOSING)
 		panic("call stop() and check is_eof() before close()");
 	cli->on_closed = done;
-	uv_call_soon(srv->loop, audio_in_closed, ai);
+
+	uv_call_t *c = (uv_call_t *)zalloc(sizeof(uv_call_t));
+	c->data = ai;
+	c->done_cb = audio_in_close_called;
+	uv_call(srv->loop, c);
 }
 
 static int audio_in_is_eof(audio_in_t *ai) {
