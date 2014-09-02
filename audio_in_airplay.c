@@ -328,6 +328,8 @@ void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop) {
 	sp->on_play = on_shairport_play;
 	sp->data = srv;
 
+	info("airplay starts '%s'", sp->name);
+
 	pthread_t tid;
 	if (getenv("AIRPLAY_TEST"))
 		pthread_create(&tid, NULL, shairport_test_loop, sp);

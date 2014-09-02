@@ -69,11 +69,11 @@ int main(int argc, char *argv[]) {
 	inputdev_init(L, loop);
 #endif
 
-	audio_mixer_init(L, loop);
-
 #ifdef USE_AIRPLAY
-	audio_in_airplay_start_loop(L, loop);
+	audio_mixer_init(L, loop);
 #endif
+
+	audio_in_airplay_start_loop(L, loop);
 
 	upnp_init(L, loop);
 
