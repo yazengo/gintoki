@@ -19,7 +19,10 @@ endif
 
 objs-x86 = $(subst .o,-x86.o,$(objs))
 cflags-x86 = $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
+cflags-x86 += -I../shairport/
 ldflags-x86 = $(shell pkg-config --libs libupnp lua5.2) $(ldflags)
+ldflags-x86 += -L../shairport
+ldflags-x86 += -lshairport
 
 objs-darwin = $(subst .o,-darwin.o,$(objs))
 cflags-darwin += $(cflags)
@@ -77,11 +80,12 @@ darwin-install-deps:
 	brew install libao
 	brew install libav
 
-cp-minifs-mips: inst-mips
-	tar xvf inst-mips.tar -C minifs/usr/app
-
 inst-mips: server-mips
 	tar cvf $@.tar server-mips *.lua tests
+
+cp-minifs-mips: inst-mips
+ 	tar xvf inst-mips.tar -C minifs/usr/app
+
 
 clean:
 	rm -rf *.o server-mips server-x86 server-darwin
