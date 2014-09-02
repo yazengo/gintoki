@@ -43,18 +43,12 @@ enum {
 	SRV_PLAYING,
 };
 
-<<<<<<< HEAD
 enum {
 	CLI_STOPPED,
 	CLI_INIT,
 	CLI_READING,
 	CLI_CLOSING,
 };
-=======
-static uv_loop_t *loop;
-static lua_State *L;
-static airplay_t _ap, *ap = &_ap;
->>>>>>> master
 
 static airplay_srv_t _srv, *srv = &_srv;
 static airplay_cli_t *cli;
@@ -325,12 +319,10 @@ static void *shairport_loop(void *_p) {
 	return NULL;
 }
 
-void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop) {
-	srv->loop = loop;
-	srv->L = L;
+static int lua_airplay_start(lua_State *L) {
+	pthread_t tid;
 
 	shairport_t *sp = (shairport_t *)zalloc(sizeof(shairport_t));
-	sp->name = "Airplay on Muno";
 	srv->sp = sp;
 
 	sp->on_start = on_shairport_start;
@@ -338,24 +330,25 @@ void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop) {
 	sp->on_play = on_shairport_play;
 	sp->data = srv;
 
-	info("airplay starts '%s'", sp->name);
-
-	pthread_t tid;
-	if (getenv("AIRPLAY_TEST"))
+	if (getenv("AIRPLAY_TEST")) {
+		info("airplay starts testing");
 		pthread_create(&tid, NULL, shairport_test_loop, sp);
-	else
-		pthread_create(&tid, NULL, shairport_loop, sp);
-}
+		return 0;
+	}
 
-static int lua_airplay_start(lua_State *L) {
-	info("starts");
-	audio_in_airplay_start_loop(L, loop);
+	char *name = (char *)lua_tostring(L, 1);
+	sp->name = strdup(name);
+
+	info("airplay starts name=%s", sp->name);
+
+	pthread_create(&tid, NULL, shairport_loop, sp);
+
 	return 0;
 }
 
-void lua_airplay_init(lua_State *_L, uv_loop_t *_loop) {
-	L = _L;
-	loop = _loop;
+void luv_airplay_init(lua_State *L, uv_loop_t *loop) {
+	srv->loop = loop;
+	srv->L = L;
 
 	lua_pushcfunction(L, lua_airplay_start);
 	lua_setglobal(L, "airplay_start");

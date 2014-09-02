@@ -74,14 +74,11 @@ int main(int argc, char *argv[]) {
 	audio_mixer_init(L, loop);
 
 #ifdef USE_AIRPLAY
-	audio_in_airplay_start_loop(L, loop);
+	luv_airplay_init(L, loop);
 #endif
 
 	if (getenv("DISABLE_UPNP") == NULL) 
 		upnp_init(L, loop);
-
-	if (getenv("DISABLE_AIRPLAY") == NULL) 
-		lua_airplay_init(L, loop);
 
 	if (test_c >= 200 && test_c < 300) {
 		run_test_c_post(test_c-200, L, loop);
