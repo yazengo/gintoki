@@ -263,6 +263,8 @@ static void avconv_close(audio_in_t *ai, audio_in_close_cb done) {
 		panic("must call after is_eof");
 
 	info("close");
+
+	av->stat = CLOSING_FD1;
 	uv_close((uv_handle_t *)av->pipe[0], on_handle_closed);
 	av->on_close = done;
 }
