@@ -43,12 +43,18 @@ enum {
 	SRV_PLAYING,
 };
 
+<<<<<<< HEAD
 enum {
 	CLI_STOPPED,
 	CLI_INIT,
 	CLI_READING,
 	CLI_CLOSING,
 };
+=======
+static uv_loop_t *loop;
+static lua_State *L;
+static airplay_t _ap, *ap = &_ap;
+>>>>>>> master
 
 static airplay_srv_t _srv, *srv = &_srv;
 static airplay_cli_t *cli;
@@ -339,5 +345,19 @@ void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop) {
 		pthread_create(&tid, NULL, shairport_test_loop, sp);
 	else
 		pthread_create(&tid, NULL, shairport_loop, sp);
+}
+
+static int lua_airplay_start(lua_State *L) {
+	info("starts");
+	audio_in_airplay_start_loop(L, loop);
+	return 0;
+}
+
+void lua_airplay_init(lua_State *_L, uv_loop_t *_loop) {
+	L = _L;
+	loop = _loop;
+
+	lua_pushcfunction(L, lua_airplay_start);
+	lua_setglobal(L, "airplay_start");
 }
 

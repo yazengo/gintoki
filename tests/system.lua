@@ -1,4 +1,4 @@
 
-system('md5sum -c /mnt/sdcard/update.md5', function (r)
-	info(r)
+system('exit 3', function (r)
+	info('ret', r)
 end)

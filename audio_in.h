@@ -29,6 +29,7 @@ void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai);
 
 void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai);
 void audio_in_airplay_start_loop(lua_State *L, uv_loop_t *loop);
+void lua_airplay_init(lua_State *L, uv_loop_t *loop);
 
 /*
  * init() -> [ can_read() -> read() ] -> is_eof() -> close()

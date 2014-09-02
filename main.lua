@@ -149,6 +149,32 @@ on_inputevent = function (e)
 		info('inputdev: keypress')
 		audio.pause_resume_toggle()
 	end
+
+	if e == 38 then
+		info('inputdev: volend')
+		audio.setvol(0)
+	end
+
+	-- network up
+	if e == 36 then
+		info('network up')
+		upnp.start()
+	end
+
+	-- network down
+	if e == 37 then
+		info('network down')
+		upnp.stop()
+	end
+
+	if e == 40 then
+		radio.next()
+	end
+
+	if e == 41 then
+		radio.prev()
+	end
+
 	if e >= 0 and e <= 15 then
 		local vol = math.ceil(100*e/15)
 		info('inputdev: vol', e, '->', vol)
@@ -156,11 +182,7 @@ on_inputevent = function (e)
 	end
 end
 
---setloglevel(0)
 upnp.start()
-stdin_open(input.handle)
---audio.setvol(3)
---radio.start(pandora)
+audio.setvol(0)
 radio.start(localmusic)
---ttyraw_open(ttyraw_onkey)
 

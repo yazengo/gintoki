@@ -13,6 +13,7 @@
 #include "upnp_device.h"
 #include "audio_mixer.h"
 #include "audio_in.h"
+#include "pcm.h"
 
 static void usage(char *prog) {
 	fprintf(stderr, "Usage: %s\n", prog);
@@ -69,13 +70,18 @@ int main(int argc, char *argv[]) {
 	inputdev_init(L, loop);
 #endif
 
-#ifdef USE_AIRPLAY
+	pcm_init();
 	audio_mixer_init(L, loop);
+
+#ifdef USE_AIRPLAY
+	audio_in_airplay_start_loop(L, loop);
 #endif
 
-	audio_in_airplay_start_loop(L, loop);
+	if (getenv("DISABLE_UPNP") == NULL) 
+		upnp_init(L, loop);
 
-	upnp_init(L, loop);
+	if (getenv("DISABLE_AIRPLAY") == NULL) 
+		lua_airplay_init(L, loop);
 
 	if (test_c >= 200 && test_c < 300) {
 		run_test_c_post(test_c-200, L, loop);
