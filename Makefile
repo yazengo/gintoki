@@ -10,10 +10,12 @@ objs += upnp_device.o upnp_util.o
 objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
 objs += audio_in_avconv.o 
+#objs += strparser.o 
 
 ifdef USE_CURL
-objs += lua_curl.o
+objs += luv_curl.o
 cflags += -DUSE_CURL
+ldflags += -lcurl
 endif
 
 ifdef USE_AIRPLAY
@@ -21,14 +23,14 @@ objs += audio_in_airplay.o
 cflags += -DUSE_AIRPLAY
 endif
 
-objs-x86 = $(subst .o,-x86.o,$(objs))
-cflags-x86 = $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
+objs-x86 += $(subst .o,-x86.o,$(objs))
+cflags-x86 += $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
 cflags-x86 += -I../shairport/
-ldflags-x86 = $(shell pkg-config --libs libupnp lua5.2) $(ldflags)
+ldflags-x86 += $(shell pkg-config --libs libupnp lua5.2) $(ldflags)
 ldflags-x86 += -L../shairport
 ldflags-x86 += -lshairport
 
-objs-darwin = $(subst .o,-darwin.o,$(objs))
+objs-darwin += $(subst .o,-darwin.o,$(objs))
 cflags-darwin += $(cflags)
 cflags-darwin += -I../shairport/
 cflags-darwin += -I/usr/local/Cellar/libupnp/1.6.19/include/upnp/
@@ -41,15 +43,15 @@ ldflags-darwin += -L../shairport/
 ldflags-darwin += -lshairport
 ldflags-darwin += -lupnp -llua -luv -lixml -lao
 
-objs-mips = $(subst .o,-mips.o,$(objs))
-objs-mips += inputdev-mips.o
 cc-mips = mipsel-linux-gcc
+objs-mips += $(subst .o,-mips.o,$(objs))
+objs-mips += inputdev-mips.o
 sysroot-mips = ../muno-repo/app/source/system/fs_compile/
-cflags-mips = $(cflags) -Ideps_mips/include/ -I$(sysroot-mips)/include/upnp
+cflags-mips += $(cflags) -Ideps_mips/include/ -I$(sysroot-mips)/include/upnp
 cflags-mips += -I../shairport-jz
 cflags-mips += -DUSE_JZCODEC
 cflags-mips += -DUSE_INPUTDEV
-ldflags-mips = -L deps_mips/lib -L $(sysroot-mips)/lib  $(ldflags)
+ldflags-mips += -L deps_mips/lib -L $(sysroot-mips)/lib  $(ldflags)
 ldflags-mips += -L../shairport-jz
 ldflags-mips += -lshairport
 ldflags-mips += -llua -pthread -lupnp -lthreadutil -lixml -lrt 

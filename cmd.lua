@@ -21,6 +21,18 @@ I.handle = function (line)
 		print('dostring: ' .. cmd)
 		loadstring(cmd)()
 	end
+
+	if string.hasprefix(line, 'c ') then
+		local f, err = loadstring(string.sub(line, 2))
+		if err then
+			print(err)
+			return
+		end
+		local r, err = pcall(f)
+		if not r then
+			print(err)
+		end
+	end
 end
 
 I.usage = function ()
@@ -28,6 +40,7 @@ I.usage = function ()
 	for k,v in pairs(I.cmds) do
 		print(k .. ' ' .. v)
 	end
+	print('c  [command]')
 end
 
 input = I

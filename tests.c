@@ -8,7 +8,9 @@
 
 #include "utils.h"
 #include "strbuf.h"
+#include "strparser.h"
 #include "ringbuf.h"
+#include "luv_curl.h"
 
 #include "upnp_device.h"
 #include "upnp_util.h"

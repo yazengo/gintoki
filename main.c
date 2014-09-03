@@ -9,7 +9,7 @@
 #include "utils.h"
 #include "strbuf.h"
 #include "lua_cjson.h"
-#include "lua_curl.h"
+#include "luv_curl.h"
 #include "upnp_device.h"
 #include "audio_mixer.h"
 #include "audio_in.h"
@@ -64,16 +64,16 @@ int main(int argc, char *argv[]) {
 	utils_init(L, loop);
 	lua_dofile_or_die(L, "utils.lua");
 
+	pcm_init();
+	audio_mixer_init(L, loop);
+
 #ifdef USE_CURL
-	lua_curl_init(L, loop);
+	luv_curl_init(L, loop);
 #endif
 
 #ifdef USE_INPUTDEV
 	inputdev_init(L, loop);
 #endif
-
-	pcm_init();
-	audio_mixer_init(L, loop);
 
 #ifdef USE_AIRPLAY
 	luv_airplay_init(L, loop);
@@ -95,5 +95,4 @@ int main(int argc, char *argv[]) {
 
 	return uv_run(loop, UV_RUN_DEFAULT);
 }
-
 
