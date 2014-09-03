@@ -146,6 +146,7 @@ static void audio_in_on_start(audio_in_t *ai, int rate) {
 static void audio_in_on_closed_call_play_done(uv_call_t *c) {
 	audio_track_t *tr = (audio_track_t *)c->data;
 
+	tr->stat = TRACK_STOPPED;
 	lua_call_play_done(tr, "done");
 	free(c);
 }
@@ -175,7 +176,7 @@ static void check_tracks_can_close(audio_mixer_t *am) {
 
 		info("closed #%d", i);
 
-		tr->stat = TRACK_STOPPED;
+		tr->stat = TRACK_STOPPING;
 		ai->close(ai, audio_in_on_closed);
 	}
 }
