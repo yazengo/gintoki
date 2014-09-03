@@ -21,6 +21,7 @@ enum {
 	TRACK_PLAYING,
 	TRACK_PAUSED,
 	TRACK_STOPPING,
+	TRACK_CLOSING,
 };
 
 struct audio_mixer_s;
@@ -146,6 +147,7 @@ static void audio_in_on_start(audio_in_t *ai, int rate) {
 static void audio_in_on_closed_call_play_done(uv_call_t *c) {
 	audio_track_t *tr = (audio_track_t *)c->data;
 
+	tr->stat = TRACK_STOPPED;
 	lua_call_play_done(tr, "done");
 	free(c);
 }
@@ -170,12 +172,12 @@ static void check_tracks_can_close(audio_mixer_t *am) {
 		audio_track_t *tr = &am->tracks[i];
 		audio_in_t *ai = tr->ai;
 
-		if (!(tr->stat != TRACK_STOPPED && ai->is_eof(ai) && tr->buf.len == 0))
+		if (!(tr->stat != TRACK_STOPPED && tr->stat != TRACK_CLOSING && ai->is_eof(ai) && tr->buf.len == 0))
 			continue;
 
 		info("closed #%d", i);
 
-		tr->stat = TRACK_STOPPED;
+		tr->stat = TRACK_CLOSING;
 		ai->close(ai, audio_in_on_closed);
 	}
 }
