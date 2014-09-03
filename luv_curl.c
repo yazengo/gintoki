@@ -75,10 +75,12 @@ static size_t write_data(void *ptr, size_t size, size_t nmemb, void *data) {
 
 	size *= nmemb;
 
-	if (lc->retfp)
-		return fwrite(ptr, size, 1, lc->retfp);
+	if (lc->retfp) 
+		size = fwrite(ptr, 1, size, lc->retfp);
 	if (lc->retsb)
 		strbuf_append_mem(lc->retsb, ptr, size);
+
+	debug("write=%d", size);
 
 	return size;
 }
@@ -138,6 +140,11 @@ static void push_curl_stat(luv_curl_t *lc) {
 		lua_pushstring(L, lc->err);
 		lua_setfield(L, -2, "err");
 	}
+
+	if (lc->retfname) {
+		lua_pushstring(L, lc->retfname);
+		lua_setfield(L, -2, "retfname");
+	}
 }
 
 static int curl_stat(lua_State *L) {
@@ -171,14 +178,14 @@ static void curl_thread_done(uv_work_t *w, int _) {
 
 	// 1
 	if (lc->retsb) {
+		//debug("len=%d %s", strlen(lc->retsb->buf), lc->retsb->buf);
 		strbuf_append_char(lc->retsb, 0);
 		lua_pushstring(L, lc->retsb->buf);
-		strbuf_free(lc->retsb);
-	} else if (lc->retfp) {
-		lua_pushnil(L);
-		fclose(lc->retfp);
 	} else 
 		lua_pushnil(L);
+
+	if (lc->retfp)
+		fclose(lc->retfp);
 
 	// 2
 	getinfo(lc);
@@ -187,6 +194,10 @@ static void curl_thread_done(uv_work_t *w, int _) {
 	lua_do_global_callback(lc->L, "curl_done", lc->c, 2, 1);
 
 	curl_easy_cleanup(lc->c);
+	if (lc->retsb)
+		strbuf_free(lc->retsb);
+	if (lc->retfname)
+		free(lc->retfname);
 }
 
 static void curl_thread(uv_work_t *w) {
@@ -194,6 +205,7 @@ static void curl_thread(uv_work_t *w) {
 
 	if (lc->retfname) {
 		lc->retfp = fopen(lc->retfname, "wb+");
+		info("'%s' opened", lc->retfname);
 		if (lc->retfp == NULL) {
 			warn("open '%s' failed", lc->retfname);
 			lc->stat = ERROR;
@@ -232,7 +244,6 @@ static int curl(lua_State *L) {
 		lc->retsb = strbuf_new(2048);
 
 	lc->c = curl_easy_init();
-
 
 	curl_easy_setopt(lc->c, CURLOPT_URL, url);
 	curl_easy_setopt(lc->c, CURLOPT_WRITEFUNCTION, write_data);
