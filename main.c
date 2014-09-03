@@ -64,7 +64,9 @@ int main(int argc, char *argv[]) {
 	utils_init(L, loop);
 	lua_dofile_or_die(L, "utils.lua");
 
+#ifdef USE_CURL
 	lua_curl_init(L, loop);
+#endif
 
 #ifdef USE_INPUTDEV
 	inputdev_init(L, loop);

@@ -2,15 +2,19 @@
 cflags = -g -I.
 ldflags = -g -luv -lm -lao
 
-USE_AIRPLAY=1
+USE_AIRPLAY = 1
 
 objs = utils.o main.o strbuf.o tests.o
 objs += audio_mixer.o audio_out.o audio_out_test.o
 objs += upnp_device.o upnp_util.o  
 objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
-objs += lua_curl.o
 objs += audio_in_avconv.o 
+
+ifdef USE_CURL
+objs += lua_curl.o
+cflags += -DUSE_CURL
+endif
 
 ifdef USE_AIRPLAY
 objs += audio_in_airplay.o

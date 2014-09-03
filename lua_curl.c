@@ -12,27 +12,30 @@ typedef struct {
 	lua_State *L;
 	uv_loop_t *loop;
 
-	int cancelled;
-	int closed_nr;
-
-	int rxbytes;
+	int stat;
 
 	int code;
 	int exit_sig, exit_code;
 
 	strbuf_t *retsb;
+
 	uv_fs_t *retfp_req;
 	uv_file retfp_file;
 	int64_t retfp_off;
+
 	char retbuf[4096];
-	int ret;
 
 	uv_pipe_t *pipe_stdout;
+	uv_pipe_t *pipe_stderr;
 	uv_process_t *proc;
 } curl_t;
 
 enum {
-	RET_STRBUF = 1,
+	INIT,
+	CLOSING,
+	CLOSING_STDOUT,
+	CLOSING_STDERR,
+	CLOSING_PROC,
 };
 
 static void on_retfp_write_done(uv_fs_t *r);
@@ -197,8 +200,8 @@ static int curl_cancel(lua_State *L) {
 }
 
 // upvalue[1] = curl_t *
-// curl_info() = { rxbytes }
-static int curl_info(lua_State *L) {
+// curl_stat() = { rxbytes }
+static int curl_stat(lua_State *L) {
 	curl_t *c = (curl_t *)lua_touserptr(L, lua_upvalueindex(1));
 
 	lua_newtable(L);
@@ -261,6 +264,11 @@ static int lua_curl(lua_State *L) {
 	uv_pipe_open(c->pipe_stdout, 0);
 	c->pipe_stdout->data = c;
 
+	c->pipe_stderr = (uv_pipe_t *)zalloc(sizeof(uv_pipe_t));
+	uv_pipe_init(loop, c->pipe_stderr, 0);
+	uv_pipe_open(c->pipe_stderr, 0);
+	c->pipe_stderr->data = c;
+
 	c->proc = (uv_process_t *)zalloc(sizeof(uv_process_t));
 	c->proc->data = c;
 
@@ -278,17 +286,24 @@ static int lua_curl(lua_State *L) {
 	uv_stdio_container_t stdio[3] = {
 		{.flags = UV_IGNORE},
 		{.flags = UV_CREATE_PIPE|UV_READABLE_PIPE, .data.stream = (uv_stream_t *)c->pipe_stdout},
-		{.flags = UV_IGNORE},
+		{.flags = UV_CREATE_PIPE|UV_READABLE_PIPE, .data.stream = (uv_stream_t *)c->pipe_stderr},
 	};
 
-	char *args_d[] = {"curl", "-v", url, "-d", req_s, NULL};
-	char *args_without_d[] = {"curl", "-v", url, NULL};
-	char **args;
+	char *_args[128] = {};
+	char **args = _args;
 
-	if (req_s)
-		args = args_d;
-	else
-		args = args_without_d;
+	*args++ = "curl";
+	*args++ = url;
+
+	if (req_s) {
+		*args++ = "-d";
+		*args++ = req_s;
+	}
+
+	if (c->retfp_req) {
+		*args++ = "-o";
+		*args++ = tofile;
+	}
 
 	opts.file = args[0];
 	opts.args = args;
@@ -300,7 +315,7 @@ static int lua_curl(lua_State *L) {
 
 	// r = {
 	// 	 cancel = [native function],
-	// 	 info = [native function],
+	// 	 stat = [native function],
 	// }
 	lua_newtable(L);
 
@@ -309,8 +324,8 @@ static int lua_curl(lua_State *L) {
 	lua_setfield(L, -2, "cancel");
 
 	lua_pushuserptr(L, c);
-	lua_pushcclosure(L, curl_info, 1);
-	lua_setfield(L, -2, "info");
+	lua_pushcclosure(L, curl_stat, 1);
+	lua_setfield(L, -2, "stat");
 
 	int r = uv_spawn(loop, c->proc, opts);
 	info("spawn=%d pid=%d", r, c->proc->pid);
