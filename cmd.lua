@@ -6,6 +6,8 @@ I.cmds = {
 	[[ radio.next() ]],
 	[[ audio.setvol(audio.getvol() - 10); print(audio.getvol()) ]],
 	[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
+	[[ radio.change{type = 'pandora'} ]],
+	[[ radio.change{type = 'local'} ]],
 }
 
 I.handle = function (line) 
