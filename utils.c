@@ -245,9 +245,13 @@ static void timer_free(uv_handle_t *t) {
 
 static void timeout_alarm(uv_timer_t *t, int _) {
 	uv_timeout_t *to = (uv_timeout_t *)t->data;
-	uv_timer_stop(t);
-	to->timeout_cb(to);
-	uv_close((uv_handle_t *)t, timer_free);
+
+	if (to->repeat) {
+		to->timeout_cb(to);
+	} else {
+		uv_timer_stop(t);
+		uv_close((uv_handle_t *)t, timer_free);
+	}
 }
 
 void uv_set_timeout(uv_loop_t *loop, uv_timeout_t *to) {
@@ -266,19 +270,25 @@ static int luv_timeout_cb_inner(lua_State *L) {
 
 static void luv_timeout_cb(uv_timeout_t *to) {
 	lua_State *L = (lua_State *)to->data;
-	lua_do_global_callback(L, "timer", to, 0, 1);
-	free(to);
+
+	if (!to->repeat) {
+		lua_do_global_callback(L, "timer", to, 0, 1);
+		free(to);
+	} else {
+		lua_do_global_callback(L, "timer", to, 0, 0);
+	}
 }
 
 // arg[1] = callback
 // arg[2] = timeout
-static int luv_set_timeout(lua_State *L) {
+static void _luv_set_timeout(lua_State *L, int repeat) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 	uv_timeout_t *to = (uv_timeout_t *)zalloc(sizeof(uv_timeout_t));
 
 	to->timeout = lua_tonumber(L, 2);
 	to->timeout_cb = luv_timeout_cb;
 	to->data = L;
+	to->repeat = repeat;
 
 	uv_set_timeout(loop, to);
 
@@ -287,6 +297,15 @@ static int luv_set_timeout(lua_State *L) {
 	lua_set_global_callback_and_pushname(L, "timer", to);
 
 	// return timer_xxx
+}
+
+static int luv_set_timeout(lua_State *L) {
+	_luv_set_timeout(L, 0);
+	return 1;
+}
+
+static int luv_set_interval(lua_State *L) {
+	_luv_set_timeout(L, 1);
 	return 1;
 }
 
@@ -573,6 +592,10 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, luv_set_timeout, 1);
 	lua_setglobal(L, "set_timeout");
+
+	lua_pushuserptr(L, loop);
+	lua_pushcclosure(L, luv_set_interval, 1);
+	lua_setglobal(L, "set_interval");
 
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, ttyraw_open, 1);

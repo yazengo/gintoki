@@ -28,7 +28,9 @@ typedef struct uv_timeout_s {
 	void (*timeout_cb)(struct uv_timeout_s *to);
 	void *data;
 	int timeout;
+	int repeat;
 } uv_timeout_t;
+
 void uv_set_timeout(uv_loop_t *loop, uv_timeout_t *to);
 
 typedef struct uv_call_s {
