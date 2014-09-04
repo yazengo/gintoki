@@ -79,6 +79,8 @@ int main(int argc, char *argv[]) {
 	luv_airplay_init(L, loop);
 #endif
 
+	luv_blowfish_init(L, loop);
+
 	if (getenv("DISABLE_UPNP") == NULL) 
 		upnp_init(L, loop);
 

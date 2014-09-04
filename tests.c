@@ -11,6 +11,7 @@
 #include "strparser.h"
 #include "ringbuf.h"
 #include "luv_curl.h"
+#include "blowfish.h"
 
 #include "upnp_device.h"
 #include "upnp_util.h"
@@ -349,6 +350,44 @@ static void test_ringbuf(uv_loop_t *loop) {
 	ringbuf_data_get(&rb, buf, 2048, ringbuf_get_done);
 }
 
+static void test_blowfish() {
+  uint32_t L = 1, R = 2;
+  BLOWFISH_CTX ctx;
+
+  Blowfish_Init (&ctx, (uint8_t *)"TESTKEY", 7);
+  Blowfish_Encrypt(&ctx, &L, &R);
+  printf("%08X %08X\n", L, R);
+  if (L == 0xDF333FD2L && R == 0x30A71BB4L)
+	  info("Test encryption OK.");
+  else
+	  info("Test encryption failed.");
+  Blowfish_Decrypt(&ctx, &L, &R);
+  if (L == 1 && R == 2)
+  	  info("Test decryption OK.");
+  else
+	  info("Test decryption failed.");
+
+	blowfish_t *b = (blowfish_t *)zalloc(sizeof(blowfish_t));
+
+	char *key = "6#26FRL$ZWD";
+	blowfish_init(b, key, strlen(key));
+
+	char in[32];
+	char out[64];
+	char decode_out[64];
+
+	memset(in, 0, sizeof(in));
+	strcpy(in, "abcdefgh");
+
+	memset(out, 0, sizeof(out));
+	blowfish_encode_hex(b, in, 8, out);
+	info("encode_out: %s", out);
+
+	memset(decode_out, 0, sizeof(decode_out));
+	blowfish_decode_hex(b, out, 8*2, decode_out);
+	info("decode_out: %s", decode_out);
+}
+
 void run_test_c_pre(int i) {
 	info("run hello world #%d", i);
 	if (i == 1)
@@ -363,6 +402,8 @@ void run_test_c_pre(int i) {
 		test_buggy_call();
 	if (i == 7 || i == 8)
 		test_uv_subprocess(i);
+	if (i == 9)
+		test_blowfish();
 }
 
 static uv_buf_t uv_malloc_buffer(uv_handle_t *h, size_t len) {

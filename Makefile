@@ -10,7 +10,7 @@ objs += upnp_device.o upnp_util.o
 objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
 objs += audio_in_avconv.o 
-#objs += strparser.o 
+objs += blowfish.o 
 
 ifdef USE_CURL
 objs += luv_curl.o
@@ -79,6 +79,9 @@ server-darwin: $(objs-darwin)
 server-mips: $(objs-mips)
 	$(cc-mips) -o $@ $(objs-mips) $(ldflags-mips) 
 
+linux-install-deps:
+	sudo apt-get install liblua52-dev libupnp-dev libuv-dev libao-dev libav-dev
+
 darwin-install-deps:
 	brew install lua52
 	brew install libupnp
@@ -91,6 +94,10 @@ inst-mips: server-mips
 
 cp-minifs-mips: inst-mips
 	tar xvf inst-mips.tar -C minifs/usr/app
+
+sumcode:
+	wc -l audio_in*.[ch] audio_out*.[ch] utils.[ch] luv_curl.[ch] main.c ringbuf.[ch] inputdev.[ch]
+	wc -l *.lua
 
 clean:
 	rm -rf *.o server-mips server-x86 server-darwin
