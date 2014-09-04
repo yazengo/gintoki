@@ -3,6 +3,7 @@ cflags = -g -I.
 ldflags = -g -luv -lm -lao
 
 USE_AIRPLAY = 1
+USE_CURL = 1
 
 objs = utils.o main.o strbuf.o tests.o
 objs += audio_mixer.o audio_out.o audio_out_test.o

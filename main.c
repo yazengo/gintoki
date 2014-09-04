@@ -10,6 +10,7 @@
 #include "strbuf.h"
 #include "lua_cjson.h"
 #include "luv_curl.h"
+#include "blowfish.h"
 #include "upnp_device.h"
 #include "audio_mixer.h"
 #include "audio_in.h"

@@ -1,5 +1,6 @@
 
 #include <fcntl.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <curl/curl.h>
 #include <uv.h>
@@ -228,6 +229,41 @@ static int curl_done(lua_State *L) {
 	return 0;
 }
 
+static void curl_setproxy(CURL *c, char *proxy) {
+	if (proxy == NULL)
+		return;
+
+	char *s = proxy + strlen(proxy) - 1;
+	int found = 0;
+	while (s > proxy) {
+		if (*s == ':') {
+			found++;
+			break;
+		}
+		if (!isnumber(*s))
+			break;
+		s--;
+	}
+
+	if (!found) {
+		info("proxy=%s", proxy);
+		curl_easy_setopt(c, CURLOPT_PROXY, proxy);
+		return;
+	}
+	*s = 0;
+
+	info("proxy.url=%s", proxy);
+	curl_easy_setopt(c, CURLOPT_PROXY, proxy);
+
+	int port = 0;
+	sscanf(s+1, "%d", &port);
+	if (!port)
+		return;
+
+	curl_easy_setopt(c, CURLOPT_PROXYPORT, (long)port);
+	info("proxy.port=%d", port);
+}
+
 static int curl(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 
@@ -240,6 +276,7 @@ static int curl(lua_State *L) {
 	lua_getfield(L, 1, "retfile"); // 4
 	lua_getfield(L, 1, "reqstr"); // 5
 	lua_getfield(L, 1, "done"); // 6
+	lua_getfield(L, 1, "proxy"); // 7
 
 	char *url = (char *)lua_tostring(L, 3);
 	info("url=%s", url);
@@ -265,6 +302,9 @@ static int curl(lua_State *L) {
 		curl_easy_setopt(lc->c, CURLOPT_READDATA, lc);
 		curl_easy_setopt(lc->c, CURLOPT_UPLOAD, 1);
 	}
+
+	char *proxy = (char *)lua_tostring(L, 7);
+	curl_setproxy(lc->c, proxy);
 
 	lua_pushvalue(L, 6); // done
 	lua_pushvalue(L, 2); // userdata: must save it until call done
