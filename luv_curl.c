@@ -27,6 +27,7 @@
 
 typedef struct {
 	CURL *c;
+	struct curl_slist *headers;
 
 	int stat;
 	const char *err;
@@ -89,6 +90,7 @@ static size_t write_data(void *ptr, size_t size, size_t nmemb, void *data) {
 static size_t read_data(void *ptr, size_t size, size_t nmemb, void *data) {
 	luv_curl_t *lc = (luv_curl_t *)data;
 
+
 	if (lc->stat == CANCELLED)
 		return 0;
 
@@ -99,6 +101,8 @@ static size_t read_data(void *ptr, size_t size, size_t nmemb, void *data) {
 	memcpy(ptr, lc->reqstr, size);
 	lc->reqstr_len -= size;
 	lc->reqstr += size;
+
+	debug("read=%d", size);
 
 	return size;
 }
@@ -216,6 +220,9 @@ static void curl_thread(uv_work_t *w) {
 
 	CURLcode r = curl_easy_perform(lc->c);
 
+	if (lc->headers)
+		curl_slist_free_all(lc->headers);
+
 	debug("thread ends r=%d", r);
 }
 
@@ -223,7 +230,11 @@ static void curl_thread(uv_work_t *w) {
 // upvalue[2] = luv_curl_t
 static int curl_done(lua_State *L) {
 	int n = lua_gettop(L);
+
 	lua_pushvalue(L, lua_upvalueindex(1));
+	if (lua_isnil(L, -1))
+		return 0;
+
 	lua_insert(L, 1);
 	lua_call_or_die(L, n, 0);
 	return 0;
@@ -246,13 +257,13 @@ static void curl_setproxy(CURL *c, char *proxy) {
 	}
 
 	if (!found) {
-		info("proxy=%s", proxy);
+		debug("proxy=%s", proxy);
 		curl_easy_setopt(c, CURLOPT_PROXY, proxy);
 		return;
 	}
 	*s = 0;
 
-	info("proxy.url=%s", proxy);
+	debug("proxy.url=%s", proxy);
 	curl_easy_setopt(c, CURLOPT_PROXY, proxy);
 
 	int port = 0;
@@ -261,7 +272,23 @@ static void curl_setproxy(CURL *c, char *proxy) {
 		return;
 
 	curl_easy_setopt(c, CURLOPT_PROXYPORT, (long)port);
-	info("proxy.port=%d", port);
+	debug("proxy.port=%d", port);
+}
+
+static void curl_addheader(luv_curl_t *lc, char *name, char *val) {
+	if (val == NULL)
+		return;
+
+	int namelen = strlen(name);
+	int vallen = strlen(val);
+	char *s = (char *)zalloc(namelen + vallen + 3);
+	memcpy(s, name, namelen);
+	memcpy(s + namelen, ": ", 2);
+	memcpy(s + namelen + 2, val, vallen);
+
+	lc->headers = curl_slist_append(lc->headers, s);
+
+	free(s);
 }
 
 static int curl(lua_State *L) {
@@ -277,6 +304,8 @@ static int curl(lua_State *L) {
 	lua_getfield(L, 1, "reqstr"); // 5
 	lua_getfield(L, 1, "done"); // 6
 	lua_getfield(L, 1, "proxy"); // 7
+	lua_getfield(L, 1, "content_type"); // 8
+	lua_getfield(L, 1, "user_agent"); // 9
 
 	char *url = (char *)lua_tostring(L, 3);
 	info("url=%s", url);
@@ -295,21 +324,29 @@ static int curl(lua_State *L) {
 	curl_easy_setopt(lc->c, CURLOPT_WRITEFUNCTION, write_data);
 	curl_easy_setopt(lc->c, CURLOPT_WRITEDATA, lc);
 
+	//curl_easy_setopt(lc->c, CURLOPT_VERBOSE, 1);
+
 	lc->reqstr = (char *)lua_tostring(L, 5);
 	if (lc->reqstr) {
-		lc->reqstr_len = strlen(lc->reqstr);
-		curl_easy_setopt(lc->c, CURLOPT_READFUNCTION, read_data);
-		curl_easy_setopt(lc->c, CURLOPT_READDATA, lc);
-		curl_easy_setopt(lc->c, CURLOPT_UPLOAD, 1);
+		//lc->reqstr_len = strlen(lc->reqstr);
+		//curl_easy_setopt(lc->c, CURLOPT_READFUNCTION, read_data);
+		//curl_easy_setopt(lc->c, CURLOPT_READDATA, lc);
+		curl_easy_setopt(lc->c, CURLOPT_POSTFIELDS, lc->reqstr);
 	}
-
-	char *proxy = (char *)lua_tostring(L, 7);
-	curl_setproxy(lc->c, proxy);
 
 	lua_pushvalue(L, 6); // done
 	lua_pushvalue(L, 2); // userdata: must save it until call done
 	lua_pushcclosure(L, curl_done, 2);
 	lua_set_global_callback(L, "curl_done", lc->c);
+
+	char *proxy = (char *)lua_tostring(L, 7);
+	curl_setproxy(lc->c, proxy);
+
+	curl_addheader(lc, "Content-Type", (char *)lua_tostring(L, 8));
+	curl_addheader(lc, "User-Agent", (char *)lua_tostring(L, 9));
+
+	if (lc->headers)
+		curl_easy_setopt(lc->c, CURLOPT_HTTPHEADER, lc->headers);
 
 	// return {
 	// 		cancel = [native function],
