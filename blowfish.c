@@ -537,12 +537,17 @@ static int luv_encode_hex(lua_State *L) {
 	luv_checkargs(L, &b, &in);
 
 	int inlen = strlen(in);
-	int outlen = inlen*2;
+	int inpadlen = (inlen+7)&~7;
+	char *inpad = (char *)zalloc(inpadlen);
+	memcpy(inpad, in, inlen);
+
+	int outlen = inpadlen*2;
 	char *out = (char *)zalloc(outlen+1);
 
-	blowfish_encode_hex(b, in, inlen, out);
+	blowfish_encode_hex(b, inpad, inpadlen, out);
 	lua_pushstring(L, out);
 
+	free(inpad);
 	free(out);
 
 	return 1;
@@ -553,6 +558,7 @@ static int luv_decode_hex(lua_State *L) {
 	char *in;
 	luv_checkargs(L, &b, &in);
 
+	in = strdup(in);
 	int inlen = strlen(in);
 	int outlen = inlen/2;
 	char *out = (char *)zalloc(outlen+1);
@@ -560,6 +566,7 @@ static int luv_decode_hex(lua_State *L) {
 	blowfish_decode_hex(b, in, inlen, out);
 	lua_pushstring(L, out);
 
+	free(in);
 	free(out);
 
 	return 1;

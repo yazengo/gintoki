@@ -27,6 +27,13 @@ table.append = function (a, ...)
 	return a
 end
 
+string.split = function(s, p)
+	if not p then p = ' \t' end
+	local rt = {}
+	string.gsub(s, '[^'..p..']+', function(w) table.insert(rt, w) end )
+	return rt
+end
+
 string.hasprefix = function (a, pref)
 	return string.sub(a, 1, string.len(pref)) == pref
 end
@@ -55,7 +62,7 @@ emitter_init = function (t)
 	end
 end
 
-info = function (...) 
+_info = function (caller_at, ...) 
 	local s = ''
 	local t = {...}
 	for i = 1,table.maxn(t) do
@@ -72,8 +79,13 @@ info = function (...)
 		end
 		s = s .. ' '
 	end
-	_info(s)
+
+	local di = debug.getinfo(caller_at)
+
+	_log(1, di.name, di.short_src, di.currentline, s)
 end
+
+info = function (...) _info(3, ...) end
 
 os.basename = function (s)
 	local x = string.gsub(s, '%.[^%.]*$', '')
@@ -89,4 +101,16 @@ prop.save = function ()
 end
 
 math.randomseed(os.time())
+
+logger = function (name)
+	return function (...) 
+		_info(3, name, ...)
+	end
+end
+
+urlencode = function (s)
+	return string.gsub(s, "([!*'%(%);:@&=+$,/?%%#%[%]])", function (ch) 
+		return string.format('%%%.2X', string.byte(ch))
+	end)
+end
 

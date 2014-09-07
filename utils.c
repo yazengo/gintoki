@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <sys/time.h>
 #include <stdarg.h>
 #include <execinfo.h>
@@ -38,7 +39,7 @@ void _log(
 	char *fmt, ...
 ) {
 	va_list ap;
-	char buf[1024];
+	char buf[512];
 
 	if (level < log_level)
 		return;
@@ -57,8 +58,15 @@ void _log(
 	}
 
 	va_start(ap, fmt);
-	vsnprintf(buf, sizeof(buf), fmt, ap);
+	vsnprintf(buf, sizeof(buf)-1, fmt, ap);
 	va_end(ap);
+
+	for (i = 0; i < sizeof(buf); i++) {
+		if (buf[i] == 0)
+			break;
+		if (buf[i] == '\r')
+			panic("no");
+	}
 
 	fprintf(stderr, "[%.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
 
@@ -309,9 +317,14 @@ static int luv_set_interval(lua_State *L) {
 	return 1;
 }
 
-static int lua_info(lua_State *L) {
-	const char *msg = lua_tostring(L, -1);
-	info("%s", msg);
+static int lua_log(lua_State *L) {
+	int level = lua_tonumber(L, 1);
+	const char *func = lua_tostring(L, 2);
+	const char *file = lua_tostring(L, 3);
+	int line = lua_tonumber(L, 4);
+	const char *msg = lua_tostring(L, 5);
+
+	_log(level, func, file, line, "%s", msg);
 	return 0;
 }
 
@@ -612,8 +625,8 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_setfield(L, -2, "readdir");
 	lua_pop(L, 1);
 
-	lua_pushcfunction(L, lua_info);
-	lua_setglobal(L, "_info");
+	lua_pushcfunction(L, lua_log);
+	lua_setglobal(L, "_log");
 
 	lua_pushcfunction(L, lua_setloglevel);
 	lua_setglobal(L, "setloglevel");

@@ -29,6 +29,8 @@ typedef struct {
 	CURL *c;
 	struct curl_slist *headers;
 
+	char *proxy;
+
 	int stat;
 	const char *err;
 
@@ -162,10 +164,14 @@ static int curl_stat(lua_State *L) {
 	return 1;
 }
 
+// arg[1] = done
 static int curl_cancel(lua_State *L) {
 	luv_curl_t *lc = (luv_curl_t *)lua_touserdata(L, lua_upvalueindex(1));
 
 	lc->stat = CANCELLED;
+
+	lua_pushvalue(L, 1);
+	lua_set_global_callback(L, "curl_cancel", lc->c);
 
 	return 0;
 }
@@ -196,6 +202,7 @@ static void curl_thread_done(uv_work_t *w, int _) {
 	push_curl_stat(lc);
 
 	lua_do_global_callback(lc->L, "curl_done", lc->c, 2, 1);
+	lua_do_global_callback(lc->L, "curl_cancel", lc->c, 0, 1);
 
 	curl_easy_cleanup(lc->c);
 	if (lc->retsb)
@@ -223,6 +230,9 @@ static void curl_thread(uv_work_t *w) {
 	if (lc->headers)
 		curl_slist_free_all(lc->headers);
 
+	if (lc->proxy)
+		free(lc->proxy);
+
 	debug("thread ends r=%d", r);
 }
 
@@ -240,9 +250,14 @@ static int curl_done(lua_State *L) {
 	return 0;
 }
 
-static void curl_setproxy(CURL *c, char *proxy) {
+static void curl_setproxy(luv_curl_t *lc, char *proxy) {
 	if (proxy == NULL)
 		return;
+
+	proxy = strdup(proxy);
+	lc->proxy = proxy;
+
+	debug("proxy=%s", proxy);
 
 	char *s = proxy + strlen(proxy) - 1;
 	int found = 0;
@@ -257,21 +272,21 @@ static void curl_setproxy(CURL *c, char *proxy) {
 	}
 
 	if (!found) {
-		debug("proxy=%s", proxy);
-		curl_easy_setopt(c, CURLOPT_PROXY, proxy);
+		debug("proxy.url=%s", proxy);
+		curl_easy_setopt(lc->c, CURLOPT_PROXY, proxy);
 		return;
 	}
 	*s = 0;
 
 	debug("proxy.url=%s", proxy);
-	curl_easy_setopt(c, CURLOPT_PROXY, proxy);
+	curl_easy_setopt(lc->c, CURLOPT_PROXY, proxy);
 
 	int port = 0;
 	sscanf(s+1, "%d", &port);
 	if (!port)
 		return;
 
-	curl_easy_setopt(c, CURLOPT_PROXYPORT, (long)port);
+	curl_easy_setopt(lc->c, CURLOPT_PROXYPORT, (long)port);
 	debug("proxy.port=%d", port);
 }
 
@@ -308,7 +323,6 @@ static int curl(lua_State *L) {
 	lua_getfield(L, 1, "user_agent"); // 9
 
 	char *url = (char *)lua_tostring(L, 3);
-	info("url=%s", url);
 	if (url == NULL) 
 		return 0;
 
@@ -340,7 +354,7 @@ static int curl(lua_State *L) {
 	lua_set_global_callback(L, "curl_done", lc->c);
 
 	char *proxy = (char *)lua_tostring(L, 7);
-	curl_setproxy(lc->c, proxy);
+	curl_setproxy(lc, proxy);
 
 	curl_addheader(lc, "Content-Type", (char *)lua_tostring(L, 8));
 	curl_addheader(lc, "User-Agent", (char *)lua_tostring(L, 9));

@@ -15,11 +15,25 @@ I.handle = function (line)
 		I.usage()
 		return
 	end
-	local i = tonumber(line)
+
+	local a = string.split(line)
+
+	for i in ipairs(a) do
+		if i >= 2 then
+			_G['arg' .. (i-1)] = a[i]
+		end
+	end
+
+	local i = tonumber(a[1])
+
 	if i and i >= 1 and i <= table.maxn(I.cmds) then
 		local cmd = I.cmds[i]
 		print('dostring: ' .. cmd)
-		loadstring(cmd)()
+		local func = loadstring(cmd)
+		local r, err = pcall(func)
+		if err then
+			print(err)
+		end
 	end
 
 	if string.hasprefix(line, 'c ') then
@@ -33,6 +47,7 @@ I.handle = function (line)
 			print(err)
 		end
 	end
+
 end
 
 I.usage = function ()
