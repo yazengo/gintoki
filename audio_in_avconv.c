@@ -21,6 +21,15 @@ typedef struct {
 	int got_dur;
 } avconv_probe_parser_t;
 
+typedef struct {
+	char *fname_tmp;
+	char *fname_done;
+	uv_pipe_t *pipe;
+	uv_fs_t *req_open, *req_read;
+	char buf[2048];
+	void *data;
+} avconv_tail_t;
+
 typedef struct avconv_s {
 	void *data;
 	int stat;
@@ -28,6 +37,8 @@ typedef struct avconv_s {
 	uv_process_t *proc;
 	uv_pipe_t *pipe[2];
 
+	avconv_tail_t *tail;
+	
 	void *read_buf;
 	int   read_len;
 
@@ -132,13 +143,47 @@ static void parser_eat(avconv_t *av, avconv_probe_parser_t *p, void *buf, int le
 	}
 }
 
+static const char *tail_prefix = "tail://";
+
+enum {
+	TAIL_INIT,
+	TAIL_OPENING_TMP,
+	TAIL_READING_TMP,
+	TAIL_SEEKING_TMP,
+	TAIL_TMP,
+};
+
+static int tail_check_url(char *url) {
+	return !strncmp(url, tail_prefix, strlen(tail_prefix));
+}
+
+static void tail_init(uv_loop_t *loop, avconv_tail_t *tl, char *url) {
+	tl->fname_done = strdup(url + strlen(tail_prefix));
+	tl->fname_tmp = zalloc(strlen(tl->fname_done) + 8);
+	strcpy(tl->fname_tmp, tl->fname_done);
+	strcat(tl->fname_tmp, ".tmp");
+
+	tl->pipe = zalloc(sizeof(uv_pipe_t));
+	uv_pipe_init(loop, tl->pipe, 0);
+	uv_pipe_open(tl->pipe, 0);
+
+	tl->req_open = zalloc(sizeof(uv_fs_t));
+
+	//uv_fs_open(loop, tl->req_open, tl->fname_tmp, );
+}
+
+static void tail_close(avconv_tail_t *tl, audio_in_close_cb done) {
+	avconv_t *av = (avconv_t *)tl->data;
+	done(av->ai);
+}
+
 enum {
 	INIT,
 	READING,
 	STOPPING,
 	CLOSING_PROC,
 	CLOSING_FD1,
-	CLOSING_FD2
+	CLOSING_FD2,
 };
 
 static void on_handle_closed(uv_handle_t *h) {
@@ -256,6 +301,13 @@ static int avconv_is_eof(audio_in_t *ai) {
 	return av->stat > READING;
 }
 
+static void avconv_close_fd1(audio_in_t *ai) {
+	avconv_t *av = (avconv_t *)ai->in;
+
+	av->stat = CLOSING_FD1;
+	uv_close((uv_handle_t *)av->pipe[0], on_handle_closed);
+}
+
 static void avconv_close(audio_in_t *ai, audio_in_close_cb done) {
 	avconv_t *av = (avconv_t *)ai->in;
 
@@ -264,9 +316,12 @@ static void avconv_close(audio_in_t *ai, audio_in_close_cb done) {
 
 	info("close");
 
-	av->stat = CLOSING_FD1;
-	uv_close((uv_handle_t *)av->pipe[0], on_handle_closed);
 	av->on_close = done;
+
+	if (av->tail)
+		tail_close(av->tail, avconv_close_fd1);
+	else
+		avconv_close_fd1(ai);
 }
 
 void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai) {
@@ -304,7 +359,20 @@ void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai) {
 	opts.stdio = stdio;
 	opts.stdio_count = 3;
 
-	char *args[] = {"avconv", "-i", ai->url, "-f", "s16le", "-ar", "44100", "-", NULL};
+	char *url = ai->url;
+	if (tail_check_url(ai->url)) {
+		url = "-";
+
+		avconv_tail_t *tl = zalloc(sizeof(avconv_tail_t));
+		tail_init(loop, tl, ai->url);
+		av->tail = tl;
+		tl->data = av;
+
+		stdio[0].flags = UV_CREATE_PIPE;
+		stdio[0].data.stream = (uv_stream_t *)tl->pipe;
+	}
+
+	char *args[] = {"avconv", "-i", url, "-f", "s16le", "-ar", "44100", "-ac", "2", "-", NULL};
 	opts.file = args[0];
 	opts.args = args;
 	opts.exit_cb = proc_on_exit;

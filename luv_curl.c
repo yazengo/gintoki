@@ -223,18 +223,8 @@ static void curl_thread_done(uv_work_t *w, int _) {
 static void curl_thread(uv_work_t *w) {
 	luv_curl_t *lc = (luv_curl_t *)w->data;
 
-	if (lc->retfname) {
-		lc->retfp = fopen(lc->retfname, "wb+");
-		info("'%s' opened", lc->retfname);
-		if (lc->retfp == NULL) {
-			warn("open '%s' failed", lc->retfname);
-			lc->stat = ERROR;
-			lc->err = "open_file_failed";
-			return;
-		}
-	}
-
-	lc->curl_ret = curl_easy_perform(lc->c);
+	if (lc->stat != ERROR)
+		lc->curl_ret = curl_easy_perform(lc->c);
 
 	if (lc->headers)
 		curl_slist_free_all(lc->headers);
@@ -340,6 +330,16 @@ static int curl(lua_State *L) {
 		lc->retfname = strdup(retfname);
 	else
 		lc->retsb = strbuf_new(2048);
+
+	if (lc->retfname) {
+		lc->retfp = fopen(lc->retfname, "wb+");
+		info("'%s' opened", lc->retfname);
+		if (lc->retfp == NULL) {
+			warn("open '%s' failed", lc->retfname);
+			lc->stat = ERROR;
+			lc->err = "open_file_failed";
+		}
+	}
 
 	lc->c = curl_easy_init();
 
