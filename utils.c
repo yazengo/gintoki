@@ -58,15 +58,8 @@ void _log(
 	}
 
 	va_start(ap, fmt);
-	vsnprintf(buf, sizeof(buf)-1, fmt, ap);
+	vsnprintf(buf, sizeof(buf)-2, fmt, ap);
 	va_end(ap);
-
-	for (i = 0; i < sizeof(buf); i++) {
-		if (buf[i] == 0)
-			break;
-		if (buf[i] == '\r')
-			panic("no");
-	}
 
 	fprintf(stderr, "[%.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
 

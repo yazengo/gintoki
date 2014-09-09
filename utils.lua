@@ -8,6 +8,10 @@ table.add = function (a, ...)
 	return a
 end
 
+table.copy = function (a) 
+	return table.add({}, a)
+end
+
 table.append = function (a, ...)
 	local i = table.maxn(a) + 1
 
@@ -68,7 +72,7 @@ _info = function (caller_at, ...)
 	for i = 1,table.maxn(t) do
 		local v = t[i]
 		if type(v) == 'table' then
-			s = s .. cjson.encode(v)
+			s = s .. (cjson.encode(v) or '(unjsonable)')
 		elseif type(v) == 'boolean' then
 			if v then s = s .. 'true'
 			else s = s .. 'false' end

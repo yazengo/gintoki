@@ -22,26 +22,6 @@ local loadjson = function (fname)
 	return cjson.decode(s) or {}
 end
 
-local P = {}
-
-P.url = '://tuner.pandora.com/services/json/?'
-
-P.log = logger('pandora')
-
-P.cookies = {}
-
-P.bf_encode = blowfish('6#26FRL$ZWD')
-P.bf_decode = blowfish('R=U!LH$O2B#')
-
-P.loadcookie = function ()
-	P.cookie = loadjson('pandora.json')
-end
-
-P.savecookie = function ()
-	P.log('cookie saved', P.cookie)
-	savejson('pandora.json', P.cookie)
-end
-
 local totable = function (t)
 	if not t or type(t) ~= 'table' then
 		return {}
@@ -70,9 +50,24 @@ local isstr = function (s)
 	return true
 end
 
-P.change_stat = function (stat)
-	P.log(P.stat, '->', stat)
-	P.stat = stat
+local P = {}
+
+P.url = '://tuner.pandora.com/services/json/?'
+
+P.log = logger('pandora')
+
+P.cookies = {}
+
+P.bf_encode = blowfish('6#26FRL$ZWD')
+P.bf_decode = blowfish('R=U!LH$O2B#')
+
+P.loadcookie = function ()
+	return loadjson('pandora.json')
+end
+
+P.savecookie = function (c)
+	P.log('cookie saved', c)
+	savejson('pandora.json', c)
 end
 
 P.call = function (p)
@@ -88,7 +83,7 @@ P.call = function (p)
 		reqstr = P.bf_encode:encode_hex(reqstr)
 	end
 
-	log(url, reqstr)
+	if P.verbose then log(url, p.data) end
 
 	return curl {
 		proxy = 'localhost:8888',
@@ -96,8 +91,11 @@ P.call = function (p)
 		content_type = 'text/plain',
 		user_agent = 'pithos',
 		reqstr = reqstr,
-		done = function (r) 
-			log(r)
+		done = function (r, stat) 
+			if P.verbose then log(r, stat) end
+			if stat.stat == 'cancelled' then
+				return
+			end
 			r = cjson.decode(r) or {}
 			if r.stat ~= 'ok' or type(r.result) ~= 'table' then
 				p.done(nil, r)
@@ -106,14 +104,6 @@ P.call = function (p)
 			end
 		end,
 	}
-end
-
-P.cancel_task = function (done)
-	if P.task then
-		P.task.cancel(done)
-	else
-		done()
-	end
 end
 
 P.decode_synctime = function (s)
@@ -144,6 +134,7 @@ P.partner_login = function (cookie, done)
 		done = function (r, stat)
 			if not r then
 				done(nil, stat)
+				return
 			end
 
 			r.syncTime = tostr(r.syncTime)
@@ -257,21 +248,7 @@ P.grep_genres = function (old)
 	return r
 end
 
-P.choose_genres_done = function (r, stat)
-	if not r or not r.stationId then
-		P.change_stat('need_station_id')
-		return
-	end
-
-	P.cookie.station_id = r.stationId
-	P.savecookie()
-
-	P.log('station_id ->', P.cookie.station_id)
-	P.change_stat('fetching_songlist')
-	P.task = P.songs_list(P.cookie, P.songs_list_done)
-end
-
-P.choose_genres = function (cookie, id, done)
+P.choose_genres = function (cookie, done)
 	return P.call {
 		proto = 'http',
 		blowfish = true,
@@ -284,7 +261,7 @@ P.choose_genres = function (cookie, id, done)
 		data = {
 			syncTime = os.time() + cookie.partner_time_offset,
 			userAuthToken = cookie.user_auth_token,
-			musicToken = id,
+			musicToken = cookie.genres_id,
 		},
 		done = function (r, stat) 
 			done(r, stat)
@@ -356,137 +333,83 @@ P.songs_list = function (cookie, done)
 	}
 end
 
-P.partner_login_done = function (r, stat)
-	P.task = nil
+--
+-- err = 'auth_failed/need_station_id/server_error'
+--
+P.auto_auth = function (cookie, cb, done)
+	local log = logger('auto_auth:')
+	local handle
 
-	if not r then
-		P.change_stat('auth_partner_failed')
-	else
-		table.add(P.cookie, r)
-		P.savecookie()
-
-		P.change_stat('auth_user')
-		P.task = P.user_login(P.cookie, P.user_login_done)
-	end
-end
-
-P.user_login_done = function (r, stat)
-	P.task = nil
-
-	if r then
-		table.add(P.cookie, r)
-		P.savecookie()
-
-		if not P.cookie.station_id then
-			P.change_stat('need_station_id')
-		else
-			P.change_stat('fetching_songlist')
-			P.task = P.songs_list(P.cookie, P.songs_list_done)
+	handle = {
+		cancel = function ()
+			if handle.task then
+				log('cancelled')
+				handle.task.cancel()
+				handle.task = nil
+			end
 		end
-	else
-		if stat.code == 1002 then
-			P.change_stat('auth_user_failed')
-		else
-			P.change_stat('auth_partner')
-			P.task = P.partner_login(P.cookie, P.partner_login_done)
-		end
-	end
-end
-
-P.songs_list_done = function (r, stat)
-	P.task = nil
-
-	if r then
-		P.change_stat('songlist_ready')
-	else
-		if stat.code == 1006 then
-			P.change_stat('need_station_id')
-		elseif stat.code == 1001 or stat.code == 1004 then
-			P.change_stat('auth_user')
-			P.task = P.user_login(P.cookie, P.user_login_done)
-		else
-			P.change_stat('server_error')
-		end
-	end
-end
-
-P.init = function ()
-	P.cookie = loadjson('pandora.json')
-
-	local c = P.cookie
-
-	P.log('cookies', c)
-
-	if c.username and c.password and
-	   c.partner_auth_token and c.user_auth_token and 
-		 c.station_id
-	then
-		P.change_stat('fetching_first_songlist')
-		P.task = P.songs_list(c, P.songs_list_done)
-		return
-	end
-
-	if c.username and c.password and 
-		 c.partner_auth_token and c.user_auth_token
-	then
-		P.change_stat('need_station_id')
-		return
-	end
-
-	if c.username and c.password then
-		P.change_stat('auth_partner')
-		P.task = P.partner_login(c, P.partner_login_done)
-		return
-	end
-
-	P.stat = 'need_user_pass'
-end
-
---[[
-
-need_user_pass
-need_station_id
-auth_partner
-auth_partner_failed
-auth_user
-auth_user_failed
-fetching_first_songlist
-fetching_songlist
-songlist_ready
-server_error
-
-fetching_songlist -> E1001 -> auth_user
-fetching_songlist -> E1006 -> need_station_id
-fetching_songlist -> E -> server_error
-fetching_songlist -> songlist_ready
-
-auth_partner -> auth_partner_failed
-auth_partner -> auth_user
-
-auth_user -> auth_user_failed
-auth_user -> fetching_songlist
-
-]]--
-
-P.info = function ()
-	-- auth_ok/auth_failed/need_auth/auth_processing
-	local map = {
-		need_user_pass = 'need_auth',
-		need_station_id = 'need_auth',
-		auth_partner = 'auth_processing',
-		auth_partner_failed = 'auth_failed',
-		auth_user = 'auth_processing',
-		auth_user_failed = 'auth_failed',
-		fetching_first_songlist = 'auth_processing',
-		fetching_songlist = 'auth_ok',
-		choosing_genres = 'auth_ok',
-		songlist_ready = 'auth_ok',
-		server_error = 'need_auth',
 	}
-	return {
-		stat = map[P.stat],
-		stat_detail = P.stat,
-	}
+
+	function funcname(f) 
+		for k,v in pairs(P) do
+			if v == f then
+				return k
+			end
+		end
+	end
+
+	function on_done(func, r, stat)
+		if r then on_ok(func, r, stat) else on_error(func, r, stat) end
+	end
+
+	function on_ok(func, r, stat)
+		log(funcname(func), '-> ok', r)
+
+		if func == P.partner_login then
+			table.add(cookie, r)
+			handle.task = P.user_login(cookie, function (...) on_done(P.user_login, ...) end)
+		elseif func == P.user_login then
+			table.add(cookie, r)
+			handle.task = cb(cookie, function (...) on_done(cb, ...) end)
+		else
+			done(cookie, r, nil)
+		end
+	end
+
+	function on_error(func, r, stat)
+		log(funcname(func), '-> error')
+
+		if func == P.partner_login then
+			done(cookie, nil, 'auth_failed')
+		elseif func == P.user_login then
+			done(cookie, nil, 'auth_failed')
+		else 
+			if stat.code == 1001 or stat.code == 1010 then
+				handle.task = P.partner_login(cookie, function (...) on_done(P.partner_login, ...) end)
+			elseif func == P.choose_genres or func == P.songs_list then
+				done(cookie, nil, 'need_station_id')
+			else
+				done(cookie, nil, 'server_error')
+			end
+		end
+	end
+
+	if not cookie.partner_id or not cookie.partner_time_offset or not cookie.partner_auth_token or
+		not cookie.user_id or not cookie.user_auth_token
+	then
+		handle.task = P.partner_login(cookie, function (...) on_done(P.partner_login, ...) end)
+	elseif func == P.songs_list and not cookie.station_id then
+		done(cookie, nil, 'need_station_id')
+	else
+		handle.task = cb(cookie, function (...) on_done(cb, ...) end)
+	end
+
+	return handle
+end
+
+P.start = function ()
+	P.stat = 'songs_ready'
+	P.next()
 end
 
 P.setopt = function (o, done)
@@ -495,55 +418,209 @@ P.setopt = function (o, done)
 	P.log('setopt', o)
 
 	if o.op == 'pandora.genre_choose' then
-		P.cancel_task(function ()
-			P.change_stat('choosing_genres')
-			P.choose_genres(P.cookie, o.id, function (r, stat)
-				done{result=0}
-				P.choose_genres_done(r, stat)
+
+		if not o.id then
+			P.log('need id')
+			return
+		end
+
+		P.stat = 'songs_fetching'
+		if P.task then P.task.cancel() end
+		P.songs = {}
+		P.songs_i = 0
+
+		local c = P.cookie
+		c.station_id = nil
+		c.genres_id = o.id
+
+		P.task = P.auto_auth(c, P.choose_genres, function (c, r, err)
+			if not r or not r.stationId then
+				done{result=1}
+				P.stat = 'need_station_id'
+				return
+			end
+
+			c.station_id = r.stationId
+
+			P.task = P.auto_auth(c, P.songs_list, function (c, r, err)
+				P.savecookie(c)
+				if r then
+					P.stat = 'songs_ready'
+					P.songs_add(r)
+					done{result=0}
+				else
+					P.stat = err
+					done{result=1, err=err}
+				end
 			end)
 		end)
+
 	elseif o.op == 'pandora.station_choose' then
-		P.cancel_task(function ()
-			P.change_stat('fetching_songlist')
-			P.cookie.station_id = o.id
-			P.savecookie()
-			P.songs_list(P.cookie, o.id, P.songs_list_done)
+
+		if not o.id then
+			P.log('need id')
+			return
+		end
+
+		P.stat = 'songs_fetching'
+		if P.task then P.task.cancel() end
+		P.songs = {}
+		P.songs_i = 0
+
+		local c = P.cookie
+		c.station_id = o.id
+
+		P.task = P.auto_auth(c, P.songs_list, function (c, r, err)
+			P.savecookie(c)
+			if r then
+				P.stat = 'songs_ready'
+				P.songs_add(r)
+				done{result=0}
+			else
+				P.stat = err
+				done{result=1, err=err}
+			end
 		end)
+
 	elseif o.op == 'pandora.login' then
-		P.cancel_task(function ()
-			P.change_stat('auth_user')
-			P.cookie.username = o.username
-			P.cookie.password = o.password
-			P.savecookie()
-			P.partner_login(P.cookie, P.partner_login_done)
+
+		P.stat = 'auth_processing'
+		if P.task then P.task.cancel() end
+		P.songs = {}
+		P.songs_i = 0
+
+		local c = P.cookie
+		c.user_auth_token = nil
+		c.user_id = nil
+		c.partner_auth_token = nil
+		c.partner_time_offset = nil
+		c.partner_id = nil
+		c.username = o.username
+		c.password = o.password
+
+		P.task = P.auto_auth(c, P.stations_list, function (c, r, err)
+			if not r then
+				P.stat = err
+				done{err=1}
+				return
+			end
+
+			if table.maxn(r) == 0 then
+				P.stat = 'need_station_id'
+				done{err=0}
+				return
+			end
+			c.station_id = r[1].id
+
+			P.task = P.auto_auth(c, P.songs_list, function (c, r, err)
+				P.savecookie(c)
+				if r then
+					P.stat = 'songs_ready'
+					P.songs_add(r)
+					done{err=0}
+				else
+					P.stat = err
+					done{err=1}
+				end
+			end)
 		end)
+
 	elseif o.op == 'pandora.genres_list' then
-		P.genres_list(P.cookie, function (r, stat)
-			done(r)
+		local c = table.copy(P.cookie)
+		P.auto_auth(c, P.genres_list, function (c, r, err)
+			if r then
+				done(r)
+			else
+				done{result=1}
+			end
 		end)
 	elseif o.op == 'pandora.stations_list' then
-		P.stations_list(P.cookie, function (r, stat)
-			done(r)
+		local c = table.copy(P.cookie)
+		P.auto_auth(c, P.stations_list, function (c, r, err)
+			if r then
+				done(r)
+			else
+				done{result=1}
+			end
 		end)
+	elseif o.op == 'pandora.songs_list' then
+		P.songs_list(P.cookie, function () end)
 	end
 end
+
+--[[
+need_auth
+need_station_id
+auth_processing
+auth_failed
+songs_fetching
+songs_ready
+]]--
 
 P.songs = {}
 P.songs_i = 0
 
+P.songs_add = function (r)
+	P.log('got songs nr', table.maxn(r))
+	local left = table.maxn(P.songs) - P.songs_i
+	table.append(P.songs, r)
+	if left == 0 and P.next_callback then
+		P.next_callback()
+	end
+end
+
+P.next = function ()
+	local left = table.maxn(P.songs) - P.songs_i
+
+	if left <= 1 and P.stat == 'songs_ready' then
+		P.stat = 'songs_fetching'
+		P.task = P.auto_auth(P.cookie, P.songs_list, function (c, r, err)
+			P.savecookie(c)
+			P.stat = 'songs_ready'
+			if r then
+				P.songs_add(r)
+			else
+				P.stat = err
+			end
+		end)
+	end
+
+	if left == 0 then
+		return nil
+	end
+
+	P.songs_i = P.songs_i + 1
+	return P.songs[P.songs_i]
+end
+
+P.info = function ()
+	return {
+		type = 'pandora',
+		songs_nr = table.maxn(P.songs),
+		songs_i = P.songs_i,
+		stat = P.stat,
+	}
+end
+
 pandora = P
 
-P.init()
+P.verbose = 1
+P.cookie = P.loadcookie()
+P.start()
+
 --P.cookie.station_id = '2178401799297707427'
 
 if input then
 	input.cmds = {
+		[[ info(pandora.info()) ]],
+		[[ info(pandora.next()) ]],
 		[[ pandora.setopt{op='pandora.login', username='enliest@qq.com', password='enliest1653'} ]],
 		[[ pandora.setopt{op='pandora.login', username='cfanfrank@gmail.com', password='enliest1653'} ]],
-		[[ pandora.setopt({op='pandora.genres_list'}) ]],
-		[[ pandora.setopt({op='pandora.stations_list'}) ]],
-		[[ pandora.setopt{op='pandora.genre_choose', id=arg1} ]],
-		[[ pandora.setopt{op='pandora.station_choose', id=arg1} ]],
+		[[ pandora.setopt{op='pandora.genres_list'} ]],
+		[[ pandora.setopt{op='pandora.stations_list'} ]],
+		[[ pandora.setopt{op='pandora.songs_list'} ]],
+		[[ pandora.setopt{op='pandora.genre_choose', id=argv[2]} ]],
+		[[ pandora.setopt{op='pandora.station_choose', id=argv[2]} ]],
 	}
 end
 
