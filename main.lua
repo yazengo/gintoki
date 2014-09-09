@@ -182,7 +182,9 @@ on_inputevent = function (e)
 	end
 end
 
+pandora.start()
+
 upnp.start()
-audio.setvol(0)
-radio.start(localmusic)
+audio.setvol(10)
+radio.start(pandora)
 
