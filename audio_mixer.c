@@ -172,7 +172,7 @@ static void check_tracks_can_close(audio_mixer_t *am) {
 		audio_track_t *tr = &am->tracks[i];
 		audio_in_t *ai = tr->ai;
 
-		if (!((tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING) && ai->is_eof(ai) && tr->buf.len == 0))
+		if (!((tr->stat == TRACK_STOPPING || tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING) && ai->is_eof(ai) && tr->buf.len == 0))
 			continue;
 
 		info("closed #%d stat=%d", i, tr->stat);
