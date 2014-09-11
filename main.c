@@ -73,7 +73,10 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef USE_INPUTDEV
-	inputdev_init(L, loop);
+	if (getenv("INPUTDEV_INOTIFY"))
+		luv_inputdev_init(L, loop);
+	else
+		inputdev_init(L, loop);
 #endif
 
 #ifdef USE_AIRPLAY

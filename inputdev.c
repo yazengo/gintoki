@@ -1,6 +1,7 @@
 
 #include <stdio.h>  
 #include <linux/input.h>  
+#include <sys/inotify.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <lua.h>
@@ -218,5 +219,49 @@ void inputdev_init(lua_State *_L, uv_loop_t *_loop) {
 	pthread_create(&tid, NULL, poll_vol_thread, NULL);
 	pthread_create(&tid, NULL, poll_network_notify_thread, NULL);
 	pthread_create(&tid, NULL, poll_gsensor_thread, NULL);
+}
+
+typedef struct {
+	lua_State *L;
+	uv_loop_t *loop;
+	int fd_inotify;
+	uv_fs_t *req_read;
+	char buf_inotify[1024];
+} inputdev_t;
+
+static inputdev_t _dev, *dev = &_dev;
+
+static void on_inotify_event(uv_fs_t *req) {
+	uv_fs_req_cleanup(req);
+	debug("r=%d", req->result);
+
+	if (req->result < 0)
+		return;
+
+	struct inotify_event *ie = (struct inotify_event *)dev->buf_inotify;
+
+	if (ie->mask & IN_CREATE) {
+		debug("create %s", ie->name);
+	} else {
+		debug("delete %s", ie->name);
+	}
+
+	uv_fs_read(loop, dev->req_read, dev->fd_inotify, dev->buf_inotify, sizeof(dev->buf_inotify), 0, on_inotify_event);
+}
+
+void luv_inputdev_init(lua_State *L, uv_loop_t *loop) {
+	int r;
+
+	dev->L = L;
+	dev->loop = loop;
+
+	dev->fd_inotify = inotify_init();
+	r = inotify_add_watch(dev->fd_inotify, "/dev/input", IN_DELETE|IN_CREATE);
+	if (r < 0)
+		panic("add watch failed");
+
+	dev->req_read = zalloc(sizeof(uv_fs_t));
+
+	uv_fs_read(loop, dev->req_read, dev->fd_inotify, dev->buf_inotify, sizeof(dev->buf_inotify), 0, on_inotify_event);
 }
 

@@ -557,6 +557,180 @@ static void test_stdin(uv_loop_t *loop) {
 	uv_read_start((uv_stream_t *)tty, uv_malloc_buffer, tty_stdin_read);
 }
 
+typedef struct {
+	uv_loop_t *loop;
+
+	uv_fs_t *req_open;
+	uv_fs_t *req_read;
+	uv_fs_t *req_stat;
+	char *fname_tmp;
+	char *fname_done;
+	int stat;
+	uv_file fd_tmp;
+	uv_file fd_done;
+	int tmp_closed;
+	uv_timer_t *timer;
+
+	char readbuf[2048];
+	char *writebuf;
+	int writelen;
+
+	int64_t off, size;
+	uv_fs_poll_t *poll;
+} avconv_tail_t;
+
+enum {
+	TAIL_OPENING_TMP,
+	TAIL_READING_TMP,
+	TAIL_WRITING_STDIN_TMP,
+	TAIL_POLLING_TMP,
+	TAIL_OPENING_DONE,
+	TAIL_READING_DONE,
+	TAIL_WRITING_STDIN_DONE,
+};
+
+static void tail_on_read(uv_fs_t *req);
+static void tail_open_done(avconv_tail_t *tl);
+static void tail_on_poll(uv_fs_poll_t *h, int stat, const uv_statbuf_t *prev, const uv_statbuf_t *curr);
+
+static void tail_close(avconv_tail_t *tl) {
+}
+
+static void tail_close_stdin(avconv_tail_t *tl) {
+	debug("close stdin");
+}
+
+static void tail_poll(avconv_tail_t *tl) {
+	debug("poll starts: %s", tl->fname_tmp);
+
+	tl->poll = zalloc(sizeof(uv_fs_poll_t));
+	tl->poll->data = tl;
+	uv_fs_poll_init(tl->loop, tl->poll);
+	uv_fs_poll_start(tl->poll, tail_on_poll, tl->fname_tmp, 1000);
+}
+
+static void tail_on_write_stdin_done(avconv_tail_t *tl) {
+	uv_file fd;
+
+	if (tl->stat == TAIL_WRITING_STDIN_TMP) {
+		tl->stat = TAIL_READING_TMP;
+		fd = tl->fd_tmp;
+	} else if (tl->stat == TAIL_WRITING_STDIN_DONE) {
+		tl->stat = TAIL_READING_DONE;
+		fd = tl->fd_done;
+	} else
+		panic("stat error");
+	uv_fs_read(tl->loop, tl->req_read, fd, tl->readbuf, sizeof(tl->readbuf), tl->off, tail_on_read);
+}
+
+static void tail_write_stdin(avconv_tail_t *tl, char *buf, int len) {
+	tl->writebuf = buf;
+	tl->writelen = len;
+
+	tail_on_write_stdin_done(tl);
+}
+
+static void tail_on_read(uv_fs_t *req) {
+	avconv_tail_t *tl = req->data;
+	uv_fs_req_cleanup(req);
+
+	debug("off=%lld read=%d", tl->off, req->result);
+
+	if (req->result <= 0) {
+		if (tl->stat == TAIL_READING_TMP) {
+			tl->stat = TAIL_POLLING_TMP;
+			tail_poll(tl);
+		} else if (tl->stat == TAIL_READING_DONE) {
+			tail_close_stdin(tl);
+		} else
+			panic("stat error");
+		return;
+	}
+
+	tl->off += req->result;
+
+	if (tl->stat == TAIL_READING_TMP)
+		tl->stat = TAIL_WRITING_STDIN_TMP;
+	else if (tl->stat == TAIL_READING_DONE)
+		tl->stat = TAIL_WRITING_STDIN_DONE;
+	else
+		panic("stat error");
+
+	tail_write_stdin(tl, tl->readbuf, req->result);
+}
+
+static void tail_on_poll(uv_fs_poll_t *h, int stat, const uv_statbuf_t *prev, const uv_statbuf_t *curr) {
+	avconv_tail_t *tl = h->data;
+
+	uv_fs_poll_stop(tl->poll);
+
+	debug("stat=%d", stat);
+	if (stat == -1) {
+		tl->stat = TAIL_OPENING_DONE;
+		tail_open_done(tl);
+		return;
+	}
+
+	tl->size = curr->st_size;
+	debug("size=%lld", tl->size);
+
+	tl->stat = TAIL_READING_TMP;
+	uv_fs_read(tl->loop, tl->req_read, tl->fd_tmp, tl->readbuf, sizeof(tl->readbuf), tl->off, tail_on_read);
+}
+
+static void tail_on_open_done(uv_fs_t *req) {
+	avconv_tail_t *tl = req->data;
+	uv_fs_req_cleanup(req);
+
+	debug("r=%d", req->result);
+	if (req->result < 0) {
+		tail_close(tl);
+		return;
+	}
+
+	tl->stat = TAIL_READING_DONE;
+	tl->fd_done = req->result;
+	uv_fs_read(tl->loop, tl->req_read, tl->fd_done, tl->readbuf, sizeof(tl->readbuf), tl->off, tail_on_read);
+}
+
+static void tail_open_done(avconv_tail_t *tl) {
+	tl->stat = TAIL_OPENING_DONE;
+	uv_fs_open(tl->loop, tl->req_open, tl->fname_done, O_RDONLY, 0, tail_on_open_done);
+}
+
+static void tail_on_open_tmp(uv_fs_t *req) {
+	avconv_tail_t *tl = req->data;
+	uv_fs_req_cleanup(req);
+
+	debug("r=%d", req->result);
+	if (req->result < 0) {
+		tail_open_done(tl);
+		return;
+	}
+
+	tl->stat = TAIL_READING_TMP;
+	tl->fd_tmp = req->result;
+	uv_fs_read(tl->loop, tl->req_read, tl->fd_tmp, tl->readbuf, sizeof(tl->readbuf), tl->off, tail_on_read);
+}
+
+static void test_poll1(uv_loop_t *loop) {
+	setloglevel(0);
+
+	avconv_tail_t *tl = zalloc(sizeof(avconv_tail_t));
+	tl->fname_tmp = "/tmp/change.tmp";
+	tl->fname_done = "/tmp/change";
+
+	tl->req_read = zalloc(sizeof(uv_fs_t));
+	tl->req_read->data = tl;
+	tl->req_open = zalloc(sizeof(uv_fs_t));
+	tl->req_open->data = tl;
+
+	tl->stat = TAIL_OPENING_TMP;
+	tl->loop = loop;
+
+	uv_fs_open(loop, tl->req_open, tl->fname_tmp, O_RDONLY, 0, tail_on_open_tmp);
+}
+
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);
 	if (i == 3)
@@ -571,5 +745,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 		test_ringbuf(loop);
 	if (i == 9)
 		test_stdin(loop);
+	if (i == 10)
+		test_poll1(loop);
 }
 
