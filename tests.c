@@ -731,6 +731,51 @@ static void test_poll1(uv_loop_t *loop) {
 	uv_fs_open(loop, tl->req_open, tl->fname_tmp, O_RDONLY, 0, tail_on_open_tmp);
 }
 
+typedef struct inotify_s {
+	int fd;
+	uv_fs_t *req;
+	uv_loop_t *loop;
+	char buf[1024];
+	void *data;
+	void (*on_event)(struct inotify_s *in);
+} inotify_t;
+
+static void inotify_on_event(uv_fs_t *req) {
+	inotify_t *in = req->data;
+	uv_fs_req_cleanup(req);
+
+	struct inotify_event *e = (struct inotify_event *)in->buf;
+
+	if (in->on_event)
+		in->on_event(in, e);
+
+	uv_fs_read(in->loop, in->req, in->fd, in->buf, sizeof(in->buf), 0, inotify_on_event);
+}
+
+static void inotify_init(uv_loop_t *loop, inotify_t *in, char *path) {
+	in->fd = inotify_init();
+
+	r = inotify_add_watch(in->fd, path, IN_DELETE|IN_CREATE);
+	if (r < 0)
+		panic("add watch failed");
+
+	in->req->data = in;
+	in->req = zalloc(sizeof(uv_fs_t));
+	in->loop = loop;
+
+	uv_fs_read(in->loop, in->req, in->fd, in->buf, sizeof(in->buf), 0, inotify_on_event);
+}
+
+static void test_inotify_event(inotify_t *in, struct inotify_event *e) {
+	info("name=%s", e->name);
+}
+
+static void test_inotify(uv_loop_t *loop) {
+	inotify_t *in = zalloc(sizeof(inotify_t));
+	in->on_event = test_inotify_event;
+	inotify_init(loop, in, "/tmp");
+}
+
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);
 	if (i == 3)
@@ -747,5 +792,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 		test_stdin(loop);
 	if (i == 10)
 		test_poll1(loop);
+	if (i == 11)
+		test_inotify(loop);
 }
 
