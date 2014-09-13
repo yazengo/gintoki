@@ -2,6 +2,7 @@
 require('localmusic')
 require('pandora')
 require('radio')
+require('audio')
 require('muno')
 
 local M = {}

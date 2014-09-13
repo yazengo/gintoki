@@ -45,6 +45,8 @@ typedef struct audio_mixer_s {
 	int rate;
 	uv_loop_t *loop;
 	lua_State *L;
+
+	int filter_track0_vol20;
 } audio_mixer_t;
 
 static void audio_emit(audio_mixer_t *am, const char *arg0, const char *arg1);
@@ -248,6 +250,10 @@ static void check_tracks_can_mix(audio_mixer_t *am) {
 
 		void *databuf; int datalen;
 		ringbuf_data_ahead_get(&tr->buf, &databuf, &datalen);
+
+		if (am->filter_track0_vol20)
+			pcm_do_volume(databuf, mixlen, 0.2);
+
 		if (i == 0)
 			memcpy(mixbuf, databuf, mixlen);
 		else
@@ -451,6 +457,19 @@ static int audio_pause_resume_toggle(lua_State *L) {
 	return 0;
 }
 
+// audio.setopt{track0_vol20 = true/false}
+static int audio_setopt(lua_State *L) {
+	audio_mixer_t *am = lua_getam(L);
+
+	lua_getfield(L, 1, "track0_vol20");
+	if (!lua_isnil(L, -1)) {
+		am->track0_vol20 = lua_toboolean(L, -1);
+		info("track0_vol20=%d", am->track0_vol20);
+	}
+
+	return 0;
+}
+
 void audio_mixer_init(lua_State *L, uv_loop_t *loop) {
 	audio_mixer_t *am = (audio_mixer_t *)zalloc(sizeof(audio_mixer_t));
 	am->loop = loop;
@@ -519,6 +538,13 @@ void audio_mixer_init(lua_State *L, uv_loop_t *loop) {
 	lua_pusham(L, am);
 	lua_pushcclosure(L, audio_pause_resume_toggle, 1);
 	lua_setfield(L, -2, "pause_resume_toggle");
+	lua_pop(L, 1);
+
+	// audio.setopt = [native function]
+	lua_getglobal(L, "audio");
+	lua_pusham(L, am);
+	lua_pushcclosure(L, audio_setopt, 1);
+	lua_setfield(L, -2, "setopt");
 	lua_pop(L, 1);
 }
 
