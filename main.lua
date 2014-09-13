@@ -158,6 +158,7 @@ on_inputevent = function (e)
 
 	-- network up
 	if e == 36 then
+		audio.alert('testaudios/connected.mp3')
 		info('network up')
 		upnp.start()
 	end

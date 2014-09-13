@@ -463,8 +463,8 @@ static int audio_setopt(lua_State *L) {
 
 	lua_getfield(L, 1, "track0_vol20");
 	if (!lua_isnil(L, -1)) {
-		am->track0_vol20 = lua_toboolean(L, -1);
-		info("track0_vol20=%d", am->track0_vol20);
+		am->filter_track0_vol20 = lua_toboolean(L, -1);
+		info("track0_vol20=%d", am->filter_track0_vol20);
 	}
 
 	return 0;

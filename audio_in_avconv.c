@@ -89,7 +89,7 @@ enum {
 static float avconv_durstr_to_float(char *s) {
 	int hh = 0, ss = 0, mm = 0, ms = 0;
 	sscanf(s, "%d:%d:%d.%d", &hh, &mm, &ss, &ms);
-	return (float)(hh*3600 + mm*60 + ss) + (float)ms/1e3;
+	return (float)(hh*3600 + mm*60 + ss) + (float)ms/100;
 }
 
 static void avconv_on_probe(avconv_t *av, const char *key, void *val) {

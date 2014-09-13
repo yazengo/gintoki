@@ -91,7 +91,7 @@ darwin-install-deps:
 	brew install libav
 
 inst-mips: server-mips
-	tar cvf $@.tar server-mips *.lua tests
+	tar cvf $@.tar server-mips *.lua tests testaudios
 
 cp-minifs-mips: inst-mips
 	tar xvf inst-mips.tar -C minifs/usr/app
