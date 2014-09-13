@@ -1,7 +1,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/inotify.h>
 #include <uv.h>
 #include <lua.h>
 #include <lauxlib.h>
@@ -732,73 +731,6 @@ static void test_poll1(uv_loop_t *loop) {
 	uv_fs_open(loop, tl->req_open, tl->fname_tmp, O_RDONLY, 0, tail_on_open_tmp);
 }
 
-typedef struct inotify_s {
-	int fd;
-	uv_fs_t *req;
-	uv_pipe_t *pipe;
-	uv_loop_t *loop;
-	char buf[512];
-	void *data;
-	void (*on_create)(struct inotify_s *in, char *name);
-	void (*on_delete)(struct inotify_s *in, char *name);
-} fsevent_t;
-
-static uv_buf_t fsevent_allocbuf(uv_handle_t *h, size_t len) {
-	fsevent_t *in = h->data;
-	return uv_buf_init(in->buf, sizeof(in->buf));
-}
-
-static void fsevent_read(uv_stream_t *h, ssize_t nread, uv_buf_t buf) {
-	fsevent_t *in = h->data;
-
-	debug("read=%d", nread);
-	if (nread <= sizeof(struct inotify_event))
-		return;
-
-	struct inotify_event *ie = (struct inotify_event *)buf.base;
-	if (ie->mask & IN_CREATE) {
-		debug("create name=%s", ie->name);
-		if (in->on_create)
-			in->on_create(in, ie->name);
-	}
-	if (ie->mask & IN_DELETE) {
-		debug("delete name=%s", ie->name);
-		if (in->on_delete)
-			in->on_delete(in, ie->name);
-	}
-}
-
-static void fsevent_init(uv_loop_t *loop, fsevent_t *in, char *path) {
-	in->fd = inotify_init();
-
-	debug("fd=%d", in->fd);
-
-	int r = inotify_add_watch(in->fd, path, IN_DELETE|IN_CREATE);
-	if (r < 0)
-		panic("add watch failed");
-
-	in->req = zalloc(sizeof(uv_fs_t));
-	in->req->data = in;
-	in->loop = loop;
-
-	in->pipe = zalloc(sizeof(uv_pipe_t));
-	in->pipe->data = in;
-	uv_pipe_init(in->loop, in->pipe, 0);
-	uv_pipe_open(in->pipe, in->fd);
-
-	uv_read_start((uv_stream_t *)in->pipe, fsevent_allocbuf, fsevent_read);
-}
-
-static void test_fsevent_event(fsevent_t *in, struct inotify_event *e) {
-	info("name=%s", e->name);
-}
-
-static void test_fsevent(uv_loop_t *loop) {
-	setloglevel(0);
-	fsevent_t *in = zalloc(sizeof(fsevent_t));
-	fsevent_init(loop, in, "/tmp");
-}
-
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 	info("i=%d", i);
 	if (i == 3)
@@ -815,7 +747,5 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 		test_stdin(loop);
 	if (i == 10)
 		test_poll1(loop);
-	if (i == 11)
-		test_fsevent(loop);
 }
 

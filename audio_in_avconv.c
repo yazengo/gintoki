@@ -204,6 +204,7 @@ static void on_handle_closed(uv_handle_t *h) {
 
 	case CLOSING_PROC:
 		av->on_close(av->ai);
+		free(av);
 		break;
 	}
 }

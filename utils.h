@@ -62,7 +62,7 @@ void utils_preinit();
 
 void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p);
 void lua_set_global_callback(lua_State *L, const char *name, void *p);
-void lua_do_global_callback(lua_State *L, const char *name, void *p, int nargs, int setnil);
+int lua_do_global_callback(lua_State *L, const char *name, void *p, int nargs, int setnil);
 
 void lua_pushuserptr(lua_State *L, void *p);
 void *lua_touserptr(lua_State *L, int index);

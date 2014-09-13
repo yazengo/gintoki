@@ -1,5 +1,9 @@
 
 set_interval(function ()
-	info('hah')
+	info('interval')
+end, 1000)
+
+set_timeout(function ()
+	info('timeout')
 end, 1000)
 

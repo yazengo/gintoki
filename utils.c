@@ -250,6 +250,7 @@ static void timeout_alarm(uv_timer_t *t, int _) {
 	if (to->repeat) {
 		to->timeout_cb(to);
 	} else {
+		to->timeout_cb(to);
 		uv_timer_stop(t);
 		uv_close((uv_handle_t *)t, timer_free);
 	}
@@ -495,14 +496,14 @@ void lua_set_global_callback(lua_State *L, const char *pref, void *p) {
 	lua_pop(L, 1);
 }
 
-void lua_do_global_callback(lua_State *L, const char *pref, void *p, int nargs, int setnil) {
+int lua_do_global_callback(lua_State *L, const char *pref, void *p, int nargs, int setnil) {
 	char name[128];
 	sprintf(name, "%s_%p", pref, p);
 
 	lua_getglobal(L, name);
 	if (lua_isnil(L, -1)) {
 		lua_pop(L, 1);
-		return;
+		return 1;
 	}
 
 	if (setnil) {
@@ -512,6 +513,8 @@ void lua_do_global_callback(lua_State *L, const char *pref, void *p, int nargs, 
 
 	lua_insert(L, -nargs-1);
 	lua_call_or_die(L, nargs, 0);
+
+	return 0;
 }
 
 void lua_pushuserptr(lua_State *L, void *p) {
@@ -542,7 +545,8 @@ void utils_preinit() {
 		signal(SIGILL, fault);
 		signal(SIGBUS, fault);
 		signal(SIGSEGV, fault);
-	}
+	} else 
+		info("coredump enabled");
 
 	char *s = getenv("LOG");
 	if (s) {

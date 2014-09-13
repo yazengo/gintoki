@@ -4,7 +4,8 @@ audio.play {
 	url = 'testaudios/10s-1.mp3'
 }
 
-set_timeout(function ()
+set_interval(function ()
+	info('play track2')
 	audio.play {
 		track = 1,
 		url = 'testaudios/hello-world.mp3'
