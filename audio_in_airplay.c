@@ -338,6 +338,8 @@ static int lua_airplay_start(lua_State *L) {
 	}
 
 	char *name = (char *)lua_tostring(L, 1);
+	if (name == NULL) 
+		panic("name must be set");
 	sp->name = strdup(name);
 
 	info("airplay starts name=%s", sp->name);
