@@ -467,7 +467,7 @@ static int audio_setopt(lua_State *L) {
 		am->filter_track0_setvol = on;
 		am->track0_vol = (float)vol/100;
 
-		info("track0_setvol=%d,%f", on, vol);
+		info("track0_setvol=%d,%d", on, vol);
 	}
 
 	return 0;

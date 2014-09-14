@@ -74,8 +74,13 @@ darwin-install-deps:
 	brew install libao
 	brew install libav
 
+inst-files := tests *.lua testaudios upnpweb bbcradio.json
+
 inst-mips: server-mips
-	tar cvf $@.tar server-mips *.lua tests testaudios
+	tar cvf $@.tar server-mips $(inst-files)
+
+inst-x86: server-x86
+	tar cvf $@.tar server-x86 $(inst-files)
 
 cp-minifs-mips: inst-mips
 	tar xvf inst-mips.tar -C minifs/usr/app
