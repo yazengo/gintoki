@@ -102,7 +102,7 @@ radio.change = function (opt)
 	elseif opt.type == 'bbcradio' then
 		to = bbcradio
 	end
-	if radio.source ~= to then
+	if to and radio.source ~= to then
 		radio.start(to)
 	end
 end
