@@ -93,7 +93,11 @@ int main(int argc, char *argv[]) {
 	float tm_start = now();
 	if (run_lua) {
 		while (*run_lua) {
-			lua_dofile_or_die(L, *run_lua);
+			char *cmd = *run_lua;
+			if (strlen(cmd) > 4 && !strcmp(cmd+strlen(cmd)-4, ".lua"))
+				lua_dofile_or_die(L, cmd);
+			else
+				lua_dostring_or_die(L, cmd);
 			run_lua++;
 		}
 	}

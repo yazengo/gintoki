@@ -1,6 +1,12 @@
 
 local B = {}
 
+B.info = function ()
+	return {
+		type = 'bbcradio'
+	}
+end
+
 B.json = (function ()
 	local js = loadjson('bbcradio.json') or {}
 	local r = {}
