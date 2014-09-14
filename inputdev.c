@@ -87,7 +87,7 @@ enum {
 };
 
 static const char *inputdev_names[] = {
-	"gpio-keys", "Sugr_Volume", "network_notify", "gesensor_dev",
+	"gpio-keys", "Sugr_Volume", "network_notify", "gsensor_dev",
 };
 
 typedef struct {
