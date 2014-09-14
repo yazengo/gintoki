@@ -15,6 +15,13 @@ enum {
 };
 static int mode;
 
+static float divtbl[16] = {
+	1, 17.4, 37.2, 72.4,
+	127.8, 226.5, 396, 627,
+	994, 1560, 2475, 3910, 
+	5530, 8760, 12400, 19450,
+};
+
 void pcm_do_volume(void *_out, int len, float fvol) {
 	int16_t *out = (int16_t *)_out;
 	len /= 2;
