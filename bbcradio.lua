@@ -43,7 +43,10 @@ end
 B.next = function ()
 	if not B.i then B.i = 0 end
 	B.i = (B.i+1) % table.maxn(B.json)
-	return B.json[B.i] or {}
+	local r = table.copy(B.json[B.i] or {})
+	r.title = r.name
+	r.name = nil
+	return r 
 end
 
 bbcradio = B
