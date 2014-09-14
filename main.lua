@@ -132,9 +132,14 @@ on_inputevent = function (e)
 		audio.setvol(0)
 	end
 
+	if e == 332 then
+		info('long press')
+		audio.alert('testaudios/hello-muno.mp3', 0)
+	end
+
 	-- network up
 	if e == 36 then
-		audio.alert('testaudios/connected.mp3')
+		audio.alert('testaudios/connected.mp3', 20)
 		info('network up')
 		upnp.start()
 	end

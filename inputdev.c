@@ -68,6 +68,7 @@ static void fsevent_init(uv_loop_t *loop, fsevent_t *in, char *path) {
 enum {
 	KEYPRESS = 33,
 	KEYDBLCLICK = 331,
+	KEYLONGPRESS = 332,
 
 	SLEEP = 34,
 	WAKEUP = 35,
@@ -96,7 +97,8 @@ typedef struct {
 
 	int gpiokeys_stat;
 	int gpiokeys_stat_dblclk;
-	uv_timeout_t *gpiokeys_timer;
+	float gpiokeys_presstm;
+	uv_timer_t *gpiokeys_timer;
 
 	int fds[INPUTDEV_NR];
 	struct input_event ev[INPUTDEV_NR];
@@ -136,11 +138,12 @@ static void gpiokeys_init() {
 }
 
 static void gpiokeys_timeout(uv_timer_t *t, int _) {
-	uv_close((uv_handle_t *)dev->gpiokeys_timer, gpio_timer_free);
+	uv_close((uv_handle_t *)dev->gpiokeys_timer, gpiokeys_timer_free);
 	dev->gpiokeys_timer = NULL;
 
 	debug("single press");
 	inputdev_emit_event(KEYPRESS); 
+	dev->gpiokeys_stat_dblclk = NONE;
 }
 
 static void gpiokeys_onkey() {
@@ -150,15 +153,17 @@ static void gpiokeys_onkey() {
 	case NONE:
 		dev->gpiokeys_timer = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
 		uv_timer_init(dev->loop, dev->gpiokeys_timer);
-		uv_timer_start(dev->gpiokeys_timer, gpiokeys_timeout, 200, 0);
+		uv_timer_start(dev->gpiokeys_timer, gpiokeys_timeout, 300, 0);
+		dev->gpiokeys_stat_dblclk = DBL1;
 		break;
 
 	case DBL1:
 		uv_timer_stop(dev->gpiokeys_timer);
-		uv_close((uv_handle_t *)dev->gpiokeys_timer, gpio_timer_free);
+		uv_close((uv_handle_t *)dev->gpiokeys_timer, gpiokeys_timer_free);
 		dev->gpiokeys_timer = NULL;
 		debug("dbl click");
 		inputdev_emit_event(KEYDBLCLICK); 
+		dev->gpiokeys_stat_dblclk = NONE;
 		break;
 	}
 }
@@ -174,13 +179,18 @@ static void gpiokeys_read(struct input_event e) {
 		if (last_e.code == 0xa4) {
 			if (last_e.value == 0) {
 				// key down
-				if (stat == NONE)
+				if (stat == NONE) {
 					stat = KEYDOWN;
+					dev->gpiokeys_presstm = now();
+				}
 			} else {
 				// key up
 				if (stat == KEYDOWN) {
 					stat = NONE;
-					gpiokeys_onkey();
+					if (now() - dev->gpiokeys_presstm > 1.0) 
+						inputdev_emit_event(KEYLONGPRESS);
+					else
+						inputdev_emit_event(KEYPRESS);
 				}
 			}
 		}

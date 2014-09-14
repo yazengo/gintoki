@@ -46,7 +46,8 @@ typedef struct audio_mixer_s {
 	uv_loop_t *loop;
 	lua_State *L;
 
-	int filter_track0_vol20;
+	int filter_track0_setvol;
+	float track0_vol;
 } audio_mixer_t;
 
 static void audio_emit(audio_mixer_t *am, const char *arg0, const char *arg1);
@@ -251,8 +252,8 @@ static void check_tracks_can_mix(audio_mixer_t *am) {
 		void *databuf; int datalen;
 		ringbuf_data_ahead_get(&tr->buf, &databuf, &datalen);
 
-		if (am->filter_track0_vol20)
-			pcm_do_volume(databuf, mixlen, 0.2);
+		if (am->filter_track0_setvol)
+			pcm_do_volume(databuf, mixlen, am->track0_vol);
 
 		if (i == 0)
 			memcpy(mixbuf, databuf, mixlen);
@@ -452,14 +453,21 @@ static int audio_pause_resume_toggle(lua_State *L) {
 	return 0;
 }
 
-// audio.setopt{track0_vol20 = true/false}
+// audio.setopt{track0_setvol = true/false, vol = 20}
 static int audio_setopt(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
 
-	lua_getfield(L, 1, "track0_vol20");
+	lua_getfield(L, 1, "track0_setvol");
 	if (!lua_isnil(L, -1)) {
-		am->filter_track0_vol20 = lua_toboolean(L, -1);
-		info("track0_vol20=%d", am->filter_track0_vol20);
+		int on = lua_toboolean(L, -1);
+
+		lua_getfield(L, 1, "vol");
+		int vol = lua_tonumber(L, -1);
+		
+		am->filter_track0_setvol = on;
+		am->track0_vol = (float)vol/100;
+
+		info("track0_setvol=%d,%f", on, vol);
 	}
 
 	return 0;
