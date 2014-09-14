@@ -389,13 +389,15 @@ static void test_blowfish() {
 }
 
 static void test_fake_shairport() {
+	info("starts");
+
 	static char buf[1024];
 	int key = 0;
 	int len = 0;
-	
+
 	write(3, "s", 1);
 
-	while (len < 44100*4*3) {
+	while (len < 44100*4) {
 		audio_out_test_fill_buf_with_key(buf, sizeof(buf), 44100, key);
 		key = (key+1)%7;
 		write(4, buf, sizeof(buf));
@@ -406,7 +408,7 @@ static void test_fake_shairport() {
 }
 
 void run_test_c_pre(int i) {
-	info("run hello world #%d", i);
+	info("run C pre test #%d", i);
 	if (i == 1)
 		test_uv_send_async_before_run_loop();
 	if (i == 2)
@@ -750,7 +752,11 @@ static void test_poll1(uv_loop_t *loop) {
 	uv_fs_open(loop, tl->req_open, tl->fname_tmp, O_RDONLY, 0, tail_on_open_tmp);
 }
 
-void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
+static void test_airplay_proc(lua_State *L, uv_loop_t *loop, char **argv) {
+	luv_airplay_proc_init(L, loop, argv[0]);
+}
+
+void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 	info("i=%d", i);
 	if (i == 3)
 		test_audio_out(loop);
@@ -766,5 +772,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop) {
 		test_stdin(loop);
 	if (i == 10)
 		test_poll1(loop);
+	if (i == 11)
+		test_airplay_proc(L, loop, argv);
 }
 

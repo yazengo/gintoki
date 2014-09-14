@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
 		upnp_init(L, loop);
 
 	if (test_c >= 200 && test_c < 300) {
-		run_test_c_post(test_c-200, L, loop);
+		run_test_c_post(test_c-200, L, loop, argv);
 	}
 
 	float tm_start = now();
