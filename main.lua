@@ -58,6 +58,8 @@ upnp.on_action = function (a, done)
 		localmusic.setopt(a, done)
 	elseif string.hasprefix(a.op, 'pandora.') then
 		radio.source_setopt(a, done)
+	elseif string.hasprefix(a.op, 'bbcradio.') then
+		radio.source_setopt(a, done)
 	elseif a.op == 'radio.change_type' then
 		radio.change(a)
 		done{result=0}

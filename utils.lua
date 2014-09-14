@@ -118,3 +118,17 @@ urlencode = function (s)
 	end)
 end
 
+savejson = function (fname, js) 
+	local f = io.open(fname, 'w+')
+	f:write(cjson.encode(js))
+	f:close()
+end
+
+loadjson = function (fname) 
+	local f = io.open(fname, 'r')
+	if f == nil then return {} end
+	local s = f:read('*a')
+	f:close()
+	return cjson.decode(s) or {}
+end
+
