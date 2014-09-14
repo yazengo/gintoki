@@ -758,6 +758,10 @@ static void test_airplay_proc(lua_State *L, uv_loop_t *loop, char **argv) {
 	luv_airplay_proc_init(L, loop, argv[0]);
 }
 
+static void test_panic() {
+	panic("BOOM");
+}
+
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 	info("i=%d", i);
 	if (i == 3)
@@ -776,5 +780,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 		test_poll1(loop);
 	if (i == 11)
 		test_airplay_proc(L, loop, argv);
+	if (i == 12)
+		test_panic();
 }
 
