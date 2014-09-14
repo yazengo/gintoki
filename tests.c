@@ -388,6 +388,23 @@ static void test_blowfish() {
 	info("decode_out: %s", decode_out);
 }
 
+static void test_fake_shairport() {
+	static char buf[1024];
+	int key = 0;
+	int len = 0;
+	
+	write(3, "s", 1);
+
+	while (len < 44100*4*3) {
+		audio_out_test_fill_buf_with_key(buf, sizeof(buf), 44100, key);
+		key = (key+1)%7;
+		write(4, buf, sizeof(buf));
+		len += sizeof(buf);
+	}
+
+	write(3, "e", 1);
+}
+
 void run_test_c_pre(int i) {
 	info("run hello world #%d", i);
 	if (i == 1)
@@ -404,6 +421,8 @@ void run_test_c_pre(int i) {
 		test_uv_subprocess(i);
 	if (i == 9)
 		test_blowfish();
+	if (i == 10)
+		test_fake_shairport();
 }
 
 static uv_buf_t uv_malloc_buffer(uv_handle_t *h, size_t len) {

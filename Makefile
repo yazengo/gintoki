@@ -21,6 +21,7 @@ endif
 
 ifdef USE_AIRPLAY
 objs += audio_in_airplay.o
+objs += audio_in_airplay_proc.o
 cflags += -DUSE_AIRPLAY
 endif
 
