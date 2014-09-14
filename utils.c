@@ -575,7 +575,6 @@ static int lua_system(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 
 	char *cmd = (char *)lua_tostring(L, 1);
-	info("cmd=%s", cmd);
 	if (cmd == NULL)
 		return 0;
 
