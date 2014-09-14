@@ -13,7 +13,7 @@ B.json = (function ()
 	for k,v in pairs(js.radios or {}) do
 		local s = {
 			id = tostring(k),
-			title = v.name,
+			name = v.name,
 			url = v.uri,
 		}
 		r[k] = s
