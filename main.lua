@@ -1,6 +1,7 @@
 
 require('localmusic')
 require('pandora')
+require('bbcradio')
 require('radio')
 require('audio')
 require('muno')
@@ -81,6 +82,8 @@ radio.change = function (opt)
 		to = pandora
 	elseif opt.type == 'local' then
 		to = localmusic
+	elseif opt.type == 'bbcradio' then
+		to = bbcradio
 	end
 	if radio.source ~= to then
 		radio.start(to)
@@ -186,9 +189,7 @@ on_inputevent = function (e)
 	end
 end
 
---pandora.start()
-
 upnp.start()
 audio.setvol(10)
-radio.start(localmusic)
+radio.change(localmusic)
 

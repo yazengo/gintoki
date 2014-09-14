@@ -402,6 +402,7 @@ P.auto_auth = function (cookie, cb, done, cancel)
 end
 
 P.start = function ()
+	if P.cookie then return end
 	P.cookie = P.loadcookie()
 	P.stat = 'songs_ready'
 	P.next()

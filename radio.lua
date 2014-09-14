@@ -36,6 +36,9 @@ end
 
 R.start = function (source)
 	R.log("start")
+	if source.start then
+		source.start()
+	end
 	R.source = source
 	source.next_callback = function ()
 		if R.source == source then R.next() end
