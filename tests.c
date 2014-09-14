@@ -402,9 +402,11 @@ static void test_fake_shairport() {
 		key = (key+1)%7;
 		write(4, buf, sizeof(buf));
 		len += sizeof(buf);
+		info("write");
 	}
 
 	write(3, "e", 1);
+	info("end");
 }
 
 void run_test_c_pre(int i) {

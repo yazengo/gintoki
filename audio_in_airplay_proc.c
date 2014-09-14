@@ -4,6 +4,25 @@
 
 #include "utils.h"
 
+/*
+
+audio_src_t *s;
+
+s->name = "airplay://";
+s->on_close = ...
+audio_src_init(s);
+
+audio_src_start(s);
+audio_src_allocbuf(s);
+audio_src_write(s, n, done);
+audio_src_stop(s);
+
+audio_src_close(s);
+
+audio_in_fromsrc_init(s, "airplay://");
+
+*/
+
 typedef struct {
 	uv_pipe_t *pipe[2];
 	char ctrl_cmd;
@@ -17,6 +36,8 @@ static uv_buf_t ctrl_alloc_buffer(uv_handle_t *h, size_t len) {
 }
 
 static void ctrl_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
+	if (n <= 0) {
+	}
 	debug("n=%d", n);
 }
 
@@ -40,7 +61,6 @@ void luv_airplay_proc_init(lua_State *L, uv_loop_t *loop, char *prog) {
 	for (i = 0; i < 2; i++) {
 		ap->pipe[i] = (uv_pipe_t *)zalloc(sizeof(uv_pipe_t));
 		uv_pipe_init(loop, ap->pipe[i], 0);
-		uv_pipe_open(ap->pipe[i], 0);
 	}
 
 	uv_stdio_container_t stdio[5] = {
@@ -51,7 +71,7 @@ void luv_airplay_proc_init(lua_State *L, uv_loop_t *loop, char *prog) {
 		{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[1]},
 	};
 
-	char *args[] = {prog, "-test-c", "101", NULL};
+	char *args[] = {prog, "-test-c", "110", NULL};
 
 	uv_process_options_t opts = {
 		.stdio = stdio,

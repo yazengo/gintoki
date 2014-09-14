@@ -366,12 +366,7 @@ static int audio_play(lua_State *L) {
 	ai->on_start = audio_in_on_start;
 	ai->url = url;
 
-#ifdef USE_AIRPLAY
-	if (!strncmp(url, "airplay://", strlen("airplay://")))
-		audio_in_airplay_init(am->loop, ai);
-	else
-#endif
-		audio_in_avconv_init(am->loop, ai);
+	audio_in_avconv_init(am->loop, ai);
 
 	check_all_tracks(am);
 

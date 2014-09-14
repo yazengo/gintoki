@@ -2,9 +2,6 @@
 cflags = -g -I.
 ldflags = -g -luv -lm
 
-USE_AIRPLAY = 1
-USE_CURL = 1
-
 objs = utils.o main.o strbuf.o tests.o
 objs += audio_mixer.o audio_out.o audio_out_test.o
 objs += upnp_device.o upnp_util.o  
@@ -12,25 +9,15 @@ objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
 objs += audio_in_avconv.o 
 objs += blowfish.o 
+objs += audio_in_airplay_proc.o
 
-ifdef USE_CURL
 objs += luv_curl.o
 cflags += -DUSE_CURL
 ldflags += -lcurl
-endif
-
-ifdef USE_AIRPLAY
-objs += audio_in_airplay.o
-objs += audio_in_airplay_proc.o
-cflags += -DUSE_AIRPLAY
-endif
 
 objs-x86 += $(subst .o,-x86.o,$(objs))
 cflags-x86 += $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
-cflags-x86 += -I../shairport/
 ldflags-x86 += $(shell pkg-config --libs libupnp lua5.2) $(ldflags) -lao
-ldflags-x86 += -L../shairport
-ldflags-x86 += -lshairport
 
 objs-darwin += $(subst .o,-darwin.o,$(objs))
 cflags-darwin += $(cflags)
@@ -41,8 +28,6 @@ ldflags-darwin += $(ldflags)
 ldflags-darwin += -L/usr/local/Cellar/libupnp/1.6.19/lib
 ldflags-darwin += -L/usr/local/Cellar/lua52/5.2.3/lib
 ldflags-darwin += -L/usr/local/Cellar/libuv/0.10.21/lib
-ldflags-darwin += -L../shairport/
-ldflags-darwin += -lshairport
 ldflags-darwin += -lupnp -llua -luv -lixml -lao
 
 cc-mips = mipsel-linux-gcc
@@ -54,8 +39,6 @@ cflags-mips += -I../third/airplay-jz
 cflags-mips += -DUSE_JZCODEC
 cflags-mips += -DUSE_INPUTDEV
 ldflags-mips += -L $(sysroot-mips)/lib  $(ldflags)
-ldflags-mips += -L../third/airplay-jz
-ldflags-mips += -lshairport
 ldflags-mips += -llua -pthread -lupnp -lthreadutil -lixml -lrt 
 ldflags-mips += -lavcodec -lavutil -lavformat -lavdevice 
 
