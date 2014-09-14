@@ -176,24 +176,23 @@ static void gpiokeys_read(struct input_event e) {
 		if (last_e.code == 0x8e) {
 			inputdev_emit_event(VOLEND); 
 		}
+
 		if (last_e.code == 0xa4) {
+
 			if (last_e.value == 0) {
 				// key down
 				if (stat == NONE) {
 					stat = KEYDOWN;
-					dev->gpiokeys_presstm = now();
 				}
 			} else {
 				// key up
 				if (stat == KEYDOWN) {
 					stat = NONE;
-					if (now() - dev->gpiokeys_presstm > 1.0) 
-						inputdev_emit_event(KEYLONGPRESS);
-					else
-						inputdev_emit_event(KEYPRESS);
+					inputdev_emit_event(KEYPRESS);
 				}
 			}
 		}
+
 	}
 
 	dev->gpiokeys_stat = stat;
