@@ -101,7 +101,8 @@ typedef struct {
 
 	uv_work_t *work;
 	int pollidx[INPUTDEV_NR];
-	struct pollfd pollfds[INPUTDEV_NR];
+	struct pollfd pollfds[INPUTDEV_NR+1];
+	int pollpipe[2];
 	int pollnr;
 	int polling;
 
@@ -206,7 +207,7 @@ static void inputdev_poll_start();
 static void inputdev_poll_thread(uv_work_t *w) {
 	debug("poll start nr=%d", dev->pollnr);
 	
-	int r = poll(dev->pollfds, dev->pollnr, -1);
+	int r = poll(dev->pollfds, dev->pollnr+1, -1);
 	int i;
 	for (i = 0; i < dev->pollnr; i++) {
 		struct pollfd *f = &dev->pollfds[i];
@@ -224,6 +225,10 @@ static void inputdev_poll_thread(uv_work_t *w) {
 			read(fd, &dev->ev[fi], sizeof(struct input_event));
 			debug("read done name=%s", inputdev_names[fi]);
 		}
+	}
+	if (dev->pollfds[dev->pollnr].revents & POLLIN) {
+		char ch;
+		read(dev->pollpipe[0], &ch, 1);
 	}
 }
 
@@ -249,6 +254,11 @@ static void inputdev_poll_done(uv_work_t *w, int _) {
 }
 
 static void inputdev_poll_start() {
+	if (dev->polling) {
+		write(dev->pollpipe[1], "", 1);
+		return;
+	}
+		
 	int pi = 0;
 	int i;
 
@@ -260,13 +270,13 @@ static void inputdev_poll_start() {
 			pi++;
 		}
 	}
+	dev->pollfds[pi].fd = dev->pollpipe[0];
+	dev->pollfds[pi].events = POLLIN;
 	dev->pollnr = pi;
 
-	if (pi > 0 && !dev->polling) {
-		debug("queue work");
-		uv_queue_work(dev->loop, dev->work, inputdev_poll_thread, inputdev_poll_done);
-		dev->polling = 1;
-	}
+	debug("queue work");
+	uv_queue_work(dev->loop, dev->work, inputdev_poll_thread, inputdev_poll_done);
+	dev->polling = 1;
 }
 
 static void inputdev_open(char *path) {
@@ -334,6 +344,8 @@ void luv_inputdev_init(lua_State *L, uv_loop_t *loop) {
 	dev->loop = loop;
 
 	dev->work = (uv_work_t *)zalloc(sizeof(uv_work_t));
+
+	pipe(dev->pollpipe);
 
 	dev->fsevent = (fsevent_t *)zalloc(sizeof(fsevent_t));
 	dev->fsevent->on_create = inputdev_on_create;

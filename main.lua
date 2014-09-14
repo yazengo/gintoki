@@ -189,7 +189,7 @@ on_inputevent = function (e)
 	end
 end
 
+audio.setvol(100)
+radio.start(localmusic)
 upnp.start()
-audio.setvol(10)
-radio.change(localmusic)
 

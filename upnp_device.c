@@ -254,7 +254,8 @@ static int PlayerDeviceStart(
 	int ret = UPNP_E_SUCCESS;
 	char desc_doc_url[DESC_URL_SIZE];
 
-	//info("init start ip=%s port=%u", ip, port);
+	info("init start ip=%s port=%u", ip, port);
+
 	ret = UpnpInit(ip, port);
 	if (ret != UPNP_E_SUCCESS) {
 		warn("UpnpInit failed: %d", ret);

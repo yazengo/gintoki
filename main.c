@@ -77,7 +77,8 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef USE_AIRPLAY
-	luv_airplay_init(L, loop);
+	if (getenv("ENABLE_AIRPLAY"))
+		luv_airplay_init(L, loop);
 #endif
 
 	luv_blowfish_init(L, loop);
