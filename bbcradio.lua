@@ -24,7 +24,7 @@ end)()
 B.setopt = function (o, done)
 	done = done or function () end
 	if o.op == 'bbcradio.stations_list' then
-		done{radios=B.json}
+		done{stations=B.json}
 	elseif o.op == 'bbcradio.station_choose' then
 		local i = tonumber(o.id)
 		local r = B.json[i]
