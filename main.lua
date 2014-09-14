@@ -27,6 +27,23 @@ all_info = function ()
 	}
 end
 
+upnp.loadconfig = function ()
+	local tpl = io.open('upnpweb/munodevicedesc.tpl.xml', 'r')
+	if not tpl then error('upnp tpl open failed') end
+	local xml = io.open('upnpweb/munodevicedesc.xml', 'w+')
+	if not xml then error('upnp xml open failed') end
+
+	local name = prop.get('upnp.name', 'Muno')
+	local s = tpl:read('*a')
+	s = string.gsub(s, '{NAME}', name)
+	xml:write(s)
+
+	info('upnp.name', name)
+
+	tpl:close()
+	xml:close()
+end
+
 upnp.on_subscribe = function (a, done)
 	done(all_info())
 end
@@ -183,7 +200,9 @@ on_inputevent = function (e)
 	end
 end
 
-audio.setvol(100)
+prop.load()
+audio.setvol(50)
 radio.start(localmusic)
+upnp.loadconfig()
 upnp.start()
 

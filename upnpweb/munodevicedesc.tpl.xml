@@ -6,8 +6,8 @@
   </specVersion>
   <device>
     <deviceType>urn:schemas-upnp-org:device:munodevice:1</deviceType>
-    <friendlyName>UPnP Muno Mac Test</friendlyName>
-    <manufacturer>Muno Manufacturer Name</manufacturer>
+    <friendlyName>{NAME}</friendlyName>
+    <manufacturer>Sugr INC</manufacturer>
     <manufacturerURL>http://www.sugrsugr.com</manufacturerURL>
     <modelDescription>UPnP Muno Device Emulator 1.0</modelDescription>
     <modelName>munoEmulator</modelName>
