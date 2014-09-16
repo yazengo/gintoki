@@ -179,7 +179,7 @@ static void gpiokeys_read(struct input_event e) {
 
 		if (last_e.code == 0xa4) {
 
-			if (last_e.value == 0) {
+			if (last_e.value == 1) {
 				// key down
 				if (stat == NONE) {
 					stat = KEYDOWN;

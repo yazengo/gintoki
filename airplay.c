@@ -182,7 +182,14 @@ static int airplay_start(lua_State *L) {
 
 		free(g_ap->name);
 		g_ap->name = name;
-		audio_in_stop(g_ap->ai);
+
+		if (ap->stat < ATTACHED) {
+			ap->stat = CLOSING_FD1;
+			uv_close((uv_handle_t *)ap->pipe[0], on_handle_closed);
+		} else {
+			audio_in_stop(g_ap->ai);
+		}
+
 		return 0;
 	}
 
