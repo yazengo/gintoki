@@ -67,6 +67,7 @@ static void fsevent_init(uv_loop_t *loop, fsevent_t *in, char *path) {
 
 enum {
 	KEYPRESS = 33,
+	KEYDBLCLICK = 331,
 
 	SLEEP = 34,
 	WAKEUP = 35,
@@ -94,6 +95,8 @@ typedef struct {
 	fsevent_t *fsevent;
 
 	int gpiokeys_stat;
+	int gpiokeys_stat_dblclk;
+	uv_timeout_t *gpiokeys_timer;
 
 	int fds[INPUTDEV_NR];
 	struct input_event ev[INPUTDEV_NR];
@@ -122,10 +125,42 @@ static void inputdev_emit_event(int e) {
 	lua_call_or_die(L, 1, 0);
 }
 
-enum { NONE, KEYDOWN }; // gpiokeys_stat
+enum { NONE, KEYDOWN, DBL1 }; // gpiokeys_stat
+
+static void gpiokeys_timer_free(uv_handle_t *t) {
+	free(t);
+}
 
 static void gpiokeys_init() {
 	dev->gpiokeys_stat = NONE;
+}
+
+static void gpiokeys_timeout(uv_timer_t *t, int _) {
+	uv_close((uv_handle_t *)dev->gpiokeys_timer, gpio_timer_free);
+	dev->gpiokeys_timer = NULL;
+
+	debug("single press");
+	inputdev_emit_event(KEYPRESS); 
+}
+
+static void gpiokeys_onkey() {
+	debug("stat=%d", dev->gpiokeys_stat_dblclk);
+
+	switch (dev->gpiokeys_stat_dblclk) {
+	case NONE:
+		dev->gpiokeys_timer = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
+		uv_timer_init(dev->loop, dev->gpiokeys_timer);
+		uv_timer_start(dev->gpiokeys_timer, gpiokeys_timeout, 200, 0);
+		break;
+
+	case DBL1:
+		uv_timer_stop(dev->gpiokeys_timer);
+		uv_close((uv_handle_t *)dev->gpiokeys_timer, gpio_timer_free);
+		dev->gpiokeys_timer = NULL;
+		debug("dbl click");
+		inputdev_emit_event(KEYDBLCLICK); 
+		break;
+	}
 }
 
 static void gpiokeys_read(struct input_event e) {
@@ -145,7 +180,7 @@ static void gpiokeys_read(struct input_event e) {
 				// key up
 				if (stat == KEYDOWN) {
 					stat = NONE;
-					inputdev_emit_event(KEYPRESS); 
+					gpiokeys_onkey();
 				}
 			}
 		}
