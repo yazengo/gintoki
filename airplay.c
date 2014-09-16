@@ -56,7 +56,8 @@ static void on_handle_closed(uv_handle_t *h) {
 		break;
 
 	case CLOSING_PROC:
-		ap->on_close(ap->ai);
+		if (ap->on_close)
+			ap->on_close(ap->ai);
 		proc_start(ap);
 		break;
 	}
