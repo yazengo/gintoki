@@ -145,7 +145,7 @@ static void proc_start(airplay_t *ap) {
 	};
 
 	char *args_test[] = {getenv("_"), "-t", "110", NULL};
-	char *args_shairport[] = {"shairport", "-a", ap->name, NULL};
+	char *args_shairport[] = {"shairport", "-a", ap->name, "-o", "pipe", NULL};
 	char **args = args_shairport;
 
 	if (getenv("AIRPLAY_TEST")) {
