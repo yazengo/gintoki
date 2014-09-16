@@ -8,6 +8,8 @@ I.cmds = {
 	[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
 	[[ radio.change{type = 'pandora'} ]],
 	[[ radio.change{type = 'local'} ]],
+	[[ gsensor_next() ]],
+	[[ gsensor_prev() ]],
 }
 
 I.handle = function (line) 

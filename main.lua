@@ -121,6 +121,24 @@ on_airplay_start = function ()
 	}
 end
 
+local say_and_do = function (url, action)
+	local doing
+	return function ()
+		if doing then return end
+		doing = true
+		audio.play {
+			url = url,
+			done = function ()
+				doing = nil
+				action()
+			end,
+		}
+	end
+end
+
+gsensor_prev = say_and_do('testaudios/prev.mp3', radio.prev)
+gsensor_next = say_and_do('testaudios/next.mp3', radio.next)
+
 on_inputevent = function (e) 
 	if e == 33 then
 		info('inputdev: keypress')
@@ -151,11 +169,11 @@ on_inputevent = function (e)
 	end
 
 	if e == 40 then
-		radio.next()
+		gsensor_next()
 	end
 
 	if e == 41 then
-		radio.prev()
+		gsensor_prev()
 	end
 
 	if e >= 0 and e <= 15 then
