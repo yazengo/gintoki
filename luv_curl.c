@@ -320,6 +320,7 @@ static int curl(lua_State *L) {
 	lua_getfield(L, 1, "proxy"); // 7
 	lua_getfield(L, 1, "content_type"); // 8
 	lua_getfield(L, 1, "user_agent"); // 9
+	lua_getfield(L, 1, "authorization"); // 10
 
 	char *url = (char *)lua_tostring(L, 3);
 	if (url == NULL) 
@@ -368,6 +369,7 @@ static int curl(lua_State *L) {
 
 	curl_addheader(lc, "Content-Type", (char *)lua_tostring(L, 8));
 	curl_addheader(lc, "User-Agent", (char *)lua_tostring(L, 9));
+	curl_addheader(lc, "Authorization", (char *)lua_tostring(L, 10));
 
 	if (lc->headers)
 		curl_easy_setopt(lc->c, CURLOPT_HTTPHEADER, lc->headers);

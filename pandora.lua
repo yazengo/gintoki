@@ -1,49 +1,21 @@
 
---setloglevel(0) 
+--[[
 
-local encode_params = function (p)
-	local r = {}
-	for k,v in pairs(p) do
-		table.insert(r, k .. '=' .. urlencode(v))
-	end
-	return table.concat(r, '&')
-end
+need_auth
+need_station_id
+auth_processing
+auth_failed
+songs_fetching => fetching
+songs_ready => auth_ok
+server_error
 
-local totable = function (t)
-	if not t or type(t) ~= 'table' then
-		return {}
-	end
-	return t
-end
-
-local istable = function (s)
-	if not s or type(s) ~= 'table' then
-		return false
-	end
-	return true
-end
-
-local tostr = function (s)
-	if not s or type(s) ~= 'string' then
-		return ''
-	end
-	return s
-end
-
-local isstr = function (s)
-	if not s or type(s) ~= 'string' then
-		return false
-	end
-	return true
-end
+]]--
 
 local P = {}
 
 P.url = '://tuner.pandora.com/services/json/?'
 
 P.log = logger('pandora')
-
-P.cookies = {}
 
 P.bf_encode = blowfish('6#26FRL$ZWD')
 P.bf_decode = blowfish('R=U!LH$O2B#')
@@ -548,15 +520,6 @@ P.setopt = function (o, done)
 		P.songs_list(P.cookie, function () end)
 	end
 end
-
---[[
-need_auth
-need_station_id
-auth_processing
-auth_failed
-songs_fetching
-songs_ready
-]]--
 
 P.songs = {}
 P.songs_i = 0

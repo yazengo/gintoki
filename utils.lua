@@ -132,3 +132,39 @@ loadjson = function (fname)
 	return cjson.decode(s) or {}
 end
 
+encode_params = function (p)
+	local r = {}
+	for k,v in pairs(p) do
+		table.insert(r, k .. '=' .. urlencode(v))
+	end
+	return table.concat(r, '&')
+end
+
+totable = function (t, default)
+	if not t or type(t) ~= 'table' then
+		return default or {}
+	end
+	return t
+end
+
+istable = function (s)
+	if not s or type(s) ~= 'table' then
+		return false
+	end
+	return true
+end
+
+tostr = function (s, default)
+	if not s or type(s) ~= 'string' then
+		return default or ''
+	end
+	return s
+end
+
+isstr = function (s)
+	if not s or type(s) ~= 'string' then
+		return false
+	end
+	return true
+end
+

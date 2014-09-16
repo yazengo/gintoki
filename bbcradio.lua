@@ -22,6 +22,7 @@ B.json = (function ()
 end)()
 
 B.setopt = function (o, done)
+	done = done or function () end
 	if o.op == 'bbcradio.stations_list' then
 		done{radios=B.json}
 	elseif o.op == 'bbcradio.station_choose' then

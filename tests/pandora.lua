@@ -3,7 +3,6 @@ local P = pandora
 
 -- setloglevel(0)
 --P.verbose = 1
-P.cookie = P.loadcookie()
 P.start()
 
 --P.cookie.station_id = '2178401799297707427'
