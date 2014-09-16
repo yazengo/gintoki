@@ -11,8 +11,8 @@ objs += audio_in_avconv.o
 objs += blowfish.o 
 objs += audio_in.o
 objs += airplay.o
-
 objs += luv_curl.o
+
 ldflags += -lcurl
 
 cflags += -DVERSION=\"$(shell git rev-parse HEAD)\"
