@@ -252,7 +252,7 @@ static void check_tracks_can_mix(audio_mixer_t *am) {
 		void *databuf; int datalen;
 		ringbuf_data_ahead_get(&tr->buf, &databuf, &datalen);
 
-		if (am->filter_track0_setvol)
+		if (am->filter_track0_setvol && tr == &am->tracks[0])
 			pcm_do_volume(databuf, mixlen, am->track0_vol);
 
 		if (i == 0)
