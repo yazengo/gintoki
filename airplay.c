@@ -178,7 +178,7 @@ static int airplay_start(lua_State *L) {
 	name = strdup(name);
 
 	if (g_ap) {
-		info("do restart");
+		info("do restart. stat=%d", g_ap->stat);
 
 		free(g_ap->name);
 		g_ap->name = name;
