@@ -33,6 +33,10 @@ int main(int argc, char *argv[]) {
 	int i;
 	for (i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-h")) usage(argv[0]);
+		if (!strcmp(argv[i], "-v")) {
+			puts(VERSION);
+			return 0;
+		}
 		if (!strcmp(argv[i], "-test-c")) {
 			if (i+1 >= argc) usage(argv[0]);
 			sscanf(argv[i+1], "%d", &test_c);

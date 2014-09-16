@@ -15,6 +15,8 @@ objs += luv_curl.o
 cflags += -DUSE_CURL
 ldflags += -lcurl
 
+cflags += -DVERSION=\"$(shell git rev-parse HEAD)\"
+
 objs-x86 += $(subst .o,-x86.o,$(objs))
 cflags-x86 += $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
 ldflags-x86 += $(shell pkg-config --libs libupnp lua5.2) $(ldflags) -lao
