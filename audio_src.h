@@ -12,6 +12,8 @@ struct audiosrc_cli_s;
 typedef void (*audiosrc_srv_done_cb)(struct audiosrc_srv_s *as);
 typedef void (*audiosrc_cli_done_cb)(struct audiosrc_cli_s *ac);
 
+void audio_in_audiosrc_init(uv_loop_t *loop, audio_in_t *ai);
+
 typedef struct audiosrc_srv_s {
 	int stat;
 
@@ -20,6 +22,8 @@ typedef struct audiosrc_srv_s {
 	void *data;
 
 	struct audiosrc_cli_s *ac;
+
+	void (*read)(struct audiosrc_srv_s *srv, audiosrc_srv_done_cb done);
 } audiosrc_srv_t;
 
 typedef struct audiosrc_cli_s {

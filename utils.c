@@ -61,7 +61,7 @@ void _log(
 	vsnprintf(buf, sizeof(buf)-2, fmt, ap);
 	va_end(ap);
 
-	fprintf(stderr, "[%.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
+	fprintf(stderr, "[%8.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
 
 	if (level == LOG_PANIC) {
 		print_trackback();
@@ -233,11 +233,26 @@ static void uv_call_done(uv_async_t *as, int _) {
 	uv_close((uv_handle_t *)as, uv_call_free);
 }
 
+static void timer_free(uv_handle_t *t);
+
+void uv_call_timeout(uv_timer_t *t, int _) {
+	uv_call_t *c = (uv_call_t *)t->data;
+	c->done_cb(c);
+	uv_close((uv_handle_t *)t, timer_free);
+}
+
 void uv_call(uv_loop_t *loop, uv_call_t *c) {
+	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
+	t->data = c;
+	uv_timer_init(loop, t);
+	uv_timer_start(t, uv_call_timeout, 0, 0);
+
+	/*
 	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
 	uv_async_init(loop, as, uv_call_done);
 	as->data = c;
 	uv_async_send(as);
+	*/
 }
 
 static void timer_free(uv_handle_t *t) {

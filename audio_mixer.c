@@ -328,10 +328,8 @@ static int audio_play(lua_State *L) {
 		i = 0;
 
 	char *url = (char *)lua_tostring(L, 3);
-	if (url == NULL) {
-		warn("failed: url=nil");
-		return 0;
-	}
+	if (url == NULL) 
+		panic("url must set");
 
 	audio_track_t *tr = &am->tracks[i];
 	tr->am = am;
@@ -367,7 +365,7 @@ static int audio_play(lua_State *L) {
 	ai->on_start = audio_in_on_start;
 	ai->url = url;
 
-	audio_in_avconv_init(am->loop, ai);
+	audio_in_init(am->loop, ai);
 
 	check_all_tracks(am);
 

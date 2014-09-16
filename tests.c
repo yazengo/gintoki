@@ -391,22 +391,20 @@ static void test_blowfish() {
 static void test_fake_shairport() {
 	info("starts");
 
-	static char buf[1024];
+#define step 44100
+#define n 10
+	static char buf[step];
 	int key = 0;
-	int len = 0;
+	int i;
 
-	write(3, "s", 1);
-
-	while (len < 44100*4) {
+	for (i = 0; i < n; i++) {
 		audio_out_test_fill_buf_with_key(buf, sizeof(buf), 44100, key);
-		key = (key+1)%7;
 		write(4, buf, sizeof(buf));
-		len += sizeof(buf);
-		info("write");
+		key = (key+1)%7;
 	}
 
-	write(3, "e", 1);
-	info("end");
+#undef step
+#undef n
 }
 
 void run_test_c_pre(int i) {
@@ -754,10 +752,6 @@ static void test_poll1(uv_loop_t *loop) {
 	uv_fs_open(loop, tl->req_open, tl->fname_tmp, O_RDONLY, 0, tail_on_open_tmp);
 }
 
-static void test_airplay_proc(lua_State *L, uv_loop_t *loop) {
-	luv_airplay_proc_init(L, loop);
-}
-
 static void test_panic() {
 	panic("BOOM");
 }
@@ -778,8 +772,6 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 		test_stdin(loop);
 	if (i == 10)
 		test_poll1(loop);
-	if (i == 11)
-		test_airplay_proc(L, loop);
 	if (i == 12)
 		test_panic();
 }

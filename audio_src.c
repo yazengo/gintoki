@@ -21,24 +21,21 @@ void audiosrc_srv_start(uv_loop_t *loop, audiosrc_srv_t *as) {
 		} else
 			empty = i;
 	}
-	allsrvs[i] = as;
-	as->i = i;
+	allsrvs[empty] = as;
+	as->i = empty;
 
 	info("url=%s", as->url);
-}
-
-static void srv_ringbuf_put_done(ringbuf_t *rb, int len) {
-	audiosrc_srv_t *as = (audiosrc_srv_t *)rb->data;
 }
 
 void audiosrc_srv_write(audiosrc_srv_t *as, void *buf, int len) {
+	debug("len=%d", len);
 	if (as->ac == NULL) 
 		return;
-	ringbuf_data_put_force(&as->ac->buf, buf, len);
+	pipebuf_write(&as->ac->buf, buf, len);
 }
 
 void audiosrc_srv_stop(audiosrc_srv_t *as) {
-	info("url=%s", as->url);
+	info("url=%s i=%d", as->url, as->i);
 
 	if (as->ac) {
 		cli_stop(as->ac);
@@ -55,11 +52,13 @@ enum {
 };
 
 static void cli_stop(audiosrc_cli_t *ac) {
+	debug("stopped");
+
 	switch (ac->stat) {
+	case AS_STOPPED:
 	case AS_INIT:
 	case AS_READING:
-		ringbuf_data_cancel_put(&ac->buf);
-		ringbuf_data_cancel_get(&ac->buf);
+		pipebuf_close_read(&as->ac->buf);
 		ac->stat = AS_CLOSING;
 		break;
 	case AS_CLOSING:
@@ -69,8 +68,11 @@ static void cli_stop(audiosrc_cli_t *ac) {
 	}
 }
 
-static void fromsrc_ringbuf_get_done(ringbuf_t *rb, int n) {
-	audiosrc_cli_t *ac = (audiosrc_cli_t *)rb->data;
+static void fromsrc_pipebuf_get_done(pipebuf_t *pb, int n) {
+	audiosrc_cli_t *ac = (audiosrc_cli_t *)pb->data;
+
+	debug("n=%d", n);
+
 	switch (ac->stat) {
 	case AS_READING:
 	case AS_CLOSING:
@@ -85,12 +87,15 @@ static void fromsrc_ringbuf_get_done(ringbuf_t *rb, int n) {
 static void fromsrc_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb done) {
 	audiosrc_cli_t *ac = (audiosrc_cli_t *)ai->in;
 
+	debug("n=%d stat=%d", len, ac->stat);
+
 	if (ac->stat != AS_INIT)
 		panic("stat=%d invalid: must be INIT", ac->stat);
 
 	ac->stat = AS_READING;
 	ac->on_read_done = done;
-	ringbuf_data_get(&ac->buf, buf, len, fromsrc_ringbuf_get_done);
+
+	pipebuf_read(&as->ac->buf, buf, len, fromsrc_pipebuf_read_done);
 }
 
 static void fromsrc_stop(audio_in_t *ai) {
@@ -104,6 +109,8 @@ typedef struct {
 } cli_done_t;
 
 static void fromsrc_close_done(uv_call_t *c) {
+	debug("closed");
+
 	cli_done_t *d = (cli_done_t *)c->data;
 	audio_in_t *ai = d->ai;
 	audiosrc_cli_t *ac = (audiosrc_cli_t *)ai->in;
@@ -120,9 +127,12 @@ static void fromsrc_close(audio_in_t *ai, audio_in_close_cb done) {
 	cli_done_t *d = (cli_done_t *)zalloc(sizeof(cli_done_t));
 	uv_call_t *c = (uv_call_t *)zalloc(sizeof(uv_call_t));
 
+	debug("close");
+
 	d->ai = ai;
 	d->done = done;
 	c->data = d;
+	c->done_cb = fromsrc_close_done;
 
 	uv_call(ac->loop, c);
 }
@@ -130,11 +140,15 @@ static void fromsrc_close(audio_in_t *ai, audio_in_close_cb done) {
 static int fromsrc_can_read(audio_in_t *ai) {
 	audiosrc_cli_t *ac = (audiosrc_cli_t *)ai->in;
 
+	debug("stat=%d", ac->stat);
+
 	return ac->stat == AS_INIT;
 }
 
 static int fromsrc_is_eof(audio_in_t *ai) {
 	audiosrc_cli_t *ac = (audiosrc_cli_t *)ai->in;
+
+	debug("stat=%d", ac->stat);
 
 	return ac->stat > AS_READING && ac->buf.len == 0;
 }
@@ -154,6 +168,11 @@ void audio_in_audiosrc_init(uv_loop_t *loop, audio_in_t *ai) {
 	audiosrc_cli_t *ac = (audiosrc_cli_t *)zalloc(sizeof(audiosrc_cli_t));
 	ac->ai = ai;
 	ac->loop = loop;
+	ac->stat = AS_INIT;
+
+	ringbuf_init(&ac->buf, loop);
+	ac->buf.data = ac;
+
 	ai->in = ac;
 
 	audiosrc_srv_t *as = NULL;
@@ -173,5 +192,8 @@ void audio_in_audiosrc_init(uv_loop_t *loop, audio_in_t *ai) {
 		info("src '%s' already binded", ai->url);
 		return;
 	}
+	as->ac = ac;
+
+	debug("starts");
 }
 

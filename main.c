@@ -25,6 +25,7 @@ static void usage(char *prog) {
 
 int main(int argc, char *argv[]) {
 
+	setenv("_", argv[0], 1);
 	utils_preinit();
 
 	int test_c = -1;
@@ -72,18 +73,13 @@ int main(int argc, char *argv[]) {
 	pcm_init();
 	audio_mixer_init(L, loop);
 
-#ifdef USE_CURL
 	luv_curl_init(L, loop);
-#endif
 
 #ifdef USE_INPUTDEV
 	luv_inputdev_init(L, loop);
 #endif
 
-#ifdef USE_AIRPLAY
-	if (getenv("ENABLE_AIRPLAY"))
-		luv_airplay_init(L, loop);
-#endif
+	luv_airplay_init(L, loop);
 
 	luv_blowfish_init(L, loop);
 

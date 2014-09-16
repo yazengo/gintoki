@@ -9,11 +9,10 @@ objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
 objs += audio_in_avconv.o 
 objs += blowfish.o 
-objs += audio_src.o
+objs += audio_in.o
 objs += airplay.o
 
 objs += luv_curl.o
-cflags += -DUSE_CURL
 ldflags += -lcurl
 
 cflags += -DVERSION=\"$(shell git rev-parse HEAD)\"
@@ -43,7 +42,6 @@ cflags-mips += -DUSE_JZCODEC
 cflags-mips += -DUSE_INPUTDEV
 ldflags-mips += -L $(sysroot-mips)/lib  $(ldflags)
 ldflags-mips += -llua -pthread -lupnp -lthreadutil -lixml -lrt 
-ldflags-mips += -lavcodec -lavutil -lavformat -lavdevice 
 
 hfiles = $(wildcard *.h)
 

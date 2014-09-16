@@ -1,12 +1,15 @@
 
-setloglevel(0)
+airplay_start('XX Muno')
 
-airplay_start('xxx')
-
-on_airplay_start = function ()
+airplay_on_start = function ()
 	info('airplay starts')
 	audio.play {
 		url = 'airplay://',
 	}
 end
+
+set_interval(function ()
+	info('restart')
+	airplay_start('XX Muno')
+end, 3000)
 

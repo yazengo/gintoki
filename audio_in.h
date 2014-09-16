@@ -25,10 +25,7 @@ typedef struct audio_in_s {
 	char *url;
 } audio_in_t;
 
-void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai);
-
-void luv_airplay_init(lua_State *L, uv_loop_t *loop);
-void luv_airplay_proc_init(lua_State *L, uv_loop_t *loop);
+void audio_in_init(uv_loop_t *loop, audio_in_t *ai);
 
 /*
  * init() -> [ can_read() -> read() ] -> is_eof() -> close()
