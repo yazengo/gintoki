@@ -1,10 +1,6 @@
 
 local R = {}
 
-R.log = function (...)
-	info('radio:', ...)
-end
-
 R.info = function ()
 	local r = {}
 	table.add(r, R.source.info())
@@ -19,7 +15,7 @@ R.source_setopt = function (opt, done)
 end
 
 R.next = function (opt)
-	R.log('next')
+	info('next')
 
 	R.song = R.source.next(opt)
 	if not R.song then return end
@@ -27,7 +23,7 @@ R.next = function (opt)
 end
 
 R.prev = function ()
-	R.log('prev')
+	info('prev')
 
 	R.song = R.source.prev()
 	if not R.song then return end
@@ -35,7 +31,7 @@ R.prev = function ()
 end
 
 R.start = function (source)
-	R.log("start")
+	info("start")
 	R.source = source
 	source.next_callback = function ()
 		if R.source == source then R.next() end
