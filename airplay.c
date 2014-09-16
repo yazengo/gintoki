@@ -8,7 +8,7 @@
 #include "utils.h"
 #include "audio_in.h"
 
-typedef struct {
+typedef struct airplay_s {
 	int stat;
 	char *name;
 
@@ -24,6 +24,7 @@ typedef struct {
 
 	audio_in_read_cb on_read_done;
 	audio_in_close_cb on_close;
+	void (*on_exit)(struct airplay_s *ap);
 } airplay_t;
 
 enum {
@@ -119,16 +120,38 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	}
 }
 
+static void airplay_stop(airplay_t *ap) {
+	if (ap->stat < STOPPING)
+		ap->stat = STOPPING;
+	uv_process_kill(ap->proc, 15);
+}
+
+static void airplay_close(airplay_t *ap) {
+	if (ap->stat != STOPPING)
+		panic("must call after is_eof");
+
+	info("close");
+
+	ap->stat = CLOSING_FD1;
+	uv_close((uv_handle_t *)ap->pipe[0], on_handle_closed);
+}
+
 static void proc_on_exit(uv_process_t *p, int stat, int sig) {
 	airplay_t *ap = (airplay_t *)p->data;
 
 	info("sig=%d", sig);
+
+	if (ap->on_exit)
+		ap->on_exit(ap);
 }
 
 static void proc_start(airplay_t *ap) {
 	uv_process_t *proc = (uv_process_t *)zalloc(sizeof(uv_process_t));
 	proc->data = ap;
 	ap->proc = proc;
+
+	ap->on_close = NULL;
+	ap->on_exit = NULL;
 
 	int i;
 	for (i = 0; i < 1; i++) {
@@ -169,6 +192,9 @@ static void proc_start(airplay_t *ap) {
 	uv_read_start((uv_stream_t *)ap->pipe[0], first_data_alloc_buffer, first_data_pipe_read);
 }
 
+static void restart_on_exit(airplay_t *ap) {
+}
+
 // arg[1] = name
 static int airplay_start(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
@@ -184,14 +210,8 @@ static int airplay_start(lua_State *L) {
 		free(g_ap->name);
 		g_ap->name = name;
 
-		if (g_ap->stat < ATTACHED) {
-			g_ap->stat = CLOSING_FD1;
-			uv_close((uv_handle_t *)g_ap->pipe[0], on_handle_closed);
-		} else {
-			audio_in_stop(g_ap->ai);
-		}
-
-		return 0;
+		airplay_stop(g_ap);
+		airplay_close(g_ap);
 	}
 
 	g_ap = (airplay_t *)zalloc(sizeof(airplay_t));
@@ -227,22 +247,14 @@ static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb d
 static void audio_in_stop(audio_in_t *ai) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
-	if (ap->stat < STOPPING)
-		ap->stat = STOPPING;
-	uv_process_kill(ap->proc, 15);
+	airplay_stop(ap);
 }
 
 static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
-	if (ap->stat != STOPPING)
-		panic("must call after is_eof");
-
-	info("close");
-
 	ap->on_close = done;
-	ap->stat = CLOSING_FD1;
-	uv_close((uv_handle_t *)ap->pipe[0], on_handle_closed);
+	airplay_close(ap);
 }
 
 static int audio_in_is_eof(audio_in_t *ai) {
