@@ -11,5 +11,5 @@ end
 set_interval(function ()
 	info('restart')
 	airplay_start('XX Muno')
-end, 3000)
+end, 300)
 

@@ -142,9 +142,6 @@ static void pctrl_start(airplay_t *ap) {
 		ap->stat = STARTED;
 		lua_emit_start(ap);
 		break;
-
-	default:
-		panic("stat=%d invalid", ap->stat);
 	}
 }
 
@@ -167,9 +164,6 @@ static void pctrl_stop(airplay_t *ap) {
 	case STOPPED_THEN_START:
 		ap->stat = STOPPED;
 		break;
-
-	default:
-		panic("stat=%d invalid", ap->stat);
 	}
 }
 
@@ -245,6 +239,8 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 }
 
 static void airplay_stop(airplay_t *ap) {
+	debug("kill stat=%d", ap->stat);
+
 	uv_process_kill(ap->proc, 15);
 
 	switch (ap->stat) {
@@ -295,11 +291,13 @@ static void delay_close(airplay_t *ap) {
 }
 
 static void airplay_close(airplay_t *ap) {
-	info("close");
+	info("close. stat=%d", ap->stat);
 
 	switch (ap->stat) {
 	case KILLED:
 	case RESTART:
+		if (ap->stat == RESTART)
+			ap->on_close = NULL;
 		ap->stat = CLOSING_PDATA;
 		uv_close((uv_handle_t *)ap->pipe[PDATA], on_handle_closed);
 		break;

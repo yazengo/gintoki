@@ -150,6 +150,11 @@ static void audio_in_on_start(audio_in_t *ai, int rate) {
 static void audio_in_on_closed_call_play_done(uv_call_t *c) {
 	audio_track_t *tr = (audio_track_t *)c->data;
 
+	debug("closed");
+
+	free(tr->ai);
+	tr->ai = NULL;
+
 	tr->stat = TRACK_STOPPED;
 	lua_call_play_done(tr, "done");
 	free(c);
@@ -159,9 +164,6 @@ static void audio_in_on_closed(audio_in_t *ai) {
 	audio_track_t *tr = (audio_track_t *)ai->data;
 
 	info("closed");
-
-	free(ai);
-	tr->ai = NULL;
 
 	uv_call_t *c = zalloc(sizeof(uv_call_t));
 	c->data = tr;
@@ -333,11 +335,12 @@ static int audio_play(lua_State *L) {
 
 	audio_track_t *tr = &am->tracks[i];
 	tr->am = am;
-	
+
 	if (tr->stat != TRACK_STOPPED) {
 		info("wait for stop");
 
 		tr->ai->stop(tr->ai);
+
 		tr->stat = TRACK_STOPPING;
 		ringbuf_init(&tr->buf, am->loop);
 
