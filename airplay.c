@@ -131,7 +131,7 @@ static lua_emit_start(airplay_t *ap) {
 }
 
 static void pctrl_start(airplay_t *ap) {
-	debug("start");
+	info("start stat=%d", ap->stat);
 
 	switch (ap->stat) {
 	case STOPPED:
@@ -146,7 +146,7 @@ static void pctrl_start(airplay_t *ap) {
 }
 
 static void pctrl_stop(airplay_t *ap) {
-	debug("stop stat=%d", ap->stat);
+	info("stop stat=%d", ap->stat);
 
 	switch (ap->stat) {
 	case STARTED:
@@ -239,8 +239,9 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 }
 
 static void airplay_stop(airplay_t *ap) {
-	debug("kill stat=%d", ap->stat);
+	info("kill stat=%d", ap->stat);
 
+	info("kill pid=%d", ap->proc->pid);
 	uv_process_kill(ap->proc, 15);
 
 	switch (ap->stat) {
