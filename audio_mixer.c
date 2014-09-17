@@ -352,6 +352,7 @@ static int audio_play(lua_State *L) {
 
 	tr->stat = TRACK_BUFFERING;
 	tr->first_blood = 1; // for testing
+	ringbuf_init(&tr->buf, am->loop);
 
 	lua_pushvalue(L, 4);
 	lua_set_play_done(tr);
