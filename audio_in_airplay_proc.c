@@ -71,7 +71,7 @@ void luv_airplay_proc_init(lua_State *L, uv_loop_t *loop, char *prog) {
 		{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[1]},
 	};
 
-	char *args[] = {prog, "-test-c", "110", NULL};
+	char *args[] = {prog, "-t", "110", NULL};
 
 	uv_process_options_t opts = {
 		.stdio = stdio,
