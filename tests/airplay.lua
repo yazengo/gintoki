@@ -1,5 +1,5 @@
 
-airplay_start('XX Muno')
+airplay_start('Muji')
 
 airplay_on_start = function ()
 	info('airplay starts')
@@ -7,9 +7,4 @@ airplay_on_start = function ()
 		url = 'airplay://',
 	}
 end
-
-set_interval(function ()
-	info('restart')
-	airplay_start('XX Muno')
-end, 3000)
 

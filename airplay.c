@@ -24,17 +24,23 @@ typedef struct airplay_s {
 
 	audio_in_read_cb on_read_done;
 	audio_in_close_cb on_close;
-	void (*on_exit)(struct airplay_s *ap);
+	void (*on_killed)(struct airplay_s *ap);
 } airplay_t;
 
 enum {
 	INIT,
 	STARTED,
+	KILLING_THEN_RESTART,
+	RESTART,
 
 	ATTACHED,
 	READING,
 
-	STOPPING,
+	KILLING_WHEN_READING,
+	KILLING_WAIT_READING_DONE,
+	KILLING_WAIT_EXIT,
+	KILLED,
+
 	CLOSING_FD1,
 	CLOSING_PROC,
 };
@@ -43,6 +49,8 @@ static airplay_t *g_ap;
 
 static void proc_start(airplay_t *ap);
 static void audio_in_stop(audio_in_t *ai);
+static void airplay_stop(airplay_t *ap);
+static void airplay_close(airplay_t *ap);
 
 static void on_handle_closed(uv_handle_t *h) {
 	airplay_t *ap = (airplay_t *)h->data;
@@ -73,10 +81,15 @@ static uv_buf_t first_data_alloc_buffer(uv_handle_t *h, size_t len) {
 
 static void first_data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	airplay_t *ap = (airplay_t *)st->data;
-
-	debug("first data comes");
-
+	
 	uv_read_stop(st);
+	debug("first data comes. n=%d", n);
+
+	if (n <= 0) {
+		airplay_stop(ap);
+		return;
+	}
+
 	ap->stat = STARTED;
 
 	lua_getglobal(ap->L, "airplay_on_start");
@@ -97,52 +110,98 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	audio_in_t *ai = ap->ai;
 
 	uv_read_stop(st);
-
 	debug("n=%d", n);
 
 	switch (ap->stat) {
 	case READING:
-		if (n > 0) {
+		if (n >= 0) {
 			ap->stat = ATTACHED;
 			ap->on_read_done(ai, n);
 		} else {
-			ap->stat = STOPPING;
+			ap->stat = KILLING_WAIT_EXIT;
+			uv_process_kill(ap->proc, 15);
 			ap->on_read_done(ai, 0);
 		}
 		break;
 
-	case STOPPING:
+	case KILLING_WAIT_READING_DONE:
+		ap->stat = KILLED;
+		ap->on_read_done(ai, 0);
+		break;
+
+	case KILLING_WHEN_READING:
+		ap->stat = KILLING_WAIT_EXIT;
 		ap->on_read_done(ai, 0);
 		break;
 
 	default:
-		panic("stat=%d invalid. must in READING,KILLING", ap->stat);
+		panic("stat=%d invalid", ap->stat);
 	}
 }
 
 static void airplay_stop(airplay_t *ap) {
-	if (ap->stat < STOPPING)
-		ap->stat = STOPPING;
 	uv_process_kill(ap->proc, 15);
+
+	switch (ap->stat) {
+	case INIT:
+	case STARTED:
+		ap->stat = KILLING_THEN_RESTART;
+		break;
+
+	case ATTACHED:
+		ap->stat = KILLING_WAIT_EXIT;
+		break;
+
+	case READING:
+		ap->stat = KILLING_WHEN_READING;
+		break;
+	}
 }
 
 static void airplay_close(airplay_t *ap) {
-	if (ap->stat != STOPPING)
-		panic("must call after is_eof");
-
+	if (ap->stat != KILLED && ap->stat != RESTART)
+		panic("stat=%d invalid", ap->stat);
+	
 	info("close");
 
 	ap->stat = CLOSING_FD1;
 	uv_close((uv_handle_t *)ap->pipe[0], on_handle_closed);
 }
 
-static void proc_on_exit(uv_process_t *p, int stat, int sig) {
+static void proc_on_killed(uv_process_t *p, int stat, int sig) {
 	airplay_t *ap = (airplay_t *)p->data;
 
 	info("sig=%d", sig);
 
-	if (ap->on_exit)
-		ap->on_exit(ap);
+	switch (ap->stat) {
+	case KILLING_WAIT_EXIT:
+		ap->stat = KILLED;
+		break;
+
+	case KILLING_WHEN_READING:
+		ap->stat = KILLING_WAIT_READING_DONE;
+		break;
+
+	case INIT:
+	case STARTED:
+		ap->stat = RESTART;
+		airplay_close(ap);
+		break;
+
+	case ATTACHED:
+		ap->stat = KILLED;
+		break;
+
+	case READING:
+		ap->stat = KILLING_WAIT_READING_DONE;
+		break;
+
+	default:
+		panic("stat=%d invalid", ap->stat);
+	}
+
+	if (ap->on_killed)
+		ap->on_killed(ap);
 }
 
 static void proc_start(airplay_t *ap) {
@@ -151,7 +210,7 @@ static void proc_start(airplay_t *ap) {
 	ap->proc = proc;
 
 	ap->on_close = NULL;
-	ap->on_exit = NULL;
+	ap->on_killed = NULL;
 
 	int i;
 	for (i = 0; i < 1; i++) {
@@ -182,7 +241,7 @@ static void proc_start(airplay_t *ap) {
 		.stdio_count = 5,
 		.file = args[0],
 		.args = args,
-		.exit_cb = proc_on_exit,
+		.exit_cb = proc_on_killed,
 	};
 
 	int r = uv_spawn(ap->loop, proc, opts);
@@ -190,9 +249,6 @@ static void proc_start(airplay_t *ap) {
 
 	ap->stat = INIT;
 	uv_read_start((uv_stream_t *)ap->pipe[0], first_data_alloc_buffer, first_data_pipe_read);
-}
-
-static void restart_on_exit(airplay_t *ap) {
 }
 
 // arg[1] = name
@@ -211,7 +267,7 @@ static int airplay_start(lua_State *L) {
 		g_ap->name = name;
 
 		airplay_stop(g_ap);
-		airplay_close(g_ap);
+		return;
 	}
 
 	g_ap = (airplay_t *)zalloc(sizeof(airplay_t));
@@ -237,6 +293,8 @@ static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb d
 	if (ap->stat != ATTACHED)
 		panic("stat=%d invalid: must be ATTACHED", ap->stat);
 
+	debug("n=%d", len);
+
 	ap->stat = READING;
 	ap->on_read_done = done;
 	ap->data_buf = uv_buf_init(buf, len);
@@ -253,32 +311,39 @@ static void audio_in_stop(audio_in_t *ai) {
 static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
+	debug("stat=%d", ap->stat);
 	ap->on_close = done;
+
 	airplay_close(ap);
 }
 
 static int audio_in_is_eof(audio_in_t *ai) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
-	return ap->stat > READING;
+	debug("stat=%d", ap->stat);
+	return ap->stat == KILLED;
 }
 
 static int audio_in_can_read(audio_in_t *ai) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
+	debug("stat=%d", ap->stat);
 	return ap->stat == ATTACHED;
 }
 
 void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai) {
 	if (g_ap == NULL) {
+		warn("please run airplay_start first");
 		audio_in_error_init(loop, ai, "please run airplay_start first");
 		return;
 	}
 	if (g_ap->stat < STARTED) {
+		warn("no rstp conn yet");
 		audio_in_error_init(loop, ai, "no rstp conn yet");
 		return;
 	}
 	if (g_ap->stat > STARTED) {
+		warn("already attached");
 		audio_in_error_init(loop, ai, "already attached");
 		return;
 	}
