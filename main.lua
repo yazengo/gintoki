@@ -129,10 +129,11 @@ radio.play = function (song)
 	}
 end
 
-on_airplay_start = function ()
+airplay_on_start = function ()
 	audio.play {
 		url = 'airplay://',
 		done = function ()
+			info('airplay ends')
 			radio.next()
 		end,
 	}
@@ -203,6 +204,7 @@ end
 prop.load()
 audio.setvol(50)
 radio.start(localmusic)
+airplay_start(prop.get('upnp.name', 'Muno') .. ' 的 Airplay 屌炸天')
 upnp.loadconfig()
 upnp.start()
 

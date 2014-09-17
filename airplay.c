@@ -184,6 +184,7 @@ static void proc_on_killed(uv_process_t *p, int stat, int sig) {
 
 	case INIT:
 	case STARTED:
+	case KILLING_THEN_RESTART:
 		ap->stat = RESTART;
 		airplay_close(ap);
 		break;
