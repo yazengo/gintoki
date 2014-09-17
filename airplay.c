@@ -239,9 +239,8 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 }
 
 static void airplay_stop(airplay_t *ap) {
-	info("kill stat=%d", ap->stat);
+	info("kill stat=%d pid=%d", ap->stat, ap->proc->pid);
 
-	info("kill pid=%d", ap->proc->pid);
 	uv_process_kill(ap->proc, 15);
 
 	switch (ap->stat) {
@@ -380,13 +379,26 @@ static void proc_start(airplay_t *ap) {
 		{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[PDATA]},
 	};
 
-	char *args_test[] = {getenv("_"), "-t", "110", NULL};
-	char *args_shairport[] = {"shairport", "-a", ap->name, "-o", "pipe", NULL};
-	char **args = args_shairport;
+	char *args[16] = {};
+	char **a = args;
 
 	if (getenv("AIRPLAY_TEST")) {
 		info("running test");
-		args = args_test;
+		*a++ = getenv("_");
+		*a++ = "-t";
+		*a++ = "110";
+	} else {
+		*a++ = "shairport";
+		*a++ = "-a";
+		*a++ = ap->name;
+		*a++ = "-o";
+		*a++ = "pipe";
+
+		char *s = getenv("AIRPLAY_LOG");
+		if (s) {
+			*a++ = "-l";
+			*a++ = s;
+		}
 	}
 
 	uv_process_options_t opts = {
