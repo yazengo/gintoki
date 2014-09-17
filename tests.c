@@ -393,18 +393,25 @@ static void test_fake_shairport() {
 
 #define step 44100
 #define n 10
+#define repeat 3
+
 	static char buf[step];
 	int key = 0;
-	int i;
+	int i, r;
 
-	for (i = 0; i < n; i++) {
-		audio_out_test_fill_buf_with_key(buf, sizeof(buf), 44100, key);
-		write(4, buf, sizeof(buf));
-		key = (key+1)%7;
+	for (r = 0; r < repeat; r++) {
+		write(3, "s", 1);
+		for (i = 0; i < n; i++) {
+			audio_out_test_fill_buf_with_key(buf, sizeof(buf), 44100, key);
+			write(4, buf, sizeof(buf));
+			key = (key+1)%7;
+		}
+		write(3, "e", 1);
 	}
 
 #undef step
 #undef n
+#undef repeat
 }
 
 void run_test_c_pre(int i) {
