@@ -407,7 +407,7 @@ static void test_fake_shairport() {
 	info("starts");
 
 #define step 44100
-#define n 10
+#define n 3
 #define repeat 3
 
 	static char buf[step];

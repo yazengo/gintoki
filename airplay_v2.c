@@ -380,6 +380,7 @@ static void enter_ai_closing(airplay_t *ap, int stat, void (*done)(airplay_t *ap
 
 	ai_closing_t *ac = (ai_closing_t *)zalloc(sizeof(ai_closing_t));
 	ac->ap = ap;
+	ac->done = done;
 	ac->c.data = ac;
 	ac->c.done_cb = on_ai_closing_done;
 
@@ -557,9 +558,9 @@ static int audio_in_is_eof(audio_in_t *ai) {
 	case ATTACHED:
 	case WAITING_DATA:
 	case WAITING_CMDHDR:
-		return 1;
+		return 0;
 	}
-	return 0;
+	return 1;
 }
 
 static int audio_in_can_read(audio_in_t *ai) {
