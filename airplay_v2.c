@@ -69,10 +69,13 @@ enum {
 	ATTACHED,
 	WAITING_DATA,
 	WAITING_CMDHDR,
+
 	STOPPED,
 	STOPPED_CLOSING,
 
 	EXITED,
+	EXITED_CLOSING,
+
 	CLOSING,
 };
 
@@ -321,19 +324,67 @@ static void enter_restart(airplay_t *ap) {
 	proc_start(ap);
 }
 
+static void on_exited_closing_done(airplay_t *ap) {
+	ap->ai_close_done(ap->ai);
+	proc_init(ap);
+	proc_start(ap);
+}
+
 static void enter_exited(airplay_t *ap) {
 	if (ap->pending_ai_close) {
-		enter_restart(ap);
+		on_exited_closing_done(ap);
 	} else {
 		ap->stat = EXITED;
 	}
 }
+
+static void on_stopped_closing_done(airplay_t *ap) {
+	ap->ai_close_done(ap->ai);
+	proc_start(ap);
+}
+
+static void enter_stopped(airplay_t *ap) {
+	if (ap->pending_ai_close) {
+		on_stopped_closing_done(ap);
+	} else {
+		ap->stat = STOPPED;
+	}
+}
+
 
 static void enter_closing(airplay_t *ap, void (*done)(airplay_t *)) {
 	ap->stat = CLOSING;
 	ap->on_close = done;
 	ap->stat_close = CLOSING_PDATA;
 	uv_close((uv_handle_t *)ap->pipe[PDATA], on_handle_closed);
+}
+
+typedef struct {
+	uv_call_t c;
+	void (*done)(airplay_t *ap);
+	airplay_t *ap;
+} ai_closing_t;
+
+static void on_ai_closing_done(uv_call_t *c) {
+	ai_closing_t *ac = (ai_closing_t *)c->data;
+	airplay_t *ap = ac->ap;
+
+	debug("done");
+	ac->done(ap);
+
+	free(ac);
+}
+
+static void enter_ai_closing(airplay_t *ap, int stat, void (*done)(airplay_t *ap)) {
+	debug("close");
+
+	ai_closing_t *ac = (ai_closing_t *)zalloc(sizeof(ai_closing_t));
+	ac->ap = ap;
+	ac->c.data = ac;
+	ac->c.done_cb = on_ai_closing_done;
+
+	ap->stat = stat;
+	uv_call(ap->loop, &ac->c);
 }
 
 static void on_read_eof(airplay_t *ap) {
@@ -360,39 +411,10 @@ static void on_proc_exit(uv_process_t *p, int stat, int sig) {
 
 	info("sig=%d stat=%d stat_close=%d", sig, ap->stat, ap->stat_close);
 
-	ap->pending_killed++;
-
 	if (ap->stat == CLOSING && ap->stat_close == CLOSING_WAITING_EXIT)
 		proc_close(ap);
-}
-
-static void on_stopped_close_done(uv_call_t *c) {
-	airplay_t *ap = (airplay_t *)c->data;
-	free(c);
-
-	debug("done");
-
-	ap->ai_close_done(ap->ai);
-
-	proc_start(ap);
-}
-
-static void stopped_close(airplay_t *ap) {
-	debug("close");
-
-	uv_call_t *c = (uv_call_t *)zalloc(sizeof(uv_call_t));
-	c->data = ap;
-	c->done_cb = on_stopped_close_done;
-	ap->stat = STOPPED_CLOSING;
-	uv_call(ap->loop, c);
-}
-
-static void enter_stopped(airplay_t *ap) {
-	if (ap->pending_ai_close) {
-		stopped_close(ap);
-	} else {
-		ap->stat = STOPPED;
-	}
+	else
+		ap->pending_killed++;
 }
 
 static void proc_init(airplay_t *ap) {
@@ -514,13 +536,11 @@ static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 
 	switch (ap->stat) {
 	case EXITED:
-		done(ap->ai);
-		proc_init(ap);
-		proc_start(ap);
+		enter_ai_closing(ap, EXITED_CLOSING, on_exited_closing_done);
 		break;
 
 	case STOPPED:
-		done(ap->ai);
+		enter_ai_closing(ap, STOPPED_CLOSING, on_stopped_closing_done);
 		break;
 
 	default:
@@ -534,10 +554,9 @@ static int audio_in_is_eof(audio_in_t *ai) {
 	debug("stat=%d", ap->stat);
 
 	switch (ap->stat) {
-	case STOPPED:
-	case STOPPED_CLOSING:
-	case CLOSING:
-	case EXITED:
+	case ATTACHED:
+	case WAITING_DATA:
+	case WAITING_CMDHDR:
 		return 1;
 	}
 	return 0;
