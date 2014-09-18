@@ -180,7 +180,7 @@ static void check_tracks_can_close(audio_mixer_t *am) {
 		if (!((tr->stat == TRACK_STOPPING || tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING) && ai->is_eof(ai) && tr->buf.len == 0))
 			continue;
 
-		info("closed #%d stat=%d", i, tr->stat);
+		info("close #%d stat=%d", i, tr->stat);
 
 		tr->stat = TRACK_CLOSING;
 		ai->close(ai, audio_in_on_closed);
@@ -337,7 +337,7 @@ static int audio_play(lua_State *L) {
 	tr->am = am;
 
 	if (tr->stat != TRACK_STOPPED) {
-		info("wait for stop");
+		info("stat=%d wait for stop", tr->stat);
 
 		lua_pushvalue(L, 1);
 		lua_pushcclosure(L, audio_on_done, 1);

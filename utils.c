@@ -556,17 +556,18 @@ void lua_setuserptr(lua_State *L, int index, void *p) {
 }
 
 static void fault(int sig) {
-	fprintf(stderr, "sig %d\n", sig);
+	error("sig=%d", sig);
 	print_trackback();
 	exit(-1);
 }
 
 static void term(int sig) {
+	info("sig=%d", sig);
 	static int i;
 	if (i++)
 		return;
-	fprintf(stderr, "sig %d\n", sig);
-	kill(0, SIGTERM);
+	if (getenv("TERM_KILL0"))
+		kill(0, SIGTERM);
 	exit(-1);
 }
 
