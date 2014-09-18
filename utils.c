@@ -561,6 +561,15 @@ static void fault(int sig) {
 	exit(-1);
 }
 
+static void term(int sig) {
+	static int i;
+	if (i++)
+		return;
+	fprintf(stderr, "sig %d\n", sig);
+	kill(0, SIGTERM);
+	exit(-1);
+}
+
 void utils_preinit() {
 	if (getenv("COREDUMP") == NULL) {
 		signal(SIGILL, fault);
@@ -568,6 +577,8 @@ void utils_preinit() {
 		signal(SIGSEGV, fault);
 	} else 
 		info("coredump enabled");
+
+	signal(SIGTERM, term);
 
 	char *s = getenv("LOG");
 	if (s) {
