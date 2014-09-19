@@ -26,7 +26,7 @@ ldflags-x86 += $(ldflags) $(shell pkg-config --libs libupnp lua5.2) -lao
 objs-darwin += $(subst .o,-darwin.o,$(objs))
 cflags-darwin += $(cflags) -I/usr/local/include -I/usr/local/include/upnp
 ldflags-darwin += $(ldflags) -L/usr/local/lib
-ldflags-darwin += -lupnp -llua -luv -lixml -lao
+ldflags-darwin += -lupnp -llua -lixml -lao
 
 cc-mips = mipsel-linux-gcc
 objs-mips += $(subst .o,-mips.o,$(objs))
