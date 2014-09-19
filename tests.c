@@ -754,8 +754,8 @@ static void test_poll1(uv_loop_t *loop) {
 	uv_fs_open(loop, tl->req_open, tl->fname_tmp, O_RDONLY, 0, tail_on_open_tmp);
 }
 
-static void test_airplay_proc(lua_State *L, uv_loop_t *loop, char **argv) {
-	luv_airplay_proc_init(L, loop, argv[0]);
+static void test_airplay_proc(lua_State *L, uv_loop_t *loop) {
+	luv_airplay_proc_init(L, loop);
 }
 
 static void test_panic() {
@@ -779,7 +779,7 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 	if (i == 10)
 		test_poll1(loop);
 	if (i == 11)
-		test_airplay_proc(L, loop, argv);
+		test_airplay_proc(L, loop);
 	if (i == 12)
 		test_panic();
 }

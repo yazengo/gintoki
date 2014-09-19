@@ -152,6 +152,20 @@ void ringbuf_data_put(ringbuf_t *rb, void *buf, int len, ringbuf_done_cb done) {
 	filler_fill(rb);
 }
 
+void ringbuf_data_put_force(ringbuf_t *rb, void *buf, int len) {
+	for (;;) {
+		int left = rb->len + len - RINGBUF_SIZE;
+		if (left <= 0)
+			break;
+		void *databuf; int datalen;
+		ringbuf_data_ahead_get(rb, &databuf, &datalen);
+		if (datalen < left)
+			left = datalen;
+		ringbuf_push_tail(rb, left);
+	}
+	ringbuf_data_put(rb, buf, len, NULL);
+}
+
 void ringbuf_data_cancel_get(ringbuf_t *rb) {
 	filler_cancel(&rb->getter);
 }

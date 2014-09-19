@@ -9,7 +9,8 @@ objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
 objs += audio_in_avconv.o 
 objs += blowfish.o 
-objs += audio_in_airplay_proc.o
+objs += audio_src.o
+objs += airplay.o
 
 objs += luv_curl.o
 cflags += -DUSE_CURL
@@ -88,7 +89,7 @@ cp-minifs-mips: inst-mips
 	tar xvf inst-mips.tar -C minifs/usr/app
 
 sumcode:
-	wc -l audio_in*.[ch] audio_out*.[ch] utils.[ch] luv_curl.[ch] main.c ringbuf.[ch] inputdev.[ch]
+	wc -l audio*.[ch] utils.[ch] luv_curl.[ch] main.c ringbuf.[ch] inputdev.[ch]
 	wc -l *.lua
 
 clean:

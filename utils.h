@@ -35,7 +35,7 @@ void uv_set_timeout(uv_loop_t *loop, uv_timeout_t *to);
 
 typedef struct uv_call_s {
 	void (*done_cb)(struct uv_call_s *);
-	void *data;
+	void *data, *data2;
 } uv_call_t;
 void uv_call(uv_loop_t *loop, uv_call_t *c);
 

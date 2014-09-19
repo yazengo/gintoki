@@ -36,6 +36,8 @@ void ringbuf_push_tail(ringbuf_t *b, int len);
 void ringbuf_data_get(ringbuf_t *b, void *buf, int len, ringbuf_done_cb done);
 void ringbuf_data_put(ringbuf_t *b, void *buf, int len, ringbuf_done_cb done);
 
+void ringbuf_data_put_force(ringbuf_t *b, void *buf, int len);
+
 void ringbuf_data_cancel_get(ringbuf_t *rb);
 void ringbuf_data_cancel_put(ringbuf_t *rb);
 
