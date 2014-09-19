@@ -1,5 +1,5 @@
 
-cflags = -g -I.
+cflags = -g -I. -Werror
 ldflags = -g -luv -lm
 
 objs = utils.o main.o strbuf.o tests.o
@@ -20,23 +20,30 @@ ldflags += -lcurl
 cflags += -DVERSION=\"$(shell git rev-parse HEAD)\"
 
 objs-x86 += $(subst .o,-x86.o,$(objs))
-cflags-x86 += $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
-ldflags-x86 += $(ldflags) $(shell pkg-config --libs libupnp lua5.2) -lao
+cflags-x86 += $(cflags)
+cflags-x86 += $(shell pkg-config --cflags lua5.2 libupnp libuv) 
+ldflags-x86 += $(ldflags)
+ldflags-x86 += $(shell pkg-config --libs libupnp lua5.2)
+ldflags-x86 += -lao
 
 objs-darwin += $(subst .o,-darwin.o,$(objs))
 cflags-darwin += $(cflags) -I/usr/local/include -I/usr/local/include/upnp
 ldflags-darwin += $(ldflags) -L/usr/local/lib
 ldflags-darwin += -lupnp -llua -lixml -lao
 
+sysroot-mips = ../system/fs_compile/
 cc-mips = mipsel-linux-gcc
 objs-mips += $(subst .o,-mips.o,$(objs))
 objs-mips += inputdev-mips.o
-sysroot-mips = ../system/fs_compile/
-cflags-mips += $(cflags) -I$(sysroot-mips)/include/ -I$(sysroot-mips)/include/upnp
-cflags-mips += -I../third/airplay-jz
+cflags-mips += $(cflags)
+cflags-mips += -I$(sysroot-mips)/include
+cflags-mips += -I$(sysroot-mips)/include/upnp
+cflags-mips += -I$(sysroot-mips)/include/uv01022
 cflags-mips += -DUSE_JZCODEC
 cflags-mips += -DUSE_INPUTDEV
-ldflags-mips += $(ldflags) -L$(sysroot-mips)/lib
+ldflags-mips += $(ldflags)
+ldflags-mips += -L$(sysroot-mips)/lib
+ldflags-mips += -L$(sysroot-mips)/lib/uv01022
 ldflags-mips += -llua -pthread -lupnp -lthreadutil -lixml -lrt 
 
 hfiles = $(wildcard *.h)
