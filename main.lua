@@ -150,6 +150,7 @@ airplay_on_start = function ()
 	audio.pause()
 	audio.play {
 		url = 'airplay://',
+		track = 2,
 		done = function ()
 			airplay_on_done()
 		end,
@@ -160,6 +161,7 @@ local say_and_do = function (url, action)
 	local doing
 	return function ()
 		if doing then return end
+		if airplaying then airplay_stop() end
 		doing = true
 		audio.play {
 			url = url,
