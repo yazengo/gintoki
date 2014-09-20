@@ -1,4 +1,5 @@
 
+#include <stdlib.h>  
 #include <stdio.h>  
 #include <linux/input.h>  
 #include <sys/inotify.h>
@@ -82,12 +83,12 @@ enum {
 };
 
 enum {
-	GPIOKEYS, SUGRVOL, NETNOTIFY, GSENSOR,
+	GPIOKEYS, SUGRVOL, NETNOTIFY, GSENSOR, LIS3DH,
 	INPUTDEV_NR,
 };
 
 static const char *inputdev_names[] = {
-	"gpio-keys", "Sugr_Volume", "network_notify", "gsensor_dev",
+	"gpio-keys", "Sugr_Volume", "network_notify", "gsensor_dev", "lis3dh_acc",
 };
 
 typedef struct {
@@ -99,6 +100,10 @@ typedef struct {
 	int gpiokeys_stat_dblclk;
 	float gpiokeys_presstm;
 	uv_timer_t *gpiokeys_timer;
+
+	int lis3dh_verbose:1;
+	FILE *lis3dh_logfp;
+	int lis3dh_xyz[3];
 
 	int fds[INPUTDEV_NR];
 	struct input_event ev[INPUTDEV_NR];
@@ -235,15 +240,53 @@ static void gsensor_read(struct input_event e) {
 	dev->last_ev[GSENSOR] = e;
 }
 
+static void lis3dh_init() {
+	char *s;
+
+	dev->lis3dh_verbose = (getenv("LIS3DH_VERBOSE") != NULL);
+
+	s = getenv("LIS3DH_LOG");
+	if (s) {
+		dev->lis3dh_logfp = fopen(s, "w+");
+	}
+
+	int rate = 10;
+	s = getenv("LIS3DH_RATE");
+	if (s) {
+		sscanf(s, "%d", &rate);
+
+		FILE *fp = fopen("/sys/class/i2c-adapter/i2c-0/0-0018/pollrate_ms", "w");
+		if (fp) {
+			fprintf(fp, "%d", rate);
+			fclose(fp);
+		}
+		info("rate=%dms", rate);
+	}
+}
+
+static void lis3dh_read(struct input_event e) {
+	if (e.type == EV_SYN) {
+		int tm = e.time.tv_sec*1000000 + e.time.tv_usec;
+		int *x = dev->lis3dh_xyz;
+		if (dev->lis3dh_verbose)
+			info("tm=%d xyz=%d,%d,%d", tm, x[0], x[1], x[2]);
+		if (dev->lis3dh_logfp)
+			fprintf(dev->lis3dh_logfp, "%d,%d,%d,%d,\n", tm, x[0], x[1], x[2]);
+	} else {
+		if (e.code <= 2)
+			dev->lis3dh_xyz[e.code] = e.value;
+	}
+}
+
 typedef void (*inputdev_init_cb)();
 typedef void (*inputdev_read_cb)(struct input_event e);
 
 static inputdev_init_cb inputdev_initcbs[] = {
-	gpiokeys_init, NULL, NULL, NULL,
+	gpiokeys_init, NULL, NULL, NULL, lis3dh_init,
 };
 
 static inputdev_read_cb inputdev_readcbs[] = {
-	gpiokeys_read, sugrvol_read, netnotify_read, gsensor_read,
+	gpiokeys_read, sugrvol_read, netnotify_read, gsensor_read, lis3dh_read,
 };
 
 static void inputdev_poll_start();
@@ -261,13 +304,9 @@ static void inputdev_poll_thread(uv_work_t *w) {
 		debug("revents=%x name=%s", f->revents, inputdev_names[fi]);
 
 		if (f->revents & (POLLERR|POLLHUP)) {
-			debug("close name=%s", inputdev_names[fi]);
 			close(fd);
-			debug("close done name=%s", inputdev_names[fi]);
 		} else if (f->revents & POLLIN) {
-			debug("read start name=%s", inputdev_names[fi]);
 			read(fd, &dev->ev[fi], sizeof(struct input_event));
-			debug("read done name=%s", inputdev_names[fi]);
 		}
 	}
 	if (dev->pollfds[dev->pollnr].revents & POLLIN) {
@@ -287,7 +326,7 @@ static void inputdev_poll_done(uv_work_t *w, int _) {
 			info("closed name=%s", inputdev_names[fi]);
 			dev->fds[fi] = 0;
 		} else if (f->revents & POLLIN) {
-			info("%s code=%d value=%d", inputdev_names[fi], dev->ev[fi].code, dev->ev[fi].value);
+			debug("%s code=%d value=%d", inputdev_names[fi], dev->ev[fi].code, dev->ev[fi].value);
 			inputdev_readcbs[fi](dev->ev[fi]);
 		}
 	}
@@ -355,10 +394,10 @@ static void inputdev_open(char *path) {
 	if (inputdev_initcbs[i])
 		inputdev_initcbs[i]();
 
-	int n = 0;
-	for (i = 0; i < INPUTDEV_NR; i++)
-		n += !!dev->fds[i];
-	info("open name=%s n=%d", name, n);
+	int n = 0, j;
+	for (j = 0; j < INPUTDEV_NR; j++)
+		n += !!dev->fds[j];
+	info("open name=%s n=%d i=%d", name, n, i);
 
 	inputdev_poll_start();
 }
