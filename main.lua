@@ -115,10 +115,10 @@ radio.change = function (opt)
 	end
 end
 
-muno.on('stat_change', function () 
+muno.stat_change = function () 
 	M.log('muno stat ->', muno.info())
 	upnp.notify{['muno.info']=muno.info()}
-end)
+end
 
 audio.track_stat_change = function (i)
 	if i ~= 0 then return end
@@ -224,7 +224,7 @@ end
 prop.load()
 audio.setvol(50)
 radio.start(localmusic)
-airplay_start(prop.get('upnp.name', 'Muno') .. ' 的 Airplay')
+--airplay_start(prop.get('upnp.name', 'Muno') .. ' 的 Airplay')
 upnp.loadconfig()
 upnp.start()
 

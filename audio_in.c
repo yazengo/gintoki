@@ -13,7 +13,7 @@ static void error_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb done
 	panic("should not call this");
 }
 
-static void error_stop(audio_in_t *ai) {
+static void error_stop_read(audio_in_t *ai) {
 }
 
 static void error_close(audio_in_t *ai, audio_in_close_cb done) {
@@ -22,7 +22,7 @@ static void error_close(audio_in_t *ai, audio_in_close_cb done) {
 
 void audio_in_error_init(uv_loop_t *loop, audio_in_t *ai, const char *err) {
 	ai->read = error_read;
-	ai->stop = error_stop;
+	ai->stop_read = error_stop_read;
 	ai->close = error_close;
 }
 

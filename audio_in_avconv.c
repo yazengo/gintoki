@@ -288,7 +288,7 @@ static void pdata_on_read_done(avconv_t *av, int n) {
 	switch (av->stat) {
 	case STOPPING:
 		av->stat = STOPPED;
-		av->ai_read_done(av->ai, n);
+		av->ai_read_done(av->ai, -1);
 		break;
 
 	case READING:
@@ -337,7 +337,7 @@ static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb d
 	uv_read_start((uv_stream_t *)av->pipe[PDATA], pdata_alloc_buffer, pdata_pipe_read);
 }
 
-static void audio_in_stop(audio_in_t *ai) {
+static void audio_in_stop_read(audio_in_t *ai) {
 	avconv_t *av = (avconv_t *)ai->in;
 
 	if (av->stat != READING)
@@ -366,7 +366,7 @@ static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 
 void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai) {
 	ai->read = audio_in_read;
-	ai->stop = audio_in_stop;
+	ai->stop_read = audio_in_stop_read;
 	ai->close = audio_in_close;
 
 	avconv_t *av = (avconv_t *)zalloc(sizeof(avconv_t));

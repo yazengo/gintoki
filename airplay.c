@@ -303,7 +303,7 @@ static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb d
 	uv_read_start((uv_stream_t *)ap->pipe[0], data_alloc_buffer, data_pipe_read);
 }
 
-static void audio_in_stop(audio_in_t *ai) {
+static void audio_in_stop_read(audio_in_t *ai) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
 	airplay_stop(ap);
@@ -341,7 +341,7 @@ void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai) {
 
 	ai->in = g_ap;
 	ai->read = audio_in_read;
-	ai->stop = audio_in_stop;
+	ai->stop_read = audio_in_stop_read;
 	ai->close = audio_in_close;
 }
 

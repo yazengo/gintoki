@@ -1,4 +1,6 @@
 
+// please visit https://www.processon.com/view/link/542c8ebd0cf2e6eabf18d06e
+
 #include <string.h>
 
 #include <uv.h>
@@ -24,7 +26,7 @@ typedef struct {
 	audio_in_t *ai;
 
 	int stat;
-	int paused:1;
+	unsigned paused:1;
 
 	ringbuf_t buf;
 	float vol;
@@ -40,6 +42,10 @@ enum {
 	CLOSING_BUF_EMPTY,
 	CLOSED_BUF_HALFFULL,
 	CLOSED_BUF_EMPTY,
+};
+
+enum {
+	READ, WRITE,
 };
 
 #define FILTERS_NR 4
@@ -115,74 +121,107 @@ static void track_on_free(audio_track_t *tr) {
 	free(tr);
 }
 
-static void track_on_buf_full(audio_track_t *tr) {
+static void track_on_buf_full(audio_track_t *tr, int op) {
 	audio_mixer_t *am = tr->am;
 
-	switch (tr->stat) {
-	case READING_BUF_EMPTY:
-		tr->stat = WAITING_BUF_FULL;
-		lua_track_stat_change(tr);
-		mixer_on_newdata(am);
-		break;
+	debug("stat=%d op=%d", tr->stat, op);
 
-	case READING_BUF_HALFFULL:
-		tr->stat = WAITING_BUF_FULL;
-		break;
+	switch (op) {
+	case READ:
+		switch (tr->stat) {
+		case READING_BUF_EMPTY:
+			tr->stat = WAITING_BUF_FULL;
+			lua_track_stat_change(tr);
+			mixer_on_newdata(am);
+			break;
 
-	default:
-		panic("stat=%d invalid", tr->stat);
+		case READING_BUF_HALFFULL:
+			tr->stat = WAITING_BUF_FULL;
+			break;
+
+		default:
+			panic("stat=%d invalid", tr->stat);
+		}
+		break;
 	}
 }
 
-static void track_on_buf_halffull(audio_track_t *tr) {
+static void track_on_buf_halffull(audio_track_t *tr, int op) {
 	audio_mixer_t *am = tr->am;
 
-	switch (tr->stat) {
-	case READING_BUF_EMPTY:
-		tr->stat = READING_BUF_HALFFULL;
-		lua_track_stat_change(tr);
-		mixer_on_newdata(am);
+	debug("stat=%d op=%d", tr->stat, op);
+
+	switch (op) {
+	case READ:
+		switch (tr->stat) {
+		case READING_BUF_EMPTY:
+			tr->stat = READING_BUF_HALFFULL;
+			lua_track_stat_change(tr);
+			mixer_on_newdata(am);
+			track_read(tr);
+			break;
+
+		case READING_BUF_HALFFULL:
+			track_read(tr);
+			break;
+
+		default:
+			panic("stat=%d invalid", tr->stat);
+		}
 		break;
 
-	case WAITING_BUF_FULL:
-	case READING_BUF_HALFFULL:
-		tr->stat = READING_BUF_HALFFULL;
-		track_read(tr);
+	case WRITE:
+		switch (tr->stat) {
+		case WAITING_BUF_FULL:
+			tr->stat = READING_BUF_HALFFULL;
+			track_read(tr);
+			break;
+		}
 		break;
-
-	case CLOSING_BUF_HALFFULL:
-	case CLOSED_BUF_HALFFULL:
-		break;
-
-	default:
-		panic("stat=%d invalid", tr->stat);
 	}
 }
 
-static void track_on_buf_empty(audio_track_t *tr) {
-	switch (tr->stat) {
-	case READING_BUF_EMPTY:
-	case WAITING_BUF_FULL:
-	case READING_BUF_HALFFULL:
-		tr->stat = READING_BUF_EMPTY;
-		track_read(tr);
+static void track_on_buf_empty(audio_track_t *tr, int op) {
+
+	debug("stat=%d op=%d", tr->stat, op);
+
+	switch (op) {
+	case READ:
+		switch (tr->stat) {
+		case READING_BUF_EMPTY:
+			track_read(tr);
+			break;
+
+		default:
+			panic("stat=%d invalid", tr->stat);
+		}
 		break;
 
-	case CLOSING_BUF_HALFFULL:
-		tr->stat = CLOSING_BUF_EMPTY;
-		lua_track_stat_change(tr);
-		break;
+	case WRITE:
+		switch (tr->stat) {
+		case READING_BUF_HALFFULL:
+			tr->stat = READING_BUF_EMPTY;
+			break;
 
-	case CLOSED_BUF_HALFFULL:
-		track_on_free(tr);
-		break;
+		case WAITING_BUF_FULL:
+			tr->stat = READING_BUF_EMPTY;
+			track_read(tr);
+			break;
 
-	default:
-		panic("stat=%d invalid", tr->stat);
+		case CLOSING_BUF_HALFFULL:
+			tr->stat = CLOSING_BUF_EMPTY;
+			lua_track_stat_change(tr);
+			break;
+
+		case CLOSED_BUF_HALFFULL:
+			track_on_free(tr);
+			break;
+		}
+		break;
 	}
 }
 
-static void track_on_eof(audio_track_t *tr) {
+static void track_on_read_eof(audio_track_t *tr) {
 	switch (tr->stat) {
 	case WAITING_EOF:
 	case READING_BUF_EMPTY:
@@ -200,17 +239,18 @@ static void track_on_eof(audio_track_t *tr) {
 	}
 }
 
-static void track_on_buf_change(audio_track_t *tr) {
+static void track_on_buf_change(audio_track_t *tr, int op) {
 	if (tr->buf.len == RINGBUF_SIZE)
-		track_on_buf_full(tr);
+		track_on_buf_full(tr, op);
 	else if (tr->buf.len > 0)
-		track_on_buf_halffull(tr);
+		track_on_buf_halffull(tr, op);
 	else
-		track_on_buf_empty(tr);
+		track_on_buf_empty(tr, op);
 }
 
 static void audio_in_on_closed(audio_in_t *ai) {
 	audio_track_t *tr = (audio_track_t *)ai->data;
+	free(ai);
 
 	switch (tr->stat) {
 	case CLOSING_BUF_EMPTY:
@@ -231,12 +271,12 @@ static void audio_in_on_read_done(audio_in_t *ai, int len) {
 
 	debug("len=%d", len);
 	if (len < 0) {
-		track_on_eof(tr);
+		track_on_read_eof(tr);
 		return;
 	}
 
 	ringbuf_push_head(&tr->buf, len);
-	track_on_buf_change(tr);
+	track_on_buf_change(tr, READ);
 }
 
 static void audio_in_on_meta(audio_in_t *ai, const char *key, void *_val) {
@@ -257,6 +297,8 @@ static void track_close(audio_track_t *tr) {
 }
 
 static void track_pause(audio_track_t *tr) {
+	debug("pause stat=%d paused=%d", tr->stat, tr->paused);
+
 	audio_mixer_t *am = tr->am;
 
 	switch (tr->stat) {
@@ -272,7 +314,9 @@ static void track_pause(audio_track_t *tr) {
 }
 
 static void track_resume(audio_track_t *tr) {
-	if (tr->paused)
+	debug("resume stat=%d paused=%d", tr->stat, tr->paused);
+
+	if (!tr->paused)
 		return;
 
 	switch (tr->stat) {
@@ -300,18 +344,21 @@ static void track_pause_resume_toggle(audio_track_t *tr) {
 }
 
 static void track_stop(audio_track_t *tr) {
+	debug("stat=%d", tr->stat);
+
 	switch (tr->stat) {
 	case READING_BUF_EMPTY:
 	case READING_BUF_HALFFULL:
-		tr->ai->stop(tr->ai);
 		ringbuf_init(&tr->buf);
 		tr->stat = WAITING_EOF;
+		tr->ai->stop_read(tr->ai);
 		break;
 
 	case WAITING_BUF_FULL:
 	case CLOSING_BUF_HALFFULL:
 		ringbuf_init(&tr->buf);
 		tr->stat = CLOSING_BUF_EMPTY;
+		tr->ai->close(tr->ai, audio_in_on_closed);
 		break;
 
 	case CLOSED_BUF_HALFFULL:
@@ -345,6 +392,8 @@ static const char *track_statstr(audio_track_t *tr) {
 static void track_read(audio_track_t *tr) {
 	void *buf; int len;
 	ringbuf_space_ahead_get(&tr->buf, &buf, &len);
+
+	debug("len=%d", len);
 	tr->ai->read(tr->ai, buf, len, audio_in_on_read_done);
 }
 
@@ -397,11 +446,11 @@ static void mixer_do_mix(audio_mixer_t *am, do_mix_t *dm) {
 			pcm_do_volume(buf, dm->len, highlight->vol);
 
 		if (i == 0)
-			memcpy(dm->buf, buf, len);
+			memcpy(dm->buf, buf, dm->len);
 		else
-			pcm_do_mix(dm->buf, buf, len);
+			pcm_do_mix(dm->buf, buf, dm->len);
 
-		ringbuf_push_tail(&tr->buf, len);
+		ringbuf_push_tail(&tr->buf, dm->len);
 		debug("mix#%d: stat=%d left=%d", i, tr->stat, tr->buf.len);
 	}
 
@@ -416,7 +465,7 @@ static void mixer_do_track_change(audio_mixer_t *am, do_mix_t *dm) {
 
 	for (i = 0; i < dm->n; i++) {
 		audio_track_t *tr = dm->tr[i];
-		track_on_buf_change(tr);
+		track_on_buf_change(tr, WRITE);
 	}
 }
 
@@ -577,11 +626,13 @@ static int lua_audio_info(lua_State *L) {
 	lua_pushstring(L, track_statstr(tr));
 	lua_setfield(L, -2, "stat");
 
-	lua_pushnumber(L, (int)track_get_pos(tr));
-	lua_setfield(L, -2, "position");
+	if (tr) {
+		lua_pushnumber(L, (int)track_get_pos(tr));
+		lua_setfield(L, -2, "position");
 
-	lua_pushnumber(L, (int)tr->dur);
-	lua_setfield(L, -2, "duration");
+		lua_pushnumber(L, (int)tr->dur);
+		lua_setfield(L, -2, "duration");
+	}
 
 	return 1;
 }

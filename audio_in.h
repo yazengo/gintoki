@@ -13,7 +13,7 @@ typedef struct audio_in_s {
 	void (*on_meta)(struct audio_in_s *ai, const char *key, void *val);
 
 	void (*read)(struct audio_in_s *ai, void *buf, int len, audio_in_read_cb done);
-	void (*stop)(struct audio_in_s *ai);
+	void (*stop_read)(struct audio_in_s *ai);
 	void (*close)(struct audio_in_s *ai, audio_in_close_cb done);
 
 	void *in;
