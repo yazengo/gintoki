@@ -72,3 +72,5 @@ void lua_pushuserptr(lua_State *L, void *p);
 void *lua_touserptr(lua_State *L, int index);
 void lua_setuserptr(lua_State *L, int index, void *p);
 
+char *strndup(const char *s, size_t n);
+

@@ -1,6 +1,7 @@
 
 #include <sys/socket.h>
 #include <sys/mman.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <uv.h>
@@ -66,8 +67,6 @@ typedef struct {
 	strbuf_t *rethdr;
 	char *retbody;
 	char *mimetype;
-
-	unsigned read_done:1;
 
 	int fd;
 	off_t flen;
