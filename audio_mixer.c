@@ -343,11 +343,11 @@ static int audio_play(lua_State *L) {
 		lua_pushcclosure(L, audio_on_done, 1);
 		lua_set_play_done(tr);
 
-		tr->ai->stop(tr->ai);
-		tr->stat = TRACK_STOPPING;
-		ringbuf_init(&tr->buf, am->loop);
-
-		check_all_tracks(am);
+		if (tr->stat < TRACK_STOPPING) {
+			tr->ai->stop(tr->ai);
+			tr->stat = TRACK_STOPPING;
+			ringbuf_init(&tr->buf, am->loop);
+		}
 
 		return 0;
 	}
