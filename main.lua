@@ -204,7 +204,7 @@ end
 prop.load()
 audio.setvol(50)
 radio.start(localmusic)
---airplay_start(prop.get('upnp.name', 'Muno') .. ' 的 Airplay')
---upnp.loadconfig()
---upnp.start()
+airplay_start(prop.get('upnp.name', 'Muno') .. ' 的 Airplay')
+upnp.loadconfig()
+upnp.start()
 
