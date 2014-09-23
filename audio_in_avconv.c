@@ -293,6 +293,7 @@ static int avconv_can_read(audio_in_t *ai) {
 
 static int avconv_is_eof(audio_in_t *ai) {
 	avconv_t *av = (avconv_t *)ai->in;
+
 	return av->stat > READING;
 }
 

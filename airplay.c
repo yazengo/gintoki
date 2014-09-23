@@ -122,7 +122,7 @@ static void on_handle_closed(uv_handle_t *h) {
 	}
 }
 
-static lua_emit_start(airplay_t *ap) {
+static void lua_emit_start(airplay_t *ap) {
 	lua_getglobal(ap->L, "airplay_on_start");
 	if (!lua_isnil(ap->L, -1)) {
 		lua_call_or_die(ap->L, 0, 0);
@@ -432,7 +432,7 @@ static int airplay_start(lua_State *L) {
 		g_ap->name = name;
 
 		airplay_stop(g_ap);
-		return;
+		return 0;
 	}
 
 	g_ap = (airplay_t *)zalloc(sizeof(airplay_t));

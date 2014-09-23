@@ -26,6 +26,7 @@ typedef struct audio_in_s {
 } audio_in_t;
 
 void audio_in_init(uv_loop_t *loop, audio_in_t *ai);
+void audio_in_error_init(uv_loop_t *loop, audio_in_t *ai, const char *err);
 
 /*
  * init() -> [ can_read() -> read() ] -> is_eof() -> close()
