@@ -239,7 +239,7 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 
 	switch (av->stat) {
 	case READING:
-		if (n > 0) {
+		if (n >= 0) {
 			av->stat = INIT;
 			av->on_read_done(ai, n);
 		} else {
