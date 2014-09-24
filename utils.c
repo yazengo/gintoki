@@ -223,6 +223,7 @@ void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p) {
 	pthread_call_uv_wait_withname(loop, cb, cb_p, "normal");
 }
 
+/*
 static void uv_call_free(uv_handle_t *h) {
 	free(h);
 }
@@ -232,13 +233,19 @@ static void uv_call_done(uv_async_t *as, int _) {
 	c->done_cb(c);
 	uv_close((uv_handle_t *)as, uv_call_free);
 }
+*/
 
 static void timer_free(uv_handle_t *t);
 
 void uv_call_timeout(uv_timer_t *t, int _) {
 	uv_call_t *c = (uv_call_t *)t->data;
-	c->done_cb(c);
+	if (c->done_cb)
+		c->done_cb(c);
 	uv_close((uv_handle_t *)t, timer_free);
+}
+
+void uv_call_cancel(uv_call_t *c) {
+	c->done_cb = NULL;
 }
 
 void uv_call(uv_loop_t *loop, uv_call_t *c) {
@@ -246,7 +253,6 @@ void uv_call(uv_loop_t *loop, uv_call_t *c) {
 	t->data = c;
 	uv_timer_init(loop, t);
 	uv_timer_start(t, uv_call_timeout, 0, 0);
-
 	/*
 	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
 	uv_async_init(loop, as, uv_call_done);

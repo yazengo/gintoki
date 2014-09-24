@@ -38,6 +38,7 @@ typedef struct uv_call_s {
 	void *data, *data2;
 } uv_call_t;
 void uv_call(uv_loop_t *loop, uv_call_t *c);
+void uv_call_cancel(uv_call_t *c);
 
 void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_start, lua_CFunction on_done, void *data);
 

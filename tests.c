@@ -388,6 +388,21 @@ static void test_blowfish() {
 	info("decode_out: %s", decode_out);
 }
 
+typedef struct {
+	int type, len;
+} cmdhdr_t;
+
+
+static void write2(void *buf, int len) {
+	while (len > 0) {
+		int r = write(4, buf, len);
+		if (r < 0)
+			break;
+		len -= r;
+		buf += r;
+	}
+}
+
 static void test_fake_shairport() {
 	info("starts");
 
@@ -400,13 +415,23 @@ static void test_fake_shairport() {
 	int i, r;
 
 	for (r = 0; r < repeat; r++) {
-		write(3, "s", 1);
+		cmdhdr_t c = {};
+
+		c.type = 0;
+		write2(&c, sizeof(c));
+
 		for (i = 0; i < n; i++) {
 			audio_out_test_fill_buf_with_key(buf, sizeof(buf), 44100, key);
-			write(4, buf, sizeof(buf));
+
+			cmdhdr_t c = {.type = 1, .len = sizeof(buf)};
+			write2(&c, sizeof(c));
+			write2(buf, sizeof(buf));
+
 			key = (key+1)%7;
 		}
-		write(3, "e", 1);
+
+		c.type = 2;
+		write2(&c, sizeof(c));
 	}
 
 #undef step
