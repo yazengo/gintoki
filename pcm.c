@@ -100,12 +100,7 @@ void pcm_do_mix(void *_out, void *_in, int len) {
 }
 
 void pcm_init() {
-	if (getenv("VOL_DIV") == NULL) {
-		mode = SHIFT8;
-		info("vol: use shift8");
-	} else {
-		mode = DIV;
-		info("vol: use div");
-	}
+	mode = DIV;
+	info("vol: use div");
 }
 
