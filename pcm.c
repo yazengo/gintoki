@@ -58,7 +58,7 @@ void pcm_do_volume(void *_out, int len, float fvol) {
 			vi = 0;
 
 		if (vi == 0) {
-			memset(out, 0, len);
+			memset(out, 0, len*2);
 			return;
 		}
 		vi--;
