@@ -81,7 +81,10 @@ int main(int argc, char *argv[]) {
 	luv_inputdev_init(L, loop);
 #endif
 
-	luv_airplay_init(L, loop);
+	if (getenv("AIRPLAY_V2"))
+		luv_airplay_init_v2(L, loop);
+	else
+		luv_airplay_init(L, loop);
 
 	luv_blowfish_init(L, loop);
 
