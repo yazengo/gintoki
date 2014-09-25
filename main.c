@@ -10,6 +10,7 @@
 #include "strbuf.h"
 #include "lua_cjson.h"
 #include "luv_curl.h"
+#include "net.h"
 #include "airplay.h"
 #include "airplay_v2.h"
 #include "blowfish.h"
@@ -90,6 +91,9 @@ int main(int argc, char *argv[]) {
 
 	if (getenv("DISABLE_UPNP") == NULL) 
 		upnp_init(L, loop);
+
+	if (getenv("NET"))
+		luv_net_init(L, loop);
 
 	if (test_c >= 200 && test_c < 300) {
 		run_test_c_post(test_c-200, L, loop, argv);

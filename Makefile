@@ -13,6 +13,7 @@ objs += audio_in.o
 objs += airplay.o
 objs += airplay_v2.o
 objs += luv_curl.o
+objs += net.o
 
 ldflags += -lcurl
 
@@ -20,17 +21,11 @@ cflags += -DVERSION=\"$(shell git rev-parse HEAD)\"
 
 objs-x86 += $(subst .o,-x86.o,$(objs))
 cflags-x86 += $(cflags) $(shell pkg-config --cflags lua5.2 libupnp libuv) 
-ldflags-x86 += $(shell pkg-config --libs libupnp lua5.2) $(ldflags) -lao
+ldflags-x86 += $(ldflags) $(shell pkg-config --libs libupnp lua5.2) -lao
 
 objs-darwin += $(subst .o,-darwin.o,$(objs))
-cflags-darwin += $(cflags)
-cflags-darwin += -I../shairport/
-cflags-darwin += -I/usr/local/Cellar/libupnp/1.6.19/include/upnp/
-cflags-darwin += -I/usr/local/Cellar/lua52/5.2.3/include
-ldflags-darwin += $(ldflags)
-ldflags-darwin += -L/usr/local/Cellar/libupnp/1.6.19/lib
-ldflags-darwin += -L/usr/local/Cellar/lua52/5.2.3/lib
-ldflags-darwin += -L/usr/local/Cellar/libuv/0.10.21/lib
+cflags-darwin += $(cflags) -I/usr/local/include
+ldflags-darwin += $(ldflags) -L/usr/local/lib
 ldflags-darwin += -lupnp -llua -luv -lixml -lao
 
 cc-mips = mipsel-linux-gcc
@@ -41,7 +36,7 @@ cflags-mips += $(cflags) -I$(sysroot-mips)/include/ -I$(sysroot-mips)/include/up
 cflags-mips += -I../third/airplay-jz
 cflags-mips += -DUSE_JZCODEC
 cflags-mips += -DUSE_INPUTDEV
-ldflags-mips += -L $(sysroot-mips)/lib  $(ldflags)
+ldflags-mips += $(ldflags) -L$(sysroot-mips)/lib
 ldflags-mips += -llua -pthread -lupnp -lthreadutil -lixml -lrt 
 
 hfiles = $(wildcard *.h)
