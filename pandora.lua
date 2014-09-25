@@ -45,7 +45,7 @@ P.call = function (p)
 	if P.verbose then log(url, p.data) end
 
 	return curl {
-		proxy = 'localhost:8888',
+		proxy = 'sugrsugr.com:8889',
 		url = url,
 		content_type = 'text/plain',
 		user_agent = 'pithos',
