@@ -1,4 +1,7 @@
 
+require('pandora')
+require('cmd')
+
 local P = pandora
 
 -- setloglevel(0)

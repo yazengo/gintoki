@@ -94,4 +94,3 @@ sumcode:
 clean:
 	rm -rf *.o server-mips server-x86 server-darwin
 
-
