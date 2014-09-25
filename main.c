@@ -11,6 +11,7 @@
 #include "lua_cjson.h"
 #include "luv_curl.h"
 #include "airplay.h"
+#include "airplay_v2.h"
 #include "blowfish.h"
 #include "upnp_device.h"
 #include "audio_mixer.h"

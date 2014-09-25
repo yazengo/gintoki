@@ -11,6 +11,7 @@ objs += audio_in_avconv.o
 objs += blowfish.o 
 objs += audio_in.o
 objs += airplay.o
+objs += airplay_v2.o
 objs += luv_curl.o
 
 ldflags += -lcurl
