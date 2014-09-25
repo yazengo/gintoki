@@ -69,7 +69,6 @@ void pcm_do_volume(void *_out, int len, float fvol) {
 		while (len--) {
 			int32_t v = *out;
 			v = v*b / a;
-			info("v=%d->%d", *out, v);
 			*out = (int16_t)v;
 			out++;
 		}
