@@ -339,9 +339,6 @@ static int lua_zpnp_notify(lua_State *L) {
 	zpnpsrv_t *zs = (zpnpsrv_t *)lua_touserptr(L, lua_upvalueindex(1));
 	char *str = (char *)lua_tostring(L, 1);
 
-	if (str == NULL)
-		str = "";
-
 	int fd = socket(AF_INET, SOCK_DGRAM, 0); 
 	if (fd < 0)
 		return 0;
@@ -358,10 +355,15 @@ static int lua_zpnp_notify(lua_State *L) {
 	msg_t m = {
 		.name = zs->name,
 		.uuid = zs->uuid,
-		.type = MT_DATA,
-		.data = str,
-		.datalen = strlen(str),
 	};
+	if (str == NULL) {
+		m.type = MT_DISCOVERY;
+	} else {
+		m.type = MT_DATA;
+		m.data = str;
+		m.datalen = strlen(str);
+	}
+
 	msg_allocfill(&m);
 	debug("n=%d -> port %d", m.len, PORT_NOTIFY);
 
