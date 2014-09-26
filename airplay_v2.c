@@ -55,6 +55,8 @@ typedef struct airplay_s {
 	readbuf_t rb;
 
 	audio_in_read_cb ai_read_done;
+	int data_len;
+
 	audio_in_close_cb ai_close_done;
 } airplay_t;
 
@@ -158,6 +160,7 @@ static void on_cmd_data(airplay_t *ap) {
 	switch (ap->stat) {
 	case WAITING_CMDHDR:
 		ap->stat = ATTACHED;
+		ap->ai_read_done(ap->ai, ap->data_len);
 		break;
 
 	case WAITING_START_DATAHDR:
@@ -176,8 +179,8 @@ static void on_data_done(airplay_t *ap, int len) {
 	switch (ap->stat) {
 	case WAITING_DATA:
 		ap->stat = WAITING_CMDHDR;
+		ap->data_len = len;
 		pdata_read_cmdhdr(ap);
-		ap->ai_read_done(ap->ai, len);
 		break;
 
 	default:

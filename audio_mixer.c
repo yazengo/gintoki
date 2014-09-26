@@ -121,7 +121,7 @@ static void audio_in_on_probe(audio_in_t *ai, const char *key, void *_val) {
 static void audio_in_on_read_done(audio_in_t *ai, int len) {
 	audio_track_t *tr = (audio_track_t *)ai->data;
 
-	debug("done len=%d", len);
+	debug("len=%d", len);
 
 	ringbuf_push_head(&tr->buf, len);
 	check_all_tracks(tr->am);
@@ -130,7 +130,7 @@ static void audio_in_on_read_done(audio_in_t *ai, int len) {
 static void audio_out_on_play_done(audio_out_t *ao, int len) {
 	audio_mixer_t *am = (audio_mixer_t *)ao->data;
 
-	debug("playdone");
+	debug("len=%d", len);
 
 	ringbuf_push_tail(&am->mixbuf, len);
 	check_all_tracks(am);
@@ -201,6 +201,8 @@ static void check_tracks_can_read(audio_mixer_t *am) {
 
 		if (len > MAX_TRACKBUF)
 			len = MAX_TRACKBUF;
+
+		debug("len=%d", len);
 
 		if (len > 0)
 			ai->read(ai, buf, len, audio_in_on_read_done);
