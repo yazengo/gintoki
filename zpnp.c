@@ -186,7 +186,7 @@ static uv_buf_t udp_allocbuf(uv_handle_t *h, size_t len) {
 }
 
 static void udp_write_done(uv_udp_send_t *sr, int stat) {
-	debug("sent");
+	free(sr->data);
 }
 
 static void udp_read(uv_udp_t *h, ssize_t n, uv_buf_t buf, struct sockaddr *addr, unsigned flags) {
@@ -203,12 +203,11 @@ static void udp_read(uv_udp_t *h, ssize_t n, uv_buf_t buf, struct sockaddr *addr
 		.type = MT_DISCOVERY,
 	};
 	msg_allocfill(&m);
-	debug("n=%d", m.len);
+	debug("n=%d uuid=%x", m.len, m.uuid);
 
 	zs->ubuf = uv_buf_init(m.buf, m.len);
+	zs->sr.data = m.buf;
 	uv_udp_send(&zs->sr, &zs->udpcli, &zs->ubuf, 1, *(struct sockaddr_in *)addr, udp_write_done);
-
-	free(m.buf);
 }
 
 static void tcpcli_on_handle_closed(uv_handle_t *h) {
@@ -340,11 +339,21 @@ static int lua_zpnp_notify(lua_State *L) {
 	zpnpsrv_t *zs = (zpnpsrv_t *)lua_touserptr(L, lua_upvalueindex(1));
 	char *str = (char *)lua_tostring(L, 1);
 
-	zpnpcli_t *zc = (zpnpcli_t *)zalloc(sizeof(zpnpcli_t));
-	zc->zs = zs;
-
 	if (str == NULL)
 		str = "";
+
+	int fd = socket(AF_INET, SOCK_DGRAM, 0); 
+	if (fd < 0)
+		return 0;
+
+	int v = 1;
+	setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &v, sizeof(v));
+
+	struct sockaddr_in si; 
+	memset(&si, 0, sizeof(si));
+	si.sin_family = AF_INET;
+	si.sin_port = htons(PORT_NOTIFY);
+	si.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 
 	msg_t m = {
 		.name = zs->name,
@@ -354,15 +363,10 @@ static int lua_zpnp_notify(lua_State *L) {
 		.datalen = strlen(str),
 	};
 	msg_allocfill(&m);
-	zc->m = m;
 	debug("n=%d -> port %d", m.len, PORT_NOTIFY);
 
-	uv_udp_set_broadcast(&zs->udpbc, 1);
-
-	zc->ubuf = uv_buf_init(m.buf, m.len);
-	zc->sr.data = zc;
-	struct sockaddr_in addr = uv_ip4_addr("0.0.0.0", PORT_NOTIFY);
-	uv_udp_send(&zc->sr, &zs->udpbc, &zc->ubuf, 1, addr, zpnp_notify_done);
+	sendto(fd, m.buf, m.filled, 0, (struct sockaddr *)&si, sizeof(si));
+	free(m.buf);
 
 	return 0;
 }
