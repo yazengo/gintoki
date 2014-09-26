@@ -35,11 +35,12 @@ enum {
 
 typedef struct airplay_s {
 	int stat;
-	int stat_close;
 
-	int stat_kill;
-	void (*on_killed)(struct airplay_s *);
-	int stopped_cancelled;
+	int stat_close;
+	void (*on_close)(struct airplay_s *);
+
+	int pending_killed;
+	int pending_ai_close;
 
 	char *name;
 
@@ -53,13 +54,12 @@ typedef struct airplay_s {
 
 	readbuf_t rb;
 
-	audio_in_read_cb on_read_done;
-	audio_in_close_cb on_close;
+	audio_in_read_cb ai_read_done;
+	audio_in_close_cb ai_close_done;
 } airplay_t;
 
 enum {
 	PDATA,
-	PCTRL,
 };
 
 enum {
@@ -72,36 +72,31 @@ enum {
 	STOPPED,
 	STOPPED_CLOSING,
 
-	KILLING,
-	KILLED,
+	EXITED,
 	CLOSING,
 };
 
 enum {
-	KILLING_WAIT_EXIT_EOF,
-	KILLING_WAIT_EOF,
-	KILLING_WAIT_EXIT,
-};
-
-enum {
 	CLOSING_PDATA,
+	CLOSING_WAITING_EXIT,
 	CLOSING_PROC,
 };
 
 static airplay_t *g_ap;
 
+static void proc_init(airplay_t *ap);
 static void proc_start(airplay_t *ap);
+static void proc_kill(airplay_t *ap);
+static void proc_close(airplay_t *ap);
 
-static void airplay_stop(airplay_t *ap);
-static void airplay_close(airplay_t *ap);
+static void enter_stopped(airplay_t *ap);
 
 static void pdata_read_cmdhdr(airplay_t *ap);
 static void pdata_read_data(airplay_t *ap, void *buf, int len);
 static void pdata_read_start(airplay_t *ap);
 
-static void stopped_cancel_closing(airplay_t *ap);
-
 static void on_read_eof(airplay_t *ap);
+static void lua_emit_start(airplay_t *ap);
 
 static void on_handle_closed(uv_handle_t *h) {
 	airplay_t *ap = (airplay_t *)h->data;
@@ -111,24 +106,18 @@ static void on_handle_closed(uv_handle_t *h) {
 
 	switch (ap->stat_close) {
 	case CLOSING_PDATA:
-		ap->stat = CLOSING_PROC;
-		uv_close((uv_handle_t *)ap->proc, on_handle_closed);
+		if (ap->pending_killed) {
+			proc_close(ap);
+		} else {
+			ap->stat = CLOSING_WAITING_EXIT;
+			proc_kill(ap);
+		}
 		break;
 
 	case CLOSING_PROC:
-		if (ap->on_close)
-			ap->on_close(ap->ai);
-		proc_start(ap);
+		ap->on_close(ap);
 		break;
 	}
-}
-
-static void lua_emit_start(airplay_t *ap) {
-	lua_getglobal(ap->L, "airplay_on_start");
-	if (!lua_isnil(ap->L, -1)) {
-		lua_call_or_die(ap->L, 0, 0);
-	} else 
-		lua_pop(ap->L, 1);
 }
 
 static void on_cmd_start(airplay_t *ap) {
@@ -150,7 +139,7 @@ static void on_cmd_stop(airplay_t *ap) {
 
 	switch (ap->stat) {
 	case WAITING_CMDHDR:
-		ap->stat = STOPPED;
+		enter_stopped(ap);
 		break;
 
 	default:
@@ -183,8 +172,7 @@ static void on_data_done(airplay_t *ap, int len) {
 	case WAITING_DATA:
 		ap->stat = WAITING_CMDHDR;
 		pdata_read_cmdhdr(ap);
-		ap->on_read_done(ap->ai, len);
-		ap->on_read_done = NULL;
+		ap->ai_read_done(ap->ai, len);
 		break;
 
 	default:
@@ -198,8 +186,7 @@ static void on_data_halfdone(airplay_t *ap, int len) {
 	switch (ap->stat) {
 	case WAITING_DATA:
 		ap->stat = ATTACHED;
-		ap->on_read_done(ap->ai, len);
-		ap->on_read_done = NULL;
+		ap->ai_read_done(ap->ai, len);
 		break;
 
 	default:
@@ -327,25 +314,24 @@ static void pdata_read_data(airplay_t *ap, void *buf, int len) {
 	pdata_read_start(ap);
 }
 
-static void jump_to_closing(airplay_t *ap) {
+static void enter_restart(airplay_t *ap) {
+	proc_init(ap);
+	proc_start(ap);
+}
+
+static void enter_exited(airplay_t *ap) {
+	if (ap->pending_ai_close) {
+		enter_restart(ap);
+	} else {
+		ap->stat = EXITED;
+	}
+}
+
+static void enter_closing(airplay_t *ap, void (*done)(airplay_t *)) {
 	ap->stat = CLOSING;
+	ap->on_close = done;
 	ap->stat_close = CLOSING_PDATA;
 	uv_close((uv_handle_t *)ap->pipe[PDATA], on_handle_closed);
-}
-
-static void jump_to_killed(airplay_t *ap) {
-	ap->stat = KILLED;
-}
-
-static void proc_kill(airplay_t *ap) {
-	uv_process_kill(ap->proc, 15);
-}
-
-static void enter_killing(airplay_t *ap, int stat, void (*done)(airplay_t *)) {
-	proc_kill(ap);
-	ap->on_killed = done;
-	ap->stat_kill = stat;
-	ap->stat = KILLING;
 }
 
 static void on_read_eof(airplay_t *ap) {
@@ -354,71 +340,28 @@ static void on_read_eof(airplay_t *ap) {
 	switch (ap->stat) {
 	case WAITING_START_CMDHDR:
 	case WAITING_START_DATAHDR:
-		enter_killing(ap, KILLING_WAIT_EXIT, jump_to_closing);
+		enter_closing(ap, enter_restart);
 		break;
 
 	case WAITING_DATA:
 	case WAITING_CMDHDR:
-		enter_killing(ap, KILLING_WAIT_EXIT, jump_to_killed);
+		enter_closing(ap, enter_exited);
 		break;
 
 	default:
 		panic("invalid stat=%d", ap->stat);
-	}
-}
-
-static void on_proc_exit_killing(airplay_t *ap) {
-	switch (ap->stat_kill) {
-	case KILLING_WAIT_EXIT_EOF:
-		ap->stat_kill = KILLING_WAIT_EOF;
-		break;
-
-	case KILLING_WAIT_EXIT:
-		ap->on_killed(ap);
-		break;
-
-	default:
-		panic("invalid stat_kill=%d", ap->stat_kill);
 	}
 }
 
 static void on_proc_exit(uv_process_t *p, int stat, int sig) {
 	airplay_t *ap = (airplay_t *)p->data;
 
-	info("sig=%d stat_kill=%d", sig, ap->stat_kill);
+	info("sig=%d", sig);
 
-	switch (ap->stat) {
-	case KILLING:
-		on_proc_exit_killing(ap);
-		break;
+	ap->pending_killed++;
 
-	case WAITING_START_CMDHDR:
-	case WAITING_START_DATAHDR:
-		enter_killing(ap, KILLING_WAIT_EOF, jump_to_closing);
-		break;
-
-	case STARTED:
-		jump_to_closing(ap);
-		break;
-
-	case WAITING_DATA:
-	case WAITING_CMDHDR:
-		enter_killing(ap, KILLING_WAIT_EOF, jump_to_killed);
-		break;
-
-	case ATTACHED:
-	case STOPPED:
-		jump_to_killed(ap);
-		break;
-
-	case STOPPED_CLOSING:
-		stopped_cancel_closing(ap);
-		jump_to_closing(ap);
-		break;
-
-	default:
-		panic("invalid stat=%d", ap->stat);
-	}
+	if (ap->stat == CLOSING && ap->stat_close == CLOSING_WAITING_EXIT)
+		proc_close(ap);
 }
 
 static void on_stopped_close_done(uv_call_t *c) {
@@ -426,51 +369,36 @@ static void on_stopped_close_done(uv_call_t *c) {
 	free(c);
 
 	debug("done");
-
-	if (ap->stopped_cancelled)
-		return;
-
-	ap->stat = WAITING_START_CMDHDR;
-	pdata_read_cmdhdr(ap);
+	proc_start(ap);
 }
 
 static void stopped_close(airplay_t *ap) {
 	uv_call_t *c = (uv_call_t *)zalloc(sizeof(uv_call_t));
 	c->data = ap;
 	c->done_cb = on_stopped_close_done;
-	ap->stopped_cancelled = 0;
 	ap->stat = STOPPED_CLOSING;
 	uv_call(ap->loop, c);
 }
 
-static void stopped_cancel_closing(airplay_t *ap) {
-	ap->stopped_cancelled = 1;
-}
-
-static void airplay_close(airplay_t *ap) {
-	info("stat=%d", ap->stat);
-
-	switch (ap->stat) {
-	case STOPPED:
+static void enter_stopped(airplay_t *ap) {
+	if (ap->pending_ai_close) {
 		stopped_close(ap);
-		break;
-
-	case KILLED:
-		jump_to_closing(ap);
-		break;
-
-	default:
-		panic("stat=%d invalid", ap->stat);
+	} else {
+		ap->stat = STOPPED;
 	}
 }
 
-static void proc_start(airplay_t *ap) {
+static void proc_init(airplay_t *ap) {
 	uv_process_t *proc = (uv_process_t *)zalloc(sizeof(uv_process_t));
 	proc->data = ap;
 	ap->proc = proc;
 
+	ap->ai_close_done = NULL;
+	ap->ai_read_done = NULL;
+	ap->pending_killed = 0;
+	ap->pending_ai_close = 0;
 	ap->on_close = NULL;
-	ap->on_read_done = NULL;
+	ap->stat_close = 0;
 
 	int i;
 	for (i = 0; i < 2; i++) {
@@ -483,7 +411,7 @@ static void proc_start(airplay_t *ap) {
 		{.flags = UV_IGNORE},
 		{.flags = UV_IGNORE},
 		{.flags = UV_IGNORE},
-		{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[PCTRL]},
+		{.flags = UV_IGNORE}, //{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[PCTRL]},
 		{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[PDATA]},
 	};
 
@@ -519,38 +447,20 @@ static void proc_start(airplay_t *ap) {
 
 	int r = uv_spawn(ap->loop, proc, opts);
 	info("proc=%s spawn=%d pid=%d", args[0], r, proc->pid);
+}
 
+static void proc_start(airplay_t *ap) {
 	ap->stat = WAITING_START_CMDHDR;
 	pdata_read_cmdhdr(ap);
 }
 
-// arg[1] = name
-static int airplay_start(lua_State *L) {
-	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
-	char *name = (char *)lua_tostring(L, 1);
+static void proc_close(airplay_t *ap) {
+	ap->stat_close = CLOSING_PROC;
+	uv_close((uv_handle_t *)ap->proc, on_handle_closed);
+}
 
-	if (name == NULL)
-		panic("name must be set");
-	name = strdup(name);
-
-	if (g_ap) {
-		info("do restart. stat=%d", g_ap->stat);
-
-		free(g_ap->name);
-		g_ap->name = name;
-
-		proc_kill(g_ap);
-		return 0;
-	}
-
-	g_ap = (airplay_t *)zalloc(sizeof(airplay_t));
-	g_ap->L = L;
-	g_ap->loop = loop;
-	g_ap->name = name;
-
-	proc_start(g_ap);
-
-	return 0;
+static void proc_kill(airplay_t *ap) {
+	uv_process_kill(ap->proc, 15);
 }
 
 static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb done) {
@@ -564,7 +474,7 @@ static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb d
 		len = left;
 
 	ap->stat = WAITING_DATA;
-	ap->on_read_done = done;
+	ap->ai_read_done = done;
 	pdata_read_data(ap, buf, len);
 }
 
@@ -578,16 +488,35 @@ static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
 	debug("stat=%d", ap->stat);
-	ap->on_close = done;
+	ap->ai_close_done = done;
 
-	airplay_close(ap);
+	ap->pending_ai_close++;
+
+	switch (ap->stat) {
+	case EXITED:
+		proc_init(ap);
+		proc_start(ap);
+		break;
+
+	case STOPPED:
+		stopped_close(ap);
+		break;
+	}
 }
 
 static int audio_in_is_eof(audio_in_t *ai) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
 	debug("stat=%d", ap->stat);
-	return ap->stat == KILLED || ap->stat == STOPPED;
+
+	switch (ap->stat) {
+	case STOPPED:
+	case STOPPED_CLOSING:
+	case CLOSING:
+	case EXITED:
+		return 1;
+	}
+	return 0;
 }
 
 static int audio_in_can_read(audio_in_t *ai) {
@@ -626,10 +555,48 @@ void audio_in_airplay_init_v2(uv_loop_t *loop, audio_in_t *ai) {
 	ai->is_eof = audio_in_is_eof;
 }
 
+static void lua_emit_start(airplay_t *ap) {
+	lua_getglobal(ap->L, "airplay_on_start");
+	if (!lua_isnil(ap->L, -1)) {
+		lua_call_or_die(ap->L, 0, 0);
+	} else 
+		lua_pop(ap->L, 1);
+}
+
+// arg[1] = name
+static int lua_airplay_start(lua_State *L) {
+	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
+	char *name = (char *)lua_tostring(L, 1);
+
+	if (name == NULL)
+		panic("name must be set");
+	name = strdup(name);
+
+	if (g_ap) {
+		info("do restart. stat=%d", g_ap->stat);
+
+		free(g_ap->name);
+		g_ap->name = name;
+
+		proc_kill(g_ap);
+		return 0;
+	}
+
+	g_ap = (airplay_t *)zalloc(sizeof(airplay_t));
+	g_ap->L = L;
+	g_ap->loop = loop;
+	g_ap->name = name;
+
+	proc_init(g_ap);
+	proc_start(g_ap);
+
+	return 0;
+}
+
 void luv_airplay_init_v2(lua_State *L, uv_loop_t *loop) {
 	// airplay_start = [native function]
 	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, airplay_start, 1);
+	lua_pushcclosure(L, lua_airplay_start, 1);
 	lua_setglobal(L, "airplay_start");
 }
 
