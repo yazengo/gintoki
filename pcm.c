@@ -7,8 +7,14 @@
 #include "utils.h"
 
 static inline int16_t clip_int16_c(int a) {
-    if ((a+0x8000) & ~0xFFFF) return (a>>31) ^ 0x7FFF;
-    else                      return a;
+	//
+	// if (a > 0x8000)
+	// 	 a = 0x8000;
+	// else if (a < -0x7fff)
+	// 	 a = -0x7fff;
+	// 
+  if ((a+0x8000) & ~0xFFFF) return (a>>31) ^ 0x7FFF;
+  else                      return a;
 }
 
 enum {
@@ -50,17 +56,13 @@ void pcm_do_volume(void *_out, int len, float fvol) {
 
 		if (vi > 100)
 			vi = 100;
-		if (vi < 0)
-			vi = 0;
-
-		if (vi == 0) {
+		else if (vi <= 0)
 			memset(out, 0, len*2);
 			return;
 		}
-		vi--;
 
 		int32_t a = voltbl[99];
-		int32_t b = voltbl[vi];
+		int32_t b = voltbl[vi-1];
 
 		while (len--) {
 			int32_t v = *out;
@@ -72,9 +74,9 @@ void pcm_do_volume(void *_out, int len, float fvol) {
 		int vol = fvol * 255;
 		if (vol == 255)
 			return;
-		if (vol > 255)
+		else if (vol > 255)
 			vol = 255;
-		if (vol <= 0)
+		else if (vol <= 0)
 			vol = 0;
 		while (len--) {
 			*out = clip_int16_c((*out * vol) >> 8);

@@ -168,25 +168,37 @@ static void udp_new(uv_loop_t *loop) {
 	info("listening on :%d", port);
 }
 
-static void enum_interfaces() {
+#define IPLEN (24)
+
+static void netinfo_enum(char *ip) {
 	uv_interface_address_t *info;
 	int n, i;
 
 	uv_interface_addresses(&info, &n);
 	for (i = 0; i < n; i++) {
 		uv_interface_address_t ia = info[i];
-		char buf[512];
 
-		uv_ip4_name(&ia.address.address4, buf, sizeof(buf));
+		if (!strcmp(ia.name, "en0") || !strcmp(ia.name, "wlan0")) {
+			uv_ip4_name(&ia.address.address4, ip, IPLEN);
+		}
 
-		debug("name=%s addr=%s internal=%d", ia.name, buf, ia.is_internal);
+		debug("name=%s internal=%d", ia.name, ia.is_internal);
 	}
 
 	uv_free_interface_addresses(info, n);
 }
 
+static int lua_netinfo_ip(lua_State *L) {
+	char ip[IPLEN] = {};
+
+	netinfo_enum(ip);
+
+	lua_pushstring(L, ip);
+	return 1;
+}
+
 void luv_net_init(lua_State *L, uv_loop_t *loop) {
-	enum_interfaces();
-	udp_new(loop);
+	lua_pushcfunction(L, lua_netinfo_ip);
+	lua_setglobal(L, "netinfo_ip");
 }
 
