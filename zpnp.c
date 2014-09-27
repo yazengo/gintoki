@@ -157,10 +157,11 @@ typedef struct {
 	uv_udp_send_t sr;
 
 	char buf[1440];
-	uv_buf_t ubuf;
+	uv_buf_t ubuf, ubuf2;
 
 	lua_State *L;
 	uv_loop_t *loop;
+	uv_work_t work;
 
 	char *name;
 	uint32_t uuid;
@@ -326,22 +327,16 @@ static int lua_zpnp_setopt(lua_State *L) {
 	return 0;
 }
 
-static void zpnp_notify_done(uv_udp_send_t *sr, int stat) {
-	zpnpcli_t *zc = (zpnpcli_t *)sr->data;
-
-	debug("done");
-
-	free(zc->m.buf);
-	free(zc);
+static void udpbc_notify_done(uv_work_t *w, int stat) {
+	zpnpsrv_t *zs = (zpnpsrv_t *)w->data;
 }
 
-static int lua_zpnp_notify(lua_State *L) {
-	zpnpsrv_t *zs = (zpnpsrv_t *)lua_touserptr(L, lua_upvalueindex(1));
-	char *str = (char *)lua_tostring(L, 1);
+static void udpbc_notify_thread(uv_work_t *w) {
+	zpnpsrv_t *zs = (zpnpsrv_t *)w->data;
 
 	int fd = socket(AF_INET, SOCK_DGRAM, 0); 
 	if (fd < 0)
-		return 0;
+		goto out;
 
 	int v = 1;
 	setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &v, sizeof(v));
@@ -351,6 +346,36 @@ static int lua_zpnp_notify(lua_State *L) {
 	si.sin_family = AF_INET;
 	si.sin_port = htons(PORT_NOTIFY);
 	si.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+
+	sendto(fd, zs->ubuf2.base, zs->ubuf2.len, 0, (struct sockaddr *)&si, sizeof(si));
+
+out:
+	free(zs->ubuf2.base);
+}
+
+static void udpbc_notify(zpnpsrv_t *zs, void *buf, int len) {
+	zs->ubuf2 = uv_buf_init(buf, len);
+	zs->work.data = zs;
+	uv_queue_work(zs->loop, &zs->work, udpbc_notify_thread, udpbc_notify_done);
+}
+
+static void udpbc_uv_notify_done(uv_udp_send_t *sr, int stat) {
+	zpnpcli_t *zc = (zpnpcli_t *)sr->data;
+	free(zc->ubuf.base);
+}
+
+static void udpbc_uv_notify(zpnpsrv_t *zs, void *buf, int len) {
+	zpnpcli_t *zc = (zpnpcli_t *)zalloc(sizeof(zpnpcli_t));
+
+	debug("testing uv send broadcast");
+	zc->ubuf = uv_buf_init(buf, len);
+	zc->sr.data = zc;
+	uv_udp_send(&zc->sr, &zs->udpbc, &zc->ubuf, 1, uv_ip4_addr("255.255.255.255", PORT_NOTIFY), udpbc_uv_notify_done);
+}
+
+static int lua_zpnp_notify(lua_State *L) {
+	zpnpsrv_t *zs = (zpnpsrv_t *)lua_touserptr(L, lua_upvalueindex(1));
+	char *str = (char *)lua_tostring(L, 1);
 
 	msg_t m = {
 		.name = zs->name,
@@ -363,12 +388,12 @@ static int lua_zpnp_notify(lua_State *L) {
 		m.data = str;
 		m.datalen = strlen(str);
 	}
-
 	msg_allocfill(&m);
-	debug("n=%d -> port %d", m.len, PORT_NOTIFY);
 
-	sendto(fd, m.buf, m.filled, 0, (struct sockaddr *)&si, sizeof(si));
-	free(m.buf);
+	if (getenv("ZNOTIFYUV"))
+		udpbc_uv_notify(zs, m.buf, m.len);
+	else
+		udpbc_notify(zs, m.buf, m.len);
 
 	return 0;
 }
@@ -384,6 +409,7 @@ static int lua_zpnp_start(lua_State *L) {
 	uv_udp_init(loop, &zs->udp);
 	uv_udp_init(loop, &zs->udpcli);
 	uv_udp_init(loop, &zs->udpbc);
+	uv_udp_set_broadcast(&zs->udpbc, 1);
 
 	zs->udp.data = zs;
 	zs->tcp.data = zs;
