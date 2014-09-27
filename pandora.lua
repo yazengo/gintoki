@@ -162,6 +162,7 @@ P.grep_songs = function (old)
 			artist = s.artistName,
 			id = s.trackToken,
 			cover_url = s.albumArtUrl,
+			like = (s.songRating == 1),
 		}
 	end
 
@@ -285,6 +286,28 @@ P.songs_list = function (cookie, done)
 		},
 		done = function (r, stat)
 			if r then r = P.grep_songs(r) end
+			done(r, stat)
+		end,
+	}
+end
+
+P.add_feedback = function (cookie, done)
+	return P.call {
+		proto = 'http',
+		blowfish = true,
+		params = {
+			method = 'station.addFeedback',
+			user_id = cookie.user_id,
+			partner_id = cookie.partner_id,
+			auth_token = cookie.user_auth_token,
+		},
+		data = {
+			syncTime = os.time() + cookie.partner_time_offset,
+			userAuthToken = cookie.user_auth_token,
+			trackToken = cookie.song_id,
+			isPositive = cookie.like,
+		},
+		done = function (r, stat)
 			done(r, stat)
 		end,
 	}
@@ -518,6 +541,18 @@ P.setopt = function (o, done)
 		end)
 	elseif o.op == 'pandora.songs_list' then
 		P.songs_list(P.cookie, function () end)
+	elseif o.op == 'pandora.rate_like' or o.op == 'pandora.rate_ban' then
+		if not o.id then
+			local s = P.songs[P.songs_i] or {}
+			o.id = s.id
+		end
+		local like = (o.op == 'pandora.rate_like')
+		P.add_feedback(table.add(P.cookie, {song_id=o.id, like=like}), function ()
+			done{result=0}
+		end)
+		if not like then
+			if P.next_callback then P.next_callback() end
+		end
 	end
 end
 
