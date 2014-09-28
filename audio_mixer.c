@@ -360,6 +360,7 @@ static int audio_play(lua_State *L) {
 	ringbuf_init(&tr->buf);
 
 	lua_getfield(L, 1, "done");
+	lua_pushcclosure(L, audio_on_done, 1);
 	lua_set_play_done(tr);
 
 	info("url=%s i=%d", url, ti);
