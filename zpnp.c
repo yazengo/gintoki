@@ -348,6 +348,7 @@ static void udpbc_notify_thread(uv_work_t *w) {
 	si.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 
 	sendto(fd, zs->ubuf2.base, zs->ubuf2.len, 0, (struct sockaddr *)&si, sizeof(si));
+	close(fd);
 
 out:
 	free(zs->ubuf2.base);
