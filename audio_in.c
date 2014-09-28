@@ -40,10 +40,10 @@ void audio_in_init(uv_loop_t *loop, audio_in_t *ai) {
 	char *airplay = "airplay://";
 
 	if (!strncmp(ai->url, airplay, strlen(airplay))) {
-		if (getenv("AIRPLAY_V2"))
-			audio_in_airplay_init_v2(loop, ai);
-		else
+		if (getenv("AIRPLAY_V1"))
 			audio_in_airplay_init(loop, ai);
+		else
+			audio_in_airplay_init_v2(loop, ai);
 	} else
 		audio_in_avconv_init(loop, ai);
 }
