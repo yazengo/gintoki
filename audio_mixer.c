@@ -80,6 +80,8 @@ static const char *track_stat_str(int stat) {
 	case TRACK_BUFFERING: return "buffering";
 	case TRACK_PLAYING: return "playing";
 	case TRACK_PAUSED: return "paused";
+	case TRACK_STOPPING: return "stopping";
+	case TRACK_CLOSING: return "closing";
 	default: return "?";
 	}
 }
@@ -107,6 +109,14 @@ static void track_change_stat(audio_track_t *tr, int stat) {
 	tr->stat = stat;
 	if (send)
 		audio_emit(tr->am, "stat_change", track_stat_str(stat));
+}
+
+static void track_stop(audio_track_t *tr) {
+	if (tr->stat < TRACK_STOPPING) {
+		tr->ai->stop(tr->ai);
+		tr->stat = TRACK_STOPPING;
+		ringbuf_init(&tr->buf);
+	}
 }
 
 static void audio_in_on_probe(audio_in_t *ai, const char *key, void *_val) {
@@ -282,7 +292,7 @@ static void check_all_tracks(audio_mixer_t *am) {
 }
 
 static int parse_track_i(lua_State *L) {
-	if (lua_isnil(L, 1))
+	if (!lua_istable(L, 1) || lua_isnil(L, 1))
 		return 0;
 
 	lua_getfield(L, 1, "track");
@@ -341,18 +351,13 @@ static int audio_play(lua_State *L) {
 		lua_pushcclosure(L, audio_on_done, 1);
 		lua_set_play_done(tr);
 
-		if (tr->stat < TRACK_STOPPING) {
-			tr->ai->stop(tr->ai);
-			tr->stat = TRACK_STOPPING;
-			ringbuf_init(&tr->buf, am->loop);
-		}
-
+		track_stop(tr);
 		return 0;
 	}
 
 	tr->stat = TRACK_BUFFERING;
 	tr->first_blood = 1; // for testing
-	ringbuf_init(&tr->buf, am->loop);
+	ringbuf_init(&tr->buf);
 
 	lua_getfield(L, 1, "done");
 	lua_set_play_done(tr);
@@ -439,6 +444,19 @@ static int audio_resume(lua_State *L) {
 	return 0;
 }
 
+// audio.stop{track=1}
+static int audio_stop(lua_State *L) {
+	audio_mixer_t *am = lua_getam(L);
+	audio_track_t *tr = &am->tracks[parse_track_i(L)];
+
+	lua_pushnil(L);
+	lua_set_play_done(tr);
+
+	track_stop(tr);
+
+	return 0;
+}
+
 // audio.pause_resume_toggle{track=1}
 static int audio_pause_resume_toggle(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
@@ -492,6 +510,13 @@ void audio_mixer_init(lua_State *L, uv_loop_t *loop) {
 	lua_getglobal(L, "emitter_init");
 	lua_getglobal(L, "audio");
 	lua_call_or_die(L, 1, 0);
+
+	// audio.stop = [native function]
+	lua_getglobal(L, "audio");
+	lua_pusham(L, am);
+	lua_pushcclosure(L, audio_stop, 1);
+	lua_setfield(L, -2, "stop");
+	lua_pop(L, 1);
 
 	// audio.play = [native function]
 	lua_getglobal(L, "audio");
