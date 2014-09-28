@@ -61,6 +61,9 @@ void print_trackback();
 void utils_init(lua_State *L, uv_loop_t *loop);
 void utils_preinit();
 
+void lua_setglobalptr(lua_State *L, const char *pref, void *p);
+void lua_getglobalptr(lua_State *L, const char *pref, void *p);
+
 void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p);
 void lua_set_global_callback(lua_State *L, const char *name, void *p);
 int lua_do_global_callback(lua_State *L, const char *name, void *p, int nargs, int setnil);

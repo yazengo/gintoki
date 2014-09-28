@@ -105,6 +105,43 @@ void print_trackback() {
 	backtrace_symbols_fd(array, size, 2);
 }
 
+static void globalptr_name(char *name, const char *pref, void *p) {
+	sprintf(name, "%s_%p", pref, p);
+}
+
+void lua_setglobalptr(lua_State *L, const char *pref, void *p) {
+	char name[128]; globalptr_name(name, pref, p);
+	lua_setglobal(L, name);
+}
+
+void lua_getglobalptr(lua_State *L, const char *pref, void *p) {
+	char name[128]; globalptr_name(name, pref, p);
+	lua_getglobal(L, name);
+}
+
+void lua_set_global_callback(lua_State *L, const char *pref, void *p) {
+	lua_setglobalptr(L, pref, p);
+}
+
+int lua_do_global_callback(lua_State *L, const char *pref, void *p, int nargs, int setnil) {
+	lua_getglobalptr(L, pref, p);
+
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return 1;
+	}
+
+	if (setnil) {
+		lua_pushnil(L);
+		lua_setglobalptr(L, pref, p);
+	}
+
+	lua_insert(L, -nargs-1);
+	lua_call_or_die(L, nargs, 0);
+
+	return 0;
+}
+
 typedef struct {
 	lua_State *L;
 
@@ -123,7 +160,6 @@ static int pcall_luv_v2_done(lua_State *L) {
 	pcall_luv_v2_t *p = (pcall_luv_v2_t *)lua_touserptr(L, lua_upvalueindex(1));
 	if (p == NULL)
 		return 0;
-	lua_setuserptr(L, lua_upvalueindex(1), NULL);
 
 	lua_pushcfunction(p->L, p->on_done);
 
@@ -317,8 +353,11 @@ static void _luv_set_timeout(lua_State *L, int repeat) {
 
 	lua_pushvalue(L, 1);
 	lua_pushcclosure(L, luv_timeout_cb_inner, 1);
-	lua_set_global_callback_and_pushname(L, "timer", to);
 
+	char name[128]; globalptr_name(name, "timer", to);
+	lua_setglobal(L, name);
+
+	lua_pushstring(L, name);
 	// return timer_xxx
 }
 
@@ -467,16 +506,6 @@ static int stdin_open(lua_State *L) {
 	return 0;
 }
 
-/*
-static int prop_get(lua_State *L) {
-	return 0;
-}
-
-static int prop_set(lua_State *L) {
-	return 0;
-}
-*/
-
 // os.readdir('path', done)
 static int os_readdir(lua_State *L) {
 	const char *path = lua_tostring(L, 1);
@@ -505,39 +534,6 @@ static int os_readdir(lua_State *L) {
 	return 1;
 }
 
-void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p) {
-	char name[128];
-	sprintf(name, "%s_%p", pref, p);
-	lua_setglobal(L, name);
-	lua_pushstring(L, name);
-}
-
-void lua_set_global_callback(lua_State *L, const char *pref, void *p) {
-	lua_set_global_callback_and_pushname(L, pref, p);
-	lua_pop(L, 1);
-}
-
-int lua_do_global_callback(lua_State *L, const char *pref, void *p, int nargs, int setnil) {
-	char name[128];
-	sprintf(name, "%s_%p", pref, p);
-
-	lua_getglobal(L, name);
-	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
-		return 1;
-	}
-
-	if (setnil) {
-		lua_pushnil(L);
-		lua_setglobal(L, name);
-	}
-
-	lua_insert(L, -nargs-1);
-	lua_call_or_die(L, nargs, 0);
-
-	return 0;
-}
-
 void lua_pushuserptr(lua_State *L, void *p) {
 	void *ud = lua_newuserdata(L, sizeof(p));
 	memcpy(ud, &p, sizeof(p));
@@ -548,11 +544,6 @@ void *lua_touserptr(lua_State *L, int index) {
 	void *ud = lua_touserdata(L, index);
 	memcpy(&p, ud, sizeof(p));
 	return p;
-}
-
-void lua_setuserptr(lua_State *L, int index, void *p) {
-	void *ud = lua_newuserdata(L, sizeof(p));
-	memcpy(ud, &p, sizeof(p));
 }
 
 static void fault(int sig) {
