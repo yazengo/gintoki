@@ -58,6 +58,8 @@ static uv_buf_t tcp_allocbuf(uv_handle_t *h, size_t len) {
 static void tcp_write(uv_write_t *wr, int stat) {
 	tcpcli_t *tc = (tcpcli_t *)wr->data;
 
+	debug("done");
+
 	uv_close((uv_handle_t *)tc->h, tcpcli_on_handle_closed);
 }
 
@@ -75,6 +77,7 @@ static int tcpcli_ret(lua_State *L) {
 	char *retstr = (char *)lua_tostring(L, 2);
 
 	tc->buf = uv_buf_init(retstr, strlen(retstr));
+	tc->wr.data = tc;
 	uv_write(&tc->wr, (uv_stream_t *)tc->h, &tc->buf, 1, tcp_write);
 
 	return 0;
