@@ -59,15 +59,22 @@ upnp.on_action = function (a, done)
 	elseif a.op == 'muno.info' then
 		done(muno.info())
 	elseif a.op == 'audio.prev' then
+		if airplaying then airplay_stop() end
 		radio.prev()
 		done{result=0}
 	elseif a.op == 'audio.next' then
+		if airplaying then airplay_stop() end
 		radio.next()
 		done{result=0}
 	elseif a.op == 'audio.play_pause_toggle' then
-		audio.pause_resume_toggle()
+		if airplaying then
+			audio.pause_resume_toggle{track=2}
+		else
+			audio.pause_resume_toggle()
+		end
 		done{result=0}
 	elseif a.op == 'audio.play' then
+		if airplaying then airplay_stop() end
 		if a.id then
 			radio.source_setopt({id=a.id})
 		end
@@ -79,6 +86,7 @@ upnp.on_action = function (a, done)
 	elseif string.hasprefix(a.op, 'bbcradio.') then
 		radio.source_setopt(a, done)
 	elseif a.op == 'radio.change_type' then
+		if airplaying then airplay_stop() end
 		radio.change(a)
 		done{result=0}
 	elseif a.op == 'muno.check_update' then
@@ -129,12 +137,21 @@ radio.play = function (song)
 	}
 end
 
+airplay_stop = function ()
+	audio.stop{track=2}
+end
+
+airplay_on_done = function ()
+	airplaying = false
+end
+
 airplay_on_start = function ()
+	airplaying = true
+	audio.pause()
 	audio.play {
 		url = 'airplay://',
 		done = function ()
-			info('airplay ends')
-			radio.next()
+			airplay_on_done()
 		end,
 	}
 end
