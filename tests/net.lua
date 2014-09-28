@@ -11,8 +11,6 @@ http_server {
 }
 ]]--
 
-info(netinfo_ip())
-
 udp_server {
 	port = 8881,
 	handler = function (req, resp)
@@ -27,7 +25,7 @@ tcp_server {
 	port = 8882,
 	handler = function (req, resp)
 		info(req)
-		resp:ret('xxx')
+		resp:ret('hello world\n')
 	end,
 }
 

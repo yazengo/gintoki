@@ -3,7 +3,7 @@ info('-- test audio mixer on done --')
 
 i = 0
 audio.play{
-	url = 'testdata/10s-2.mp3',
+	url = 'testaudios/10s-2.mp3',
 	done = function () 
 		info('done')
 	end,

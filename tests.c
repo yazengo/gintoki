@@ -335,21 +335,6 @@ static void test_buggy_call() {
 	}
 }
 
-static void ringbuf_get_done(ringbuf_t *rb, int len) {
-	info("get %d", len);
-}
-
-static void test_ringbuf(uv_loop_t *loop) {
-	ringbuf_t rb;
-	static char buf[176400];
-
-	ringbuf_init(&rb, loop);
-
-	ringbuf_data_get(&rb, buf, 24576, ringbuf_get_done);
-	ringbuf_data_put(&rb, buf, sizeof(buf), NULL);
-	ringbuf_data_get(&rb, buf, 2048, ringbuf_get_done);
-}
-
 static void test_blowfish() {
   uint32_t L = 1, R = 2;
   BLOWFISH_CTX ctx;
@@ -798,8 +783,6 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 		test_pthread_call_luv_v2(L, loop);
 	if (i == 7)
 		test_pthread_call_uv(L, loop);
-	if (i == 8)
-		test_ringbuf(loop);
 	if (i == 9)
 		test_stdin(loop);
 	if (i == 10)
