@@ -279,37 +279,7 @@ static int lua_udp_server(lua_State *L) {
 	return 0;
 }
 
-static void netinfo_enum(char *ip) {
-	uv_interface_address_t *info;
-	int n, i;
-	char defip[IPLEN];
-
-	uv_interface_addresses(&info, &n);
-	for (i = 0; i < n; i++) {
-		uv_interface_address_t ia = info[i];
-
-		if (!strcmp(ia.name, "en0") || !strcmp(ia.name, "wlan0")) {
-			uv_ip4_name(&ia.address.address4, ip, IPLEN);
-		}
-
-		debug("name=%s internal=%d", ia.name, ia.is_internal);
-	}
-	uv_free_interface_addresses(info, n);
-}
-
-static int lua_netinfo_ip(lua_State *L) {
-	char ip[IPLEN] = {};
-
-	netinfo_enum(ip);
-
-	lua_pushstring(L, ip);
-	return 1;
-}
-
 void luv_net_init(lua_State *L, uv_loop_t *loop) {
-	lua_pushcfunction(L, lua_netinfo_ip);
-	lua_setglobal(L, "netinfo_ip");
-
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, lua_udp_server, 1);
 	lua_setglobal(L, "udp_server");
