@@ -7,6 +7,8 @@
 #include "strbuf.h"
 #include "utils.h"
 
+#define IPLEN 24
+
 typedef struct {
 	uv_udp_t srv, cli;
 	char buf[1440];
@@ -208,6 +210,16 @@ static void udp_read(uv_udp_t *h, ssize_t n, uv_buf_t buf, struct sockaddr *addr
 	us->buf[n] = 0;
 	debug("data=%s", us->buf);
 
+	char ip[IPLEN];
+	uv_ip4_name((struct sockaddr_in *)addr, ip, IPLEN);
+	debug("peer ip=%s", ip);
+
+	struct sockaddr_in loaddr;
+	int salen = sizeof(loaddr);
+	uv_udp_getsockname(h, (struct sockaddr *)&loaddr, &salen);
+	uv_ip4_name(&loaddr, ip, IPLEN);
+	debug("local ip=%s", ip);
+
 	udpcli_t *uc = (udpcli_t *)zalloc(sizeof(udpcli_t));
 	uc->peer = *(struct sockaddr_in *)addr;
 	uc->us = us;
@@ -266,8 +278,6 @@ static int lua_udp_server(lua_State *L) {
 
 	return 0;
 }
-
-#define IPLEN 24
 
 static void netinfo_enum(char *ip) {
 	uv_interface_address_t *info;
