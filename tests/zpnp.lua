@@ -2,6 +2,7 @@
 zpnp_start()
 zpnp_setopt{uuid=0x1133, name=hostname()}
 zpnp_notify()
+zpnp_notify('hello_first_notify')
 
 zpnp_on_action = function (r, done) 
 	info(r)

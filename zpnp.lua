@@ -20,6 +20,14 @@ end
 zpnp.start = function ()
 	zpnp_start()
 	zpnp_setopt{uuid=hostuuid(), name=hostname()}
-	zpnp_notify()
+
+	local times = 8
+	local notify
+	notify = function ()
+		zpnp_notify()
+		times = times - 1
+		if times > 0 then set_timeout(notify, 300) end
+	end
+	notify()
 end
 
