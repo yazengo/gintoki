@@ -111,7 +111,7 @@ P.partner_login = function (c, done)
 			version = '5',
 		},
 		done = function (r, st)
-			if err then
+			if st.stat ~= 'ok' then
 				done(nil, 'server_error')
 				return
 			end

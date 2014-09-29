@@ -1,7 +1,8 @@
 
 #define PORT_DISCOVERY   33123
-#define PORT_NOTIFY      33125
 #define PORT_DATA        33124
+#define PORT_NOTIFY      33125
+#define PORT_TRACKALIVE  33126
 
 typedef struct {
 	uint32_t type;

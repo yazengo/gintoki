@@ -20,5 +20,6 @@ end
 zpnp.start = function ()
 	zpnp_start()
 	zpnp_setopt{uuid=hostuuid(), name=hostname()}
+	zpnp_notify()
 end
 

@@ -14,6 +14,6 @@ zpnp_on_subscribe = function (r, done)
 end
 
 set_interval(function ()
-	zpnp_notify('hello_notify')
-end, 3000)
+	zpnp_notify()
+end, 300)
 
