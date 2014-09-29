@@ -4,6 +4,8 @@ if hostplat() == 'mips' then
 	local mac = fp:read('*a')
 	fp:close()
 
+	mac = string.gsub(mac, '\n', '')
+
 	local name = string.sub(mac, -6)
 	hostname = function ()
 		return name
