@@ -526,7 +526,6 @@ typedef void (*onexit_cb)();
 static onexit_cb exitcbs[EXITCB_NR];
 
 static void print_traceback_and_exit() {
-	signal(SIGTERM, SIG_IGN);
 	print_traceback();
 
 	int i;
@@ -538,11 +537,16 @@ static void print_traceback_and_exit() {
 }
 
 static void term(int sig) {
+	signal(SIGTERM, SIG_IGN);
 	error("sig=%d", sig);
 	print_traceback_and_exit();
 }
 
 static void fault(int sig) {
+	signal(SIGILL, SIG_IGN);
+	signal(SIGBUS, SIG_IGN);
+	signal(SIGSEGV, SIG_IGN);
+	signal(SIGABRT, SIG_IGN);
 	error("sig=%d", sig);
 	print_traceback_and_exit();
 }
