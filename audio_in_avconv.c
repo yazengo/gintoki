@@ -34,6 +34,8 @@ typedef struct avconv_s {
 	void *data;
 	int stat;
 
+	int pending_exit:1;
+
 	uv_process_t *proc;
 	uv_pipe_t *pipe[2];
 
@@ -180,7 +182,8 @@ static void tail_close(avconv_tail_t *tl, audio_in_close_cb done) {
 enum {
 	INIT,
 	READING,
-	STOPPING,
+
+	CLOSING_WAITING_EXIT,
 	CLOSING_PROC,
 	CLOSING_FD1,
 	CLOSING_FD2,
@@ -237,64 +240,59 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 
 	uv_read_stop(st);
 
-	switch (av->stat) {
-	case READING:
-		if (n >= 0) {
-			av->stat = INIT;
-			av->on_read_done(ai, n);
+	if (n < 0) {
+		if (av->pending_exited) {
+			av->on_stop_done(av->ai);
 		} else {
 			av->stat = STOPPING;
-			av->on_read_done(ai, 0);
 		}
-		break;
-
-	case STOPPING:
-		av->on_read_done(ai, 0);
-		break;
-
-	default:
-		panic("must be READING or STOPPING state");
+	} else {
 	}
+
+	av->stat = INIT;
+	av->on_read_done(ai, n);
 }
 
 static void proc_on_exit(uv_process_t *p, int stat, int sig) {
+	avconv_t *av = (avconv_t *)p->data;
+
 	info("sig=%d", sig);
+
+	if (av->stat == STOPPING) {
+		av->on_stop_done(av->ai);
+	} else {
+		av->pending_exited = 1;
+	}
 }
 
 static void avconv_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb done) {
 	avconv_t *av = (avconv_t *)ai->in;
 
+	debug("len=%d", len);
+
 	if (av->stat != INIT)
-		panic("please call can_read before read");
+		panic("stat=%d invalid", av->stat);
 
 	av->stat = READING;
-
 	av->read_buf = buf;
 	av->read_len = len;
 	av->on_read_done = done;
 
-	debug("len=%d", len);
-
 	uv_read_start((uv_stream_t *)av->pipe[0], data_alloc_buffer, data_pipe_read);
 }
 
-static void avconv_stop(audio_in_t *ai) {
+static void avconv_stop(audio_in_t *ai, audio_in_stop_cb done) {
 	avconv_t *av = (avconv_t *)ai->in;
 
-	if (av->stat < STOPPING)
+	if (av->stat != INIT)
+		panic("stat=%d invalid", av->stat);
+
+	if (av->pending_exited) {
+		uv_call_arg1(av->loop, done, ai);
+	} else {
 		av->stat = STOPPING;
-	uv_process_kill(av->proc, 9);
-}
-
-static int avconv_can_read(audio_in_t *ai) {
-	avconv_t *av = (avconv_t *)ai->in;
-	return av->stat == INIT;
-}
-
-static int avconv_is_eof(audio_in_t *ai) {
-	avconv_t *av = (avconv_t *)ai->in;
-
-	return av->stat > READING;
+		uv_process_kill(av->proc, 9);
+	}
 }
 
 static void avconv_close_fd1(audio_in_t *ai) {
@@ -324,10 +322,6 @@ void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai) {
 	ai->read = avconv_read;
 	ai->stop = avconv_stop;
 	ai->close = avconv_close;
-	ai->can_read = avconv_can_read;
-	ai->is_eof = avconv_is_eof;
-
-	ai->on_start(ai, 44100);
 
 	avconv_t *av = (avconv_t *)zalloc(sizeof(avconv_t));
 	av->ai = ai;

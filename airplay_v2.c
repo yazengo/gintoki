@@ -434,7 +434,7 @@ static void proc_init(airplay_t *ap) {
 	ap->stat_close = 0;
 
 	int i;
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < 1; i++) {
 		ap->pipe[i] = (uv_pipe_t *)zalloc(sizeof(uv_pipe_t));
 		ap->pipe[i]->data = ap;
 		uv_pipe_init(ap->loop, ap->pipe[i], 0);
@@ -552,27 +552,6 @@ static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 	}
 }
 
-static int audio_in_is_eof(audio_in_t *ai) {
-	airplay_t *ap = (airplay_t *)ai->in;
-
-	debug("stat=%d", ap->stat);
-
-	switch (ap->stat) {
-	case ATTACHED:
-	case WAITING_DATA:
-	case WAITING_CMDHDR:
-		return 0;
-	}
-	return 1;
-}
-
-static int audio_in_can_read(audio_in_t *ai) {
-	airplay_t *ap = (airplay_t *)ai->in;
-
-	debug("stat=%d", ap->stat);
-	return ap->stat == ATTACHED;
-}
-
 void audio_in_airplay_init_v2(uv_loop_t *loop, audio_in_t *ai) {
 	if (g_ap == NULL) {
 		warn("please run airplay_start first");
@@ -598,8 +577,6 @@ void audio_in_airplay_init_v2(uv_loop_t *loop, audio_in_t *ai) {
 	ai->read = audio_in_read;
 	ai->stop = audio_in_stop;
 	ai->close = audio_in_close;
-	ai->can_read = audio_in_can_read;
-	ai->is_eof = audio_in_is_eof;
 }
 
 static void lua_emit_start(airplay_t *ap) {

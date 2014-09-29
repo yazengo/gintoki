@@ -120,18 +120,18 @@ static void data_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 		} else {
 			ap->stat = KILLING_WAIT_EXIT;
 			uv_process_kill(ap->proc, 15);
-			ap->on_read_done(ai, 0);
+			ap->on_read_done(ai, -1);
 		}
 		break;
 
 	case KILLING_WAIT_READING_DONE:
 		ap->stat = KILLED;
-		ap->on_read_done(ai, 0);
+		ap->on_read_done(ai, -1);
 		break;
 
 	case KILLING_WHEN_READING:
 		ap->stat = KILLING_WAIT_EXIT;
-		ap->on_read_done(ai, 0);
+		ap->on_read_done(ai, -1);
 		break;
 
 	default:
@@ -318,20 +318,6 @@ static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 	airplay_close(ap);
 }
 
-static int audio_in_is_eof(audio_in_t *ai) {
-	airplay_t *ap = (airplay_t *)ai->in;
-
-	debug("stat=%d", ap->stat);
-	return ap->stat == KILLED;
-}
-
-static int audio_in_can_read(audio_in_t *ai) {
-	airplay_t *ap = (airplay_t *)ai->in;
-
-	debug("stat=%d", ap->stat);
-	return ap->stat == ATTACHED;
-}
-
 void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai) {
 	if (g_ap == NULL) {
 		warn("please run airplay_start first");
@@ -357,7 +343,5 @@ void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai) {
 	ai->read = audio_in_read;
 	ai->stop = audio_in_stop;
 	ai->close = audio_in_close;
-	ai->can_read = audio_in_can_read;
-	ai->is_eof = audio_in_is_eof;
 }
 
