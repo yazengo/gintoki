@@ -89,10 +89,10 @@ handle = function (a, done)
 	elseif a.op == 'muno.do_update' then
 		muno.do_update(done)
 	elseif a.op == 'muno.request_sync' then
-		pnp_notify_sync{['audio.info']=ar_info()}
+		pnp.notify_sync{['audio.info']=ar_info()}
 		done{result=0}
 	elseif a.op == 'muno.request_event' then
-		pnp_notify_event(all_info())
+		pnp.notify_event(all_info())
 		done{result=0}
 	else
 		fail()
@@ -126,13 +126,13 @@ radio.change = function (opt)
 end
 
 muno.stat_change = function () 
-	pnp_notify_event{['muno.info']=muno.info()}
+	pnp.notify_event{['muno.info']=muno.info()}
 end
 
 audio.track_stat_change = function (i)
 	if i ~= 0 then return end
 	local r = ar_info()
-	pnp_notify_event{['audio.info']=r}
+	pnp.notify_event{['audio.info']=r}
 end
 
 radio.play = function (song) 
@@ -273,27 +273,29 @@ upnp.on_subscribe = function (a, done)
 	done(all_info())
 end
 
-zpnp.on_action = handle
-upnp.on_action = handle
+pnp = {}
 
-pnp_notify = function (r)
-	zpnp.notify(r)
-	upnp.notify(r)
-end
+pnp.notify = function () end
 
-pnp_start = function ()
+pnp.start = function ()
 	zpnp.start()
 	upnp.start()
+	pnp.notify = function (r)
+		zpnp.notify(r)
+		upnp.notify(r)
+	end
+	zpnp.on_action = handle
+	upnp.on_action = handle
 end
 
-pnp_notify_event = function (r) pnp_notify(table.add(r, {type='event'})) end
-pnp_notify_sync  = function (r) pnp_notify(table.add(r, {type='sync'})) end
+pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end
+pnp.notify_sync  = function (r) pnp.notify(table.add(r, {type='sync'})) end
 
 info('hostname', hostname())
 prop.load()
 audio.setvol(50)
 airplay_start('Muno_' .. hostname())
-pnp_start()
+pnp.start()
 if inputdev_init then inputdev_init() end
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}
