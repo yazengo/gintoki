@@ -60,7 +60,9 @@ handle = function (a, done)
 		muno.notify_vol_change(vol)
 		done{result=vol}
 	elseif a.op == 'muno.info' then
-		done(muno.info())
+		muno.getinfo(function (r)
+			done(r)
+		end)
 	elseif a.op == 'audio.prev' then
 		radio.prev()
 		done{result=0}

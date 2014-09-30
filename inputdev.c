@@ -71,6 +71,8 @@ enum {
 	KEYDBLCLICK = 331,
 	KEYLONGPRESS = 332,
 
+	SHAKE = 168,
+
 	SLEEP = 34,
 	WAKEUP = 35,
 	NETWORK_UP = 36,
@@ -234,6 +236,8 @@ static void gsensor_read(struct input_event e) {
 				inputdev_emit_event(NEXT);
 			if (last_e.code == KEY_FORWARD)
 				inputdev_emit_event(PREV);
+			if (last_e.code == KEY_REWIND)
+				inputdev_emit_event(SHAKE);
 		}
 	}
 

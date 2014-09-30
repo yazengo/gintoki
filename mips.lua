@@ -17,13 +17,16 @@ gsensor_prev = say_and_do('prev')
 gsensor_next = say_and_do('next')
 
 muno.getssid = function (done)
-	popen('wpa_cli status', function (r, code) 
-		local ssid
-		for k,v in string.gmatch(r, 'ssid=([^\n]+)') do
-			ssid = k
-		end
-		done(ssid)
-	end)
+	popen {
+		cmd = 'wpa_cli status', 
+		done = function (r, code) 
+			local ssid
+			for k,v in string.gmatch(r, 'ssid=([^\n]+)') do
+				ssid = k
+			end
+			done(ssid)
+		end,
+	}
 end
 
 local vol_oncer = oncer()
@@ -33,8 +36,8 @@ vol_oncer.done = function ()
 end
 
 local setvol = function (v)
-	local vol = math.ceil(100*e/15)
-	info('inputdev: vol', e, '->', vol)
+	local vol = math.ceil(100*v/15)
+	info('inputdev: vol', v, '->', vol)
 	audio.setvol(vol)
 	vol_oncer:update()
 	vol_oncer.vol = vol
@@ -58,6 +61,13 @@ inputdev_on_event = function (e)
 		info('long press')
 		audio.alert {
 			url = 'testaudios/hello-muno.mp3',
+			vol = 0,
+		}
+	end
+
+	if e == 168 then
+		audio.alert {
+			url = 'testaudios/shake.mp3',
 			vol = 0,
 		}
 	end
@@ -93,5 +103,5 @@ end
 
 local vol = readint('/sys/module/adc_volume_driver/drivers/platform:jz4775-hwmon/jz4775-hwmon.0/volume')
 inputdev_init() 
-inputdev_setvol(vol)
+setvol(vol)
 
