@@ -1,15 +1,22 @@
 
 local M = {}
 
-M.info = function () 
-	return {
-		battery = 90,
-		volume = audio.getvol(),
-		wifi = {ssid = M.ssid or 'Unknown'},
-		firmware_version = "1.0.1",
-		name = hostname(),
-		local_music_num = table.maxn(localmusic.list),
-	}
+M.getinfo = function (done) 
+	local ret = function (ssid)
+		done {
+			battery = 90,
+			volume = audio.getvol(),
+			wifi = {ssid = ssid or 'Unknown'},
+			firmware_version = "1.0.1",
+			name = hostname(),
+			local_music_num = table.maxn(localmusic.list),
+		}
+	end
+	if muno.getssid then
+		muno.getssid(ret)
+	else
+		ret()
+	end
 end
 
 M.notify_vol_change = function (vol)

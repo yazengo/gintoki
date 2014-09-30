@@ -29,11 +29,13 @@ ar_info = function ()
 	return r
 end
 
-all_info = function ()
-	return {
-		['audio.info']=ar_info(),
-		['muno.info']=muno.info(),
-	}
+all_info = function (done)
+	muno.getinfo(function (r)
+		done {
+			['audio.info']=ar_info(),
+			['muno.info']=r,
+		}
+	end)
 end
 
 handle = function (a, done)
@@ -93,7 +95,9 @@ handle = function (a, done)
 		pnp.notify_sync{['audio.info']=ar_info()}
 		done{result=0}
 	elseif a.op == 'muno.request_event' then
-		pnp.notify_event(all_info())
+		all_info(function (r)
+			pnp.notify_event(r)
+		end)
 		done{result=0}
 	else
 		fail()
@@ -204,10 +208,6 @@ airplay_on_start = function ()
 	airplay.start()
 end
 
-upnp.on_subscribe = function (a, done)
-	done(all_info())
-end
-
 pnp = {}
 
 pnp.notify = function () end
@@ -221,6 +221,9 @@ pnp.start = function ()
 	end
 	zpnp.on_action = handle
 	upnp.on_action = handle
+	upnp.on_subscribe = function (a, done)
+		all_info(done)
+	end
 end
 
 pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end

@@ -16,7 +16,7 @@ end
 gsensor_prev = say_and_do('prev')
 gsensor_next = say_and_do('next')
 
-local wpa_ssid = function (done)
+muno.getssid = function (done)
 	popen('wpa_cli status', function (r, code) 
 		local ssid
 		for k,v in string.gmatch(r, 'ssid=([^\n]+)') do
@@ -70,9 +70,6 @@ inputdev_on_event = function (e)
 		}
 		info('network up')
 		upnp.start()
-		wpa_ssid(function (ssid)
-			muno.ssid = ssid
-		end)
 	end
 
 	-- network down
