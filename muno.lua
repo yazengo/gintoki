@@ -68,6 +68,16 @@ M.do_update = function (done)
 	--local path_zip = '/tmp/update.zip'
 	--local path_md5 = '/tmp/update.md5'
 
+	local system = function (cmd, done)
+		done = done or function () end
+		popen {
+			cmd = cmd,
+			done = function (r, code) 
+				done(code)
+			end,
+		}
+	end
+
 	local curl_zip = function (ok, fail)
 		system('curl "' .. url_zip .. '" > ' .. path_zip, function (r)
 			if r == 0 then ok() else fail() end
@@ -124,6 +134,7 @@ M.do_update = function (done)
 	end
 
 	downloading()
+
 	curl_zip(function ()
 		curl_md5(function ()
 			installing()
@@ -134,5 +145,4 @@ M.do_update = function (done)
 end
 
 muno = M
-
 
