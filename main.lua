@@ -1,4 +1,5 @@
 
+arch = require(hostplat())
 require('localmusic')
 require('pandora')
 require('douban')
@@ -9,7 +10,6 @@ require('audio')
 require('muno')
 require('upnp')
 require('zpnp')
-require('hostname')
 
 handle = function (a, done)
 	done = done or function () end
@@ -190,16 +190,17 @@ end
 pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end
 pnp.notify_sync  = function (r) pnp.notify(table.add(r, {type='sync'})) end
 
+hostname = arch.hostname or hostname
+hostuuid = function ()
+	return tonumber(string.sub(sha1_encode(hostname()), -8), 16)
+end
+
 info('hostname', hostname())
 prop.load()
 airplay_start('Muno_' .. hostname())
 pnp.start()
 
-if hostplat() == 'mips' then
-	require('mips')
-else
-	audio.setvol(50)
-end
+if arch.init() then arch.init() end
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}
 

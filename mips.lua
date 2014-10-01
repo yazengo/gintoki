@@ -1,4 +1,6 @@
 
+local A = {}
+
 local say_and_do = function (k)
 	return function ()
 		if not (radio.source and radio.source[k]) and k == 'prev' then
@@ -101,7 +103,24 @@ inputdev_on_event = function (e)
 	end
 end
 
-local vol = readint('/sys/module/adc_volume_driver/drivers/platform:jz4775-hwmon/jz4775-hwmon.0/volume')
-inputdev_init() 
-setvol(vol)
+A.init = function ()
+	local vol = readint('/sys/module/adc_volume_driver/drivers/platform:jz4775-hwmon/jz4775-hwmon.0/volume')
+	inputdev_init() 
+	setvol(vol)
+end
+
+A.hostname = function ()
+	local fp = io.open('macaddr', 'r')
+	local mac = fp:read('*a')
+	fp:close()
+
+	mac = string.gsub(mac, '\n', '')
+
+	local name = string.sub(mac, -6)
+	hostname = function ()
+		return name
+	end
+end
+
+return A
 
