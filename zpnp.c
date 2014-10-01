@@ -408,6 +408,7 @@ typedef struct {
 
 static void notify_broadcast_done(uv_work_t *w, int stat) {
 	notify_t *zn = (notify_t *)w->data;
+	free(zn->buf.base);
 	free(zn);
 }
 
@@ -434,6 +435,7 @@ static void notify_broadcast_thread(uv_work_t *w) {
 
 static void notify_peers_done(uv_work_t *w, int stat) {
 	notify_t *zn = (notify_t *)w->data;
+	free(zn->buf.base);
 	free(zn);
 }
 
