@@ -88,10 +88,6 @@ static void jzcodec_play(audio_out_t *ao, void *buf, int len) {
 }
 #endif
 
-int audio_out_is_playing(audio_out_t *ao) {
-	return ao->is_playing;
-}
-
 // on thread main
 static void play_done(uv_work_t *w, int stat) {
 	audio_out_t *ao = (audio_out_t *)w->data;
@@ -100,8 +96,6 @@ static void play_done(uv_work_t *w, int stat) {
 
 	if (ao->on_play_done)
 		ao->on_play_done(ao, ao->play_len);
-
-	debug("end len=%d", ao->play_len);
 }
 
 // on thread play
@@ -110,11 +104,12 @@ static void play_thread(uv_work_t *w) {
 
 	debug("start len=%d", ao->play_len);
 	ao->play(ao, ao->play_buf, ao->play_len);
+	debug("end len=%d", ao->play_len);
 }
 
 // on thread main
 void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_t *, int)) {
-	if (audio_out_is_playing(ao))
+	if (ao->is_playing)
 		panic("playing not end");
 
 	ao->play_buf = buf;

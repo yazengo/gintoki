@@ -1,8 +1,6 @@
 
 local M = {}
 
-emitter_init(M)
-
 M.vol = 100
 M.info = function () 
 	return {
@@ -16,7 +14,7 @@ M.info = function ()
 end
 
 M.setvol = function (vol) 
-	M.emit('stat_change')
+	if M.stat_change then M.stat_change() end
 	return audio.setvol(vol)
 end
 

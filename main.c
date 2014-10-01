@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
 	lua_dofile_or_die(L, "utils.lua");
 
 	pcm_init();
-	audio_mixer_init(L, loop);
+	luv_audio_mixer_init(L, loop);
 
 	luv_curl_init(L, loop);
 

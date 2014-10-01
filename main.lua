@@ -120,11 +120,12 @@ muno.on('stat_change', function ()
 	upnp.notify{['muno.info']=muno.info()}
 end)
 
-audio.on('stat_change', function ()
+audio.track_stat_change = function (i)
+	if i ~= 0 then return end
 	local r = ar_info()
 	M.log('audio stat ->', r)
 	upnp.notify{['audio.info']=r}
-end)
+end
 
 radio.play = function (song) 
 	M.log('play', song.title)
