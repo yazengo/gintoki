@@ -12,5 +12,7 @@ end
 
 input.cmds = {
 	[[ audio.play { url = 'testaudios/10s-1.mp3' } ]],
+	[[ airplay_start('Hello1') ]],
+	[[ airplay_start('Hello2') ]],
 }
 
