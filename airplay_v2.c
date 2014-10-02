@@ -451,7 +451,7 @@ static void proc_init(airplay_t *ap) {
 		{.flags = UV_IGNORE},
 		{.flags = UV_IGNORE},
 		{.flags = UV_IGNORE},
-		{.flags = UV_IGNORE}, //{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[PCTRL]},
+		{.flags = UV_IGNORE},
 		{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[PDATA]},
 	};
 
@@ -501,8 +501,7 @@ static void proc_close(airplay_t *ap) {
 }
 
 static void proc_kill(airplay_t *ap) {
-	info("pid=%d", ap->proc->pid);
-	debug("stat=%d", ap->stat);
+	info("pid=%d stat=%d", ap->proc->pid, ap->stat);
 	uv_process_kill(ap->proc, 15);
 }
 
