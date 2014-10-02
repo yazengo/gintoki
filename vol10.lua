@@ -1,3 +1,0 @@
-
-audio.setvol(10)
-

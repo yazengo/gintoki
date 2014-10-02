@@ -557,7 +557,7 @@ static void term(int sig) {
 	static int i;
 	if (i++)
 		return;
-	if (getenv("TERM_KILL0"))
+	if (getenv("TERM_NOT_KILL0") == NULL)
 		kill(0, SIGTERM);
 	exit(-1);
 }
