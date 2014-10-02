@@ -1,4 +1,6 @@
 
+require('cmd')
+
 airplay_start('Muji')
 
 airplay_on_start = function ()
@@ -6,8 +8,9 @@ airplay_on_start = function ()
 	audio.play {
 		url = 'airplay://',
 	}
-	set_timeout(function ()
-		audio.stop()
-	end, 4000)
 end
+
+input.cmds = {
+	[[ audio.play { url = 'testaudios/10s-1.mp3' } ]],
+}
 

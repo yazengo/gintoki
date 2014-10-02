@@ -189,7 +189,6 @@ static void on_data_done(airplay_t *ap, int len) {
 	case READING_DATA:
 		ap->stat = ATTACHED_READ_CMD;
 		ap->ai_read_done(ap->ai, len);
-		pdata_read_cmdhdr(ap);
 		break;
 
 	default:
@@ -547,10 +546,12 @@ static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb d
 	switch (ap->stat) {
 	case ATTACHED_READ_DATA:
 		ap->stat = READING_DATA;
+		pdata_read_data(ap, buf, len);
 		break;
 
 	case ATTACHED_READ_CMD:
 		ap->stat = READING_CMD;
+		pdata_read_cmdhdr(ap);
 		break;
 
 	case STOPPING_WAIT_AI_READ:
@@ -562,7 +563,6 @@ static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb d
 	}
 
 	ap->ai_read_done = done;
-	pdata_read_data(ap, buf, len);
 }
 
 static void audio_in_stop_read(audio_in_t *ai) {
