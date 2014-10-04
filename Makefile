@@ -14,6 +14,7 @@ objs += airplay.o
 objs += airplay_v2.o
 objs += luv_curl.o
 objs += net.o
+objs += http_parser.o
 
 ldflags += -lcurl
 
