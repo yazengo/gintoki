@@ -1,4 +1,6 @@
 
+// please visit https://www.processon.com/view/link/542c8ebd0cf2e6eabf18d06e
+
 #include <string.h>
 
 #include <uv.h>
@@ -15,43 +17,490 @@
 #define MAX_TRACKBUF (1024*8)
 #define TRACKS_NR 4
 
-enum {
-	TRACK_STOPPED,
-	TRACK_BUFFERING,
-	TRACK_PLAYING,
-	TRACK_PAUSED,
-	TRACK_STOPPING,
-	TRACK_CLOSING,
-};
-
 struct audio_mixer_s;
 
 typedef struct {
 	struct audio_mixer_s *am;
+	int ti;
+
 	audio_in_t *ai;
+
 	int stat;
+	unsigned paused:1;
+
 	ringbuf_t buf;
 	float vol;
 	float dur;
-
-	int first_blood; // test only
 } audio_track_t;
 
+enum {
+	READING_BUF_EMPTY,
+	READING_BUF_HALFFULL,
+	WAITING_BUF_FULL,
+	WAITING_EOF,
+	CLOSING_BUF_HALFFULL,
+	CLOSING_BUF_EMPTY,
+	CLOSED_BUF_HALFFULL,
+	CLOSED_BUF_EMPTY,
+};
+
+enum {
+	READ, WRITE,
+};
+
+#define FILTERS_NR 4
+
+typedef struct {
+	int type;
+	float vol;
+	int i;
+} audio_filter_t;
+
+enum {
+	NONE,
+	HIGHLIGHT,
+};
+
 typedef struct audio_mixer_s {
-	audio_track_t tracks[TRACKS_NR];
+	audio_track_t *tracks[TRACKS_NR];
+
+	int stat;
+
 	audio_out_t *ao;
+
 	ringbuf_t mixbuf;
+
 	float vol;
 	int rate;
+
 	uv_loop_t *loop;
 	lua_State *L;
 
-	int filter_track0_setvol;
-	float track0_vol;
+	audio_filter_t filters[FILTERS_NR];
 } audio_mixer_t;
 
-static void audio_emit(audio_mixer_t *am, const char *arg0, const char *arg1);
-static void check_all_tracks(audio_mixer_t *am);
+enum {
+	STOPPED,
+	PLAYING,
+};
+
+typedef struct {
+	audio_track_t *tr[TRACKS_NR];
+	int n;
+	void *buf;
+	int len;
+} do_mix_t;
+
+static void lua_call_play_done(audio_track_t *tr, const char *stat);
+static void lua_track_stat_change(audio_track_t *tr);
+static void mixer_do_track_change(audio_mixer_t *am, do_mix_t *dm);
+static void mixer_play(audio_mixer_t *am);
+static void mixer_on_newdata(audio_mixer_t *am);
+static void track_read(audio_track_t *tr);
+static void track_close(audio_track_t *tr);
+
+static float vol2fvol(int v) {
+	if (v < 0)
+		v = 0;
+	else if (v > 100)
+		v = 100;
+	return v/100.0;
+}
+
+static int fvol2vol(float v) {
+	return v*100;
+}
+
+static void track_on_free(audio_track_t *tr) {
+	audio_mixer_t *am = tr->am;
+
+	info("closed");
+
+	am->tracks[tr->ti] = NULL;
+	lua_call_play_done(tr, "closed");
+	free(tr);
+}
+
+static void track_on_buf_full(audio_track_t *tr, int op) {
+	audio_mixer_t *am = tr->am;
+
+	debug("stat=%d op=%d", tr->stat, op);
+
+	switch (op) {
+	case READ:
+		switch (tr->stat) {
+		case READING_BUF_EMPTY:
+			tr->stat = WAITING_BUF_FULL;
+			lua_track_stat_change(tr);
+			mixer_on_newdata(am);
+			break;
+
+		case READING_BUF_HALFFULL:
+			tr->stat = WAITING_BUF_FULL;
+			break;
+
+		default:
+			panic("stat=%d invalid", tr->stat);
+		}
+		break;
+	}
+}
+
+static void track_on_buf_halffull(audio_track_t *tr, int op) {
+	audio_mixer_t *am = tr->am;
+
+	debug("stat=%d op=%d", tr->stat, op);
+
+	switch (op) {
+	case READ:
+		switch (tr->stat) {
+		case READING_BUF_EMPTY:
+			tr->stat = READING_BUF_HALFFULL;
+			lua_track_stat_change(tr);
+			mixer_on_newdata(am);
+			track_read(tr);
+			break;
+
+		case READING_BUF_HALFFULL:
+			track_read(tr);
+			break;
+
+		default:
+			panic("stat=%d invalid", tr->stat);
+		}
+		break;
+
+	case WRITE:
+		switch (tr->stat) {
+		case WAITING_BUF_FULL:
+			tr->stat = READING_BUF_HALFFULL;
+			track_read(tr);
+			break;
+		}
+		break;
+	}
+}
+
+static void track_on_buf_empty(audio_track_t *tr, int op) {
+
+	debug("stat=%d op=%d", tr->stat, op);
+
+	switch (op) {
+	case READ:
+		switch (tr->stat) {
+		case READING_BUF_EMPTY:
+			track_read(tr);
+			break;
+
+		default:
+			panic("stat=%d invalid", tr->stat);
+		}
+		break;
+
+	case WRITE:
+		switch (tr->stat) {
+		case READING_BUF_HALFFULL:
+			tr->stat = READING_BUF_EMPTY;
+			break;
+
+		case WAITING_BUF_FULL:
+			tr->stat = READING_BUF_EMPTY;
+			track_read(tr);
+			break;
+
+		case CLOSING_BUF_HALFFULL:
+			tr->stat = CLOSING_BUF_EMPTY;
+			lua_track_stat_change(tr);
+			break;
+
+		case CLOSED_BUF_HALFFULL:
+			track_on_free(tr);
+			break;
+		}
+		break;
+	}
+}
+
+static void track_on_read_eof(audio_track_t *tr) {
+	switch (tr->stat) {
+	case WAITING_EOF:
+	case READING_BUF_EMPTY:
+		tr->stat = CLOSING_BUF_EMPTY;
+		track_close(tr);
+		break;
+
+	case READING_BUF_HALFFULL:
+		tr->stat = CLOSING_BUF_HALFFULL;
+		track_close(tr);
+		break;
+
+	default:
+		panic("stat=%d invalid", tr->stat);
+	}
+}
+
+static void track_on_buf_change(audio_track_t *tr, int op) {
+	if (tr->buf.len == RINGBUF_SIZE)
+		track_on_buf_full(tr, op);
+	else if (tr->buf.len > 0)
+		track_on_buf_halffull(tr, op);
+	else
+		track_on_buf_empty(tr, op);
+}
+
+static void audio_in_on_closed(audio_in_t *ai) {
+	audio_track_t *tr = (audio_track_t *)ai->data;
+	free(ai);
+
+	switch (tr->stat) {
+	case CLOSING_BUF_EMPTY:
+		track_on_free(tr);
+		break;
+
+	case CLOSING_BUF_HALFFULL:
+		tr->stat = CLOSED_BUF_HALFFULL;
+		break;
+
+	default:
+		panic("stat=%d invalid", tr->stat);
+	}
+}
+
+static void audio_in_on_read_done(audio_in_t *ai, int len) {
+	audio_track_t *tr = (audio_track_t *)ai->data;
+
+	debug("len=%d", len);
+	if (len < 0) {
+		track_on_read_eof(tr);
+		return;
+	}
+
+	ringbuf_push_head(&tr->buf, len);
+	track_on_buf_change(tr, READ);
+}
+
+static void audio_in_on_meta(audio_in_t *ai, const char *key, void *_val) {
+	audio_track_t *tr = (audio_track_t *)ai->data;
+
+	if (strcmp(key, "dur") == 0) {
+		tr->dur = *(float *)_val;
+		info("dur=%f", tr->dur);
+	}
+}
+
+static float track_get_pos(audio_track_t *tr) {
+	return (float)tr->buf.tailpos / (44100*2*2); // int16_t*2 per sample
+}
+
+static void track_close(audio_track_t *tr) {
+	tr->ai->close(tr->ai, audio_in_on_closed);
+}
+
+static void track_pause(audio_track_t *tr) {
+	debug("pause stat=%d paused=%d", tr->stat, tr->paused);
+
+	audio_mixer_t *am = tr->am;
+
+	switch (tr->stat) {
+	case READING_BUF_EMPTY:
+	case WAITING_BUF_FULL:
+	case READING_BUF_HALFFULL:
+	case CLOSING_BUF_HALFFULL:
+	case CLOSED_BUF_HALFFULL:
+		tr->paused = 1;
+		lua_track_stat_change(tr);
+		break;
+	}
+}
+
+static void track_resume(audio_track_t *tr) {
+	debug("resume stat=%d paused=%d", tr->stat, tr->paused);
+
+	if (!tr->paused)
+		return;
+
+	switch (tr->stat) {
+	case READING_BUF_EMPTY:
+		tr->paused = 0;
+		lua_track_stat_change(tr);
+		break;
+
+	case WAITING_BUF_FULL:
+	case READING_BUF_HALFFULL:
+	case CLOSING_BUF_HALFFULL:
+	case CLOSED_BUF_HALFFULL:
+		tr->paused = 0;
+		mixer_on_newdata(tr->am);
+		lua_track_stat_change(tr);
+		break;
+	}
+}
+
+static void track_pause_resume_toggle(audio_track_t *tr) {
+	if (tr->paused)
+		track_resume(tr);
+	else
+		track_pause(tr);
+}
+
+static void track_stop(audio_track_t *tr) {
+	debug("stat=%d", tr->stat);
+
+	switch (tr->stat) {
+	case READING_BUF_EMPTY:
+	case READING_BUF_HALFFULL:
+		ringbuf_init(&tr->buf);
+		tr->stat = WAITING_EOF;
+		tr->ai->stop_read(tr->ai);
+		break;
+
+	case WAITING_BUF_FULL:
+	case CLOSING_BUF_HALFFULL:
+		ringbuf_init(&tr->buf);
+		tr->stat = CLOSING_BUF_EMPTY;
+		tr->ai->close(tr->ai, audio_in_on_closed);
+		break;
+
+	case CLOSED_BUF_HALFFULL:
+		track_on_free(tr);
+		break;
+	}
+}
+
+static const char *track_statstr(audio_track_t *tr) {
+	if (tr == NULL)
+		return "stopped";
+
+	switch (tr->stat) {
+	case READING_BUF_EMPTY:
+		return tr->paused ? "paused" : "buffering";
+
+	case READING_BUF_HALFFULL:
+	case WAITING_BUF_FULL:
+	case CLOSING_BUF_HALFFULL:
+	case CLOSED_BUF_HALFFULL:
+		return tr->paused ? "paused" : "playing";
+
+	case CLOSING_BUF_EMPTY:
+	case WAITING_EOF:
+		return "stopped";
+	}
+
+	return "?";
+}
+
+static void track_read(audio_track_t *tr) {
+	void *buf; int len;
+	ringbuf_space_ahead_get(&tr->buf, &buf, &len);
+
+	debug("len=%d", len);
+	tr->ai->read(tr->ai, buf, len, audio_in_on_read_done);
+}
+
+static void mixer_pre_mix(audio_mixer_t *am, do_mix_t *dm) {
+	ringbuf_space_ahead_get(&am->mixbuf, &dm->buf, &dm->len);
+	if (dm->len == 0)
+		return;
+
+	int maxlen = MAX_MIXLEN - am->mixbuf.len;
+	if (dm->len > maxlen)
+		dm->len = maxlen;
+
+	if (dm->len <= 0)
+		return;
+
+	int i;
+	for (i = 0; i < TRACKS_NR; i++) {
+		audio_track_t *tr = am->tracks[i];
+
+		if (!(tr && tr->buf.len > 0 && !tr->paused))
+			continue;
+
+		void *buf; int len;
+		ringbuf_data_ahead_get(&tr->buf, &buf, &len);
+
+		if (len < dm->len)
+			dm->len = len;
+
+		dm->tr[dm->n++] = tr;
+	}
+}
+
+static void mixer_do_mix(audio_mixer_t *am, do_mix_t *dm) {
+	int i;
+
+	audio_filter_t *highlight = NULL;
+	for (i = 0; i < FILTERS_NR; i++) {
+		audio_filter_t *f = &am->filters[i];
+		if (f->type == HIGHLIGHT && am->tracks[f->i])
+			highlight = f;
+	}
+
+	for (i = 0; i < dm->n; i++) {
+		audio_track_t *tr = dm->tr[i];
+
+		void *buf; int len;
+		ringbuf_data_ahead_get(&tr->buf, &buf, &len);
+
+		if (highlight && tr != am->tracks[highlight->i])
+			pcm_do_volume(buf, dm->len, highlight->vol);
+
+		if (i == 0)
+			memcpy(dm->buf, buf, dm->len);
+		else
+			pcm_do_mix(dm->buf, buf, dm->len);
+
+		ringbuf_push_tail(&tr->buf, dm->len);
+		debug("mix#%d: stat=%d left=%d", i, tr->stat, tr->buf.len);
+	}
+
+	pcm_do_volume(dm->buf, dm->len, am->vol);
+
+	debug("mixbuf: len=%d pushhead=%d", am->mixbuf.len, dm->len);
+	ringbuf_push_head(&am->mixbuf, dm->len);
+}
+
+static void mixer_do_track_change(audio_mixer_t *am, do_mix_t *dm) {
+	int i;
+
+	for (i = 0; i < dm->n; i++) {
+		audio_track_t *tr = dm->tr[i];
+		track_on_buf_change(tr, WRITE);
+	}
+}
+
+static void mixer_on_newdata(audio_mixer_t *am) {
+	if (am->stat == STOPPED)
+		mixer_play(am);
+}
+
+static void mixer_on_play_done(audio_out_t *ao, int len) {
+	audio_mixer_t *am = (audio_mixer_t *)ao->data;
+
+	debug("len=%d", len);
+	am->stat = STOPPED;
+
+	debug("mixbuf: len=%d pushtail=%d", am->mixbuf.len, len);
+	ringbuf_push_tail(&am->mixbuf, len);
+	mixer_play(am);
+}
+
+static void mixer_play(audio_mixer_t *am) {
+	if (am->stat != STOPPED)
+		panic("stat=%d invalid", am->stat);
+
+	do_mix_t dm = {};
+
+	mixer_pre_mix(am, &dm);
+	debug("n=%d len=%d", dm.n, dm.len);
+	if (dm.n == 0) 
+		return;
+	mixer_do_mix(am, &dm);
+	mixer_do_track_change(am, &dm);
+
+	am->stat = PLAYING;
+	audio_out_play(am->ao, dm.buf, dm.len, mixer_on_play_done);
+}
 
 static void lua_call_play_done(audio_track_t *tr, const char *stat) {
 	lua_State *L = tr->am->L;
@@ -74,224 +523,7 @@ static audio_mixer_t *lua_getam(lua_State *L) {
 	return (audio_mixer_t *)lua_touserptr(L, lua_upvalueindex(1));
 }
 
-static const char *track_stat_str(int stat) {
-	switch (stat) {
-	case TRACK_STOPPED: return "stopped";
-	case TRACK_BUFFERING: return "buffering";
-	case TRACK_PLAYING: return "playing";
-	case TRACK_PAUSED: return "paused";
-	case TRACK_STOPPING: return "stopping";
-	case TRACK_CLOSING: return "closing";
-	default: return "?";
-	}
-}
-
-static float track_get_pos(audio_track_t *tr) {
-	return (float)tr->buf.tailpos / (44100*2*2); // int16_t*2 per sample
-}
-
-static void track_change_stat(audio_track_t *tr, int stat) {
-	if (tr->stat == stat)
-		return;
-
-	int send = 0;
-
-	if (stat == TRACK_PAUSED || tr->stat == TRACK_PAUSED)
-		send = 1;
-
-	if (tr->stat == TRACK_BUFFERING && stat == TRACK_PLAYING) {
-		if (tr->first_blood) {
-			send = 1;
-			tr->first_blood = 0;
-		}
-	}
-
-	tr->stat = stat;
-	if (send)
-		audio_emit(tr->am, "stat_change", track_stat_str(stat));
-}
-
-static void track_stop(audio_track_t *tr) {
-	if (tr->stat < TRACK_STOPPING) {
-		tr->ai->stop(tr->ai);
-		tr->stat = TRACK_STOPPING;
-		ringbuf_init(&tr->buf);
-	}
-}
-
-static void audio_in_on_probe(audio_in_t *ai, const char *key, void *_val) {
-	audio_track_t *tr = (audio_track_t *)ai->data;
-
-	if (strcmp(key, "dur") == 0) {
-		tr->dur = *(float *)_val;
-		info("dur=%f", tr->dur);
-	}
-}
-
-static void audio_in_on_read_done(audio_in_t *ai, int len) {
-	audio_track_t *tr = (audio_track_t *)ai->data;
-
-	debug("len=%d", len);
-
-	ringbuf_push_head(&tr->buf, len);
-	check_all_tracks(tr->am);
-}
-
-static void audio_out_on_play_done(audio_out_t *ao, int len) {
-	audio_mixer_t *am = (audio_mixer_t *)ao->data;
-
-	debug("len=%d", len);
-
-	ringbuf_push_tail(&am->mixbuf, len);
-	check_all_tracks(am);
-}
-
-static void audio_in_on_start(audio_in_t *ai, int rate) {
-	audio_track_t *tr = (audio_track_t *)ai->data;
-	audio_mixer_t *am = tr->am;
-
-	if (am->rate != rate) {
-		info("rate -> %d", rate);
-		audio_out_set_rate(am->ao, rate);
-		am->rate = rate;
-	}
-}
-
-static void audio_in_on_closed(audio_in_t *ai) {
-	audio_track_t *tr = (audio_track_t *)ai->data;
-
-	info("closed");
-
-	free(tr->ai);
-	tr->ai = NULL;
-
-	tr->stat = TRACK_STOPPED;
-	lua_call_play_done(tr, "done");
-}
-
-static void check_tracks_can_close(audio_mixer_t *am) {
-	int i;
-	for (i = 0; i < TRACKS_NR; i++) {
-		audio_track_t *tr = &am->tracks[i];
-		audio_in_t *ai = tr->ai;
-
-		if (!((tr->stat == TRACK_STOPPING || tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING) && ai->is_eof(ai) && tr->buf.len == 0))
-			continue;
-
-		info("close #%d stat=%d", i, tr->stat);
-
-		tr->stat = TRACK_CLOSING;
-		ai->close(ai, audio_in_on_closed);
-	}
-}
-
-static void check_tracks_can_read(audio_mixer_t *am) {
-	int i;
-	for (i = 0; i < TRACKS_NR; i++) {
-		audio_track_t *tr = &am->tracks[i];
-		audio_in_t *ai = tr->ai;
-
-		if (!((tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING || tr->stat == TRACK_PAUSED) && ai->can_read(ai)))
-			continue;
-
-		void *buf; int len;
-		ringbuf_space_ahead_get(&tr->buf, &buf, &len);
-
-		if (len > MAX_TRACKBUF)
-			len = MAX_TRACKBUF;
-
-		debug("len=%d", len);
-
-		if (len > 0)
-			ai->read(ai, buf, len, audio_in_on_read_done);
-	}
-}
-
-static void check_tracks_can_mix(audio_mixer_t *am) {
-
-	void *mixbuf; int mixlen;
-	ringbuf_space_ahead_get(&am->mixbuf, &mixbuf, &mixlen);
-	if (mixlen == 0)
-		return;
-
-	int max_mixlen = MAX_MIXLEN - am->mixbuf.len;
-	if (mixlen > max_mixlen)
-		mixlen = max_mixlen;
-	if (mixlen <= 0)
-		return;
-
-	audio_track_t *trmix[TRACKS_NR];
-	int canmix = 0;
-
-	int i;
-	for (i = 0; i < TRACKS_NR; i++) {
-		audio_track_t *tr = &am->tracks[i];
-
-		if (!(tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING))
-			continue;
-
-		void *databuf; int datalen;
-		ringbuf_data_ahead_get(&tr->buf, &databuf, &datalen);
-
-		if (datalen == 0) {
-			track_change_stat(tr, TRACK_BUFFERING);
-			continue;
-		} else 
-			track_change_stat(tr, TRACK_PLAYING);
-
-		if (datalen < mixlen)
-			mixlen = datalen;
-
-		trmix[canmix++] = tr;
-	}
-
-	if (canmix == 0)
-		return;
-
-	for (i = 0; i < canmix; i++) {
-		audio_track_t *tr = trmix[i];
-
-		void *databuf; int datalen;
-		ringbuf_data_ahead_get(&tr->buf, &databuf, &datalen);
-
-		if (am->filter_track0_setvol && tr == &am->tracks[0])
-			pcm_do_volume(databuf, mixlen, am->track0_vol);
-
-		if (i == 0)
-			memcpy(mixbuf, databuf, mixlen);
-		else
-			pcm_do_mix(mixbuf, databuf, mixlen);
-		ringbuf_push_tail(&tr->buf, mixlen);
-	}
-
-	debug("canmix=%d mixlen=%d", canmix, mixlen);
-
-	pcm_do_volume(mixbuf, mixlen, am->vol);
-	ringbuf_push_head(&am->mixbuf, mixlen);
-}
-
-static void check_tracks_can_play(audio_mixer_t *am) {
-	void *databuf; int datalen;
-	ringbuf_data_ahead_get(&am->mixbuf, &databuf, &datalen);
-	if (datalen == 0)
-		return;
-
-	debug("playlen=%d", datalen);
-
-	if (!audio_out_is_playing(am->ao)) 
-		audio_out_play(am->ao, databuf, datalen, audio_out_on_play_done);
-	else
-		debug("playing");
-}
-
-static void check_all_tracks(audio_mixer_t *am) {
-	check_tracks_can_close(am);
-	check_tracks_can_read(am);
-	check_tracks_can_mix(am);
-	check_tracks_can_play(am);
-}
-
-static int parse_track_i(lua_State *L) {
+static int lua_parse_track_i(lua_State *L) {
 	if (!lua_istable(L, 1) || lua_isnil(L, 1))
 		return 0;
 
@@ -301,38 +533,43 @@ static int parse_track_i(lua_State *L) {
 
 	if (i > TRACKS_NR)
 		i = TRACKS_NR-1;
-	if (i < 0)
+	else if (i < 0)
 		i = 0;
 
 	return i;
 }
 
-// audio.emit(arg0, arg1)
-static void audio_emit(audio_mixer_t *am, const char *arg0, const char *arg1) {
-	lua_getglobal(am->L, "audio");
-	lua_getfield(am->L, -1, "emit");
-	lua_remove(am->L, -2);
+// audio.track_stat_change(3) -> track#3 stat changed
+static void lua_track_stat_change(audio_track_t *tr) {
+	lua_State *L = tr->am->L;
 
-	lua_pushstring(am->L, arg0);
-	lua_pushstring(am->L, arg1);
-	lua_call_or_die(am->L, 2, 0);
+	lua_getglobal(L, "audio");
+	lua_getfield(L, -1, "track_stat_change");
+	lua_remove(L, -2);
+
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return;
+	}
+
+	lua_pushnumber(L, tr->ti);
+	lua_call_or_die(L, 1, 0);
 }
 
-// upvalue[1] = {url='filename',i=0/1,done=function}
-static int audio_on_done(lua_State *L) {
+// upvalue[1] = [args of audio.play]
+static int lua_audio_on_stopped(lua_State *L) {
 	lua_getglobal(L, "audio");
 	lua_getfield(L, -1, "play");
 	lua_remove(L, -2);
 	
 	lua_pushvalue(L, lua_upvalueindex(1));
-
 	lua_call_or_die(L, 1, 0);
 
 	return 0;
 }
 
-// audio.play({url='filename',track=0/1,done=function})
-static int audio_play(lua_State *L) {
+// audio.play {url='filename',track=0/1,done=function}
+static int lua_audio_play(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
 
 	lua_getfield(L, 1, "url");
@@ -340,157 +577,179 @@ static int audio_play(lua_State *L) {
 	if (url == NULL) 
 		panic("url must set");
 
-	int ti = parse_track_i(L);
-	audio_track_t *tr = &am->tracks[ti];
-	tr->am = am;
+	int ti = lua_parse_track_i(L);
+	audio_track_t *tr = am->tracks[ti];
 
-	if (tr->stat != TRACK_STOPPED) {
-		info("stat=%d wait for stop", tr->stat);
+	if (tr) {
+		debug("wait close");
 
 		lua_pushvalue(L, 1);
-		lua_pushcclosure(L, audio_on_done, 1);
+		lua_pushcclosure(L, lua_audio_on_stopped, 1);
 		lua_set_play_done(tr);
 
 		track_stop(tr);
 		return 0;
 	}
 
-	tr->stat = TRACK_BUFFERING;
-	tr->first_blood = 1; // for testing
-	ringbuf_init(&tr->buf);
-
-	lua_getfield(L, 1, "done");
-	lua_set_play_done(tr);
+	tr = (audio_track_t *)zalloc(sizeof(audio_track_t));
+	tr->ti = ti;
+	tr->am = am;
+	am->tracks[ti] = tr;
 
 	info("url=%s i=%d", url, ti);
 
 	audio_in_t *ai = (audio_in_t *)zalloc(sizeof(audio_in_t));
 	tr->ai = ai;
 	ai->data = tr;
-	ai->on_probe = audio_in_on_probe;
-	ai->on_start = audio_in_on_start;
+	ai->on_meta = audio_in_on_meta;
 	ai->url = url;
+
+	lua_getfield(L, 1, "done");
+	lua_set_play_done(tr);
 
 	audio_in_init(am->loop, ai);
 
-	check_all_tracks(am);
+	tr->stat = READING_BUF_EMPTY;
+	track_read(tr);
+	lua_track_stat_change(tr);
 
 	return 0;
 }
 
-// audio.info() = {duration=123, position=123, stat='playing/paused/stopped/buffering'}
-static int audio_info(lua_State *L) {
+// audio.info{track=1} -> {duration=123, position=123, stat='playing/paused/stopped/buffering'}
+static int lua_audio_info(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
-	audio_track_t *tr = &am->tracks[0];
+	audio_track_t *tr = am->tracks[lua_parse_track_i(L)];
 
 	lua_newtable(L);
 
-	lua_pushstring(L, track_stat_str(tr->stat));
+	lua_pushstring(L, track_statstr(tr));
 	lua_setfield(L, -2, "stat");
 
-	lua_pushnumber(L, (int)track_get_pos(tr));
-	lua_setfield(L, -2, "position");
+	if (tr) {
+		lua_pushnumber(L, (int)track_get_pos(tr));
+		lua_setfield(L, -2, "position");
 
-	lua_pushnumber(L, (int)tr->dur);
-	lua_setfield(L, -2, "duration");
+		lua_pushnumber(L, (int)tr->dur);
+		lua_setfield(L, -2, "duration");
+	}
 
 	return 1;
 }
 
 // audio.setvol(vol) = 11
-static int audio_setvol(lua_State *L) {
+static int lua_audio_setvol(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
-	int vol = lua_tonumber(L, -1);
-
-	if (vol > 100)
-		vol = 100;
-	if (vol < 0)
-		vol = 0;
-
-	am->vol = vol/100.0;
-
-	lua_pushnumber(L, (int)(am->vol*100));
+	am->vol = vol2fvol(lua_tonumber(L, 1));
+	lua_pushnumber(L, fvol2vol(am->vol));
 	return 1;
 }
 
 // audio.getvol() = 11
-static int audio_getvol(lua_State *L) {
+static int lua_audio_getvol(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
-	lua_pushnumber(L, (int)(am->vol*100));
+	lua_pushnumber(L, fvol2vol(am->vol));
 	return 1;
 }
 
 // audio.pause{track=1}
-static int audio_pause(lua_State *L) {
+static int lua_audio_pause(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
-	audio_track_t *tr = &am->tracks[parse_track_i(L)];
+	audio_track_t *tr = am->tracks[lua_parse_track_i(L)];
 
-	if (tr->stat == TRACK_PLAYING || tr->stat == TRACK_BUFFERING)
-		track_change_stat(tr, TRACK_PAUSED);
+	if (tr)
+		track_pause(tr);
 
 	return 0;
 }
 
 // audio.resume{track=1}
-static int audio_resume(lua_State *L) {
+static int lua_audio_resume(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
-	audio_track_t *tr = &am->tracks[parse_track_i(L)];
+	audio_track_t *tr = am->tracks[lua_parse_track_i(L)];
 
-	if (tr->stat == TRACK_PAUSED)
-		track_change_stat(tr, TRACK_PLAYING);
-
-	check_all_tracks(am);
-
-	return 0;
-}
-
-// audio.stop{track=1}
-static int audio_stop(lua_State *L) {
-	audio_mixer_t *am = lua_getam(L);
-	audio_track_t *tr = &am->tracks[parse_track_i(L)];
-
-	lua_pushnil(L);
-	lua_set_play_done(tr);
-
-	track_stop(tr);
+	if (tr)
+		track_resume(tr);
 
 	return 0;
 }
 
 // audio.pause_resume_toggle{track=1}
-static int audio_pause_resume_toggle(lua_State *L) {
+static int lua_audio_pause_resume_toggle(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
-	audio_track_t *tr = &am->tracks[parse_track_i(L)];
+	audio_track_t *tr = am->tracks[lua_parse_track_i(L)];
 
-	if (tr->stat == TRACK_PAUSED)
-		return audio_resume(L);
-	else
-		return audio_pause(L);
+	if (tr)
+		track_pause_resume_toggle(tr);
 
 	return 0;
 }
 
-// audio.setopt{track0_setvol = true/false, vol = 20}
-static int audio_setopt(lua_State *L) {
+// audio.stop{track=1}
+static int lua_audio_stop(lua_State *L) {
+	audio_mixer_t *am = lua_getam(L);
+	audio_track_t *tr = am->tracks[lua_parse_track_i(L)];
+
+	if (tr)
+		track_stop(tr);
+
+	return 0;
+}
+
+// audio.setfilter{enabled=false, slot=0, type='highlight', i=3, vol=20}
+static int lua_audio_setfilter(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
 
-	lua_getfield(L, 1, "track0_setvol");
-	if (!lua_isnil(L, -1)) {
-		int on = lua_toboolean(L, -1);
+	lua_getfield(L, 1, "slot");
+	int slot = lua_tonumber(L, -1);
 
-		lua_getfield(L, 1, "vol");
-		int vol = lua_tonumber(L, -1);
-		
-		am->filter_track0_setvol = on;
-		am->track0_vol = (float)vol/100;
+	lua_getfield(L, 1, "type");
+	const char *type = lua_tostring(L, -1);
 
-		info("track0_setvol=%d,%d", on, vol);
+	lua_getfield(L, 1, "enabled");
+	int enabled = lua_toboolean(L, -1);
+
+	if (slot < 0 || slot >= FILTERS_NR)
+		panic("slot=%d invalid", slot);
+
+	audio_filter_t *f = &am->filters[slot];
+
+	if (!enabled) {
+		f->type = NONE;
+	} else {
+		if (!strcmp(type, "highlight")) {
+			f->type = HIGHLIGHT;
+
+			lua_getfield(L, 1, "vol");
+			f->vol = vol2fvol(lua_tonumber(L, -1));
+
+			lua_getfield(L, 1, "i");
+			f->i = lua_tonumber(L, -1);
+
+			info("highlight: i=%d vol=%f", f->i, f->vol);
+		}
 	}
 
 	return 0;
 }
 
-void audio_mixer_init(lua_State *L, uv_loop_t *loop) {
+static struct {
+	const char *name;
+	lua_CFunction func;
+} funcs[] = {
+	{"play", lua_audio_play},
+	{"stop", lua_audio_stop},
+	{"info", lua_audio_info},
+	{"getvol", lua_audio_getvol},
+	{"setvol", lua_audio_setvol},
+	{"pause", lua_audio_pause},
+	{"resume", lua_audio_resume},
+	{"pause_resume_toggle", lua_audio_pause_resume_toggle},
+	{"setfilter", lua_audio_setfilter},
+	{},
+};
+
+void luv_audio_mixer_init(lua_State *L, uv_loop_t *loop) {
 	audio_mixer_t *am = (audio_mixer_t *)zalloc(sizeof(audio_mixer_t));
 	am->loop = loop;
 	am->L = L;
@@ -506,72 +765,13 @@ void audio_mixer_init(lua_State *L, uv_loop_t *loop) {
 	lua_newtable(L);
 	lua_setglobal(L, "audio");
 
-	// emitter_init(audio)
-	lua_getglobal(L, "emitter_init");
-	lua_getglobal(L, "audio");
-	lua_call_or_die(L, 1, 0);
-
-	// audio.stop = [native function]
-	lua_getglobal(L, "audio");
-	lua_pusham(L, am);
-	lua_pushcclosure(L, audio_stop, 1);
-	lua_setfield(L, -2, "stop");
-	lua_pop(L, 1);
-
-	// audio.play = [native function]
-	lua_getglobal(L, "audio");
-	lua_pusham(L, am);
-	lua_pushcclosure(L, audio_play, 1);
-	lua_setfield(L, -2, "play");
-	lua_pop(L, 1);
-
-	// audio.info = [native function]
-	lua_getglobal(L, "audio");
-	lua_pusham(L, am);
-	lua_pushcclosure(L, audio_info, 1);
-	lua_setfield(L, -2, "info");
-	lua_pop(L, 1);
-
-	// audio.getvol = [native function]
-	lua_getglobal(L, "audio");
-	lua_pusham(L, am);
-	lua_pushcclosure(L, audio_getvol, 1);
-	lua_setfield(L, -2, "getvol");
-	lua_pop(L, 1);
-
-	// audio.setvol = [native function]
-	lua_getglobal(L, "audio");
-	lua_pusham(L, am);
-	lua_pushcclosure(L, audio_setvol, 1);
-	lua_setfield(L, -2, "setvol");
-	lua_pop(L, 1);
-
-	// audio.pause = [native function]
-	lua_getglobal(L, "audio");
-	lua_pusham(L, am);
-	lua_pushcclosure(L, audio_pause, 1);
-	lua_setfield(L, -2, "pause");
-	lua_pop(L, 1);
-
-	// audio.resume = [native function]
-	lua_getglobal(L, "audio");
-	lua_pusham(L, am);
-	lua_pushcclosure(L, audio_resume, 1);
-	lua_setfield(L, -2, "resume");
-	lua_pop(L, 1);
-
-	// audio.pause_resume_toggle = [native function]
-	lua_getglobal(L, "audio");
-	lua_pusham(L, am);
-	lua_pushcclosure(L, audio_pause_resume_toggle, 1);
-	lua_setfield(L, -2, "pause_resume_toggle");
-	lua_pop(L, 1);
-
-	// audio.setopt = [native function]
-	lua_getglobal(L, "audio");
-	lua_pusham(L, am);
-	lua_pushcclosure(L, audio_setopt, 1);
-	lua_setfield(L, -2, "setopt");
-	lua_pop(L, 1);
+	int i;
+	for (i = 0; funcs[i].name; i++) {
+		lua_getglobal(L, "audio");
+		lua_pusham(L, am);
+		lua_pushcclosure(L, funcs[i].func, 1);
+		lua_setfield(L, -2, funcs[i].name);
+		lua_pop(L, 1);
+	}
 }
 

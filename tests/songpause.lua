@@ -10,9 +10,9 @@ audio.play{
 	i=0,
 }
 
-audio.on('stat_change', function () 
+audio.track_stat_change = function () 
 	info('change->', audio.info())
-end)
+end
 
 vol = 100
 

@@ -1,4 +1,6 @@
 
+// please visit http://www.processon.com/view/link/542c8e090cf2e6eabf18d01d
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -16,7 +18,7 @@ typedef struct {
 enum {
 	CMD_START,
 	CMD_DATA,
-	CMD_STOP,
+	CMD_END,
 };
 
 typedef struct {
@@ -39,14 +41,13 @@ typedef struct airplay_s {
 	int stat_close;
 	void (*on_close)(struct airplay_s *);
 
-	int pending_killed;
-	int pending_ai_close;
+	unsigned pending_killed:1;
 
 	char *name;
 
 	audio_in_t *ai;
 
-	uv_pipe_t *pipe[2];
+	uv_pipe_t *pipe[1];
 	uv_process_t *proc;
 
 	lua_State *L;
@@ -55,8 +56,6 @@ typedef struct airplay_s {
 	readbuf_t rb;
 
 	audio_in_read_cb ai_read_done;
-	int data_len;
-
 	audio_in_close_cb ai_close_done;
 } airplay_t;
 
@@ -65,19 +64,26 @@ enum {
 };
 
 enum {
-	WAITING_START_CMDHDR,
-	WAITING_START_DATAHDR,
+	READING_FIRST_START,
+	READING_FIRST_DATA,
 	STARTED,
-	ATTACHED,
-	WAITING_DATA,
-	WAITING_CMDHDR,
 
+	ATTACHED_READ_DATA,
+	ATTACHED_READ_CMD,
+
+	READING_DATA,
+	READING_CMD,
+
+	ENDED,
+	ENDED_CLOSING,
+
+	RESTARTING_WAIT_READ,
+	STOPPING_WAIT_READ,
+	STOPPING_WAIT_AI_READ,
+	STOPPING_WAIT_AI_READING,
 	STOPPED,
-	STOPPED_CLOSING,
 
-	EXITED,
-	EXITED_CLOSING,
-
+	READ_EOF,
 	CLOSING,
 };
 
@@ -94,7 +100,9 @@ static void proc_start(airplay_t *ap);
 static void proc_kill(airplay_t *ap);
 static void proc_close(airplay_t *ap);
 
+static void enter_restart(airplay_t *ap);
 static void enter_stopped(airplay_t *ap);
+static void enter_closing(airplay_t *ap, void (*done)(airplay_t *));
 
 static void pdata_read_cmdhdr(airplay_t *ap);
 static void pdata_read_data(airplay_t *ap, void *buf, int len);
@@ -131,8 +139,8 @@ static void on_cmd_start(airplay_t *ap) {
 	info("stat=%d", ap->stat);
 
 	switch (ap->stat) {
-	case WAITING_START_CMDHDR:
-		ap->stat = WAITING_START_DATAHDR;
+	case READING_FIRST_START:
+		ap->stat = READING_FIRST_DATA;
 		pdata_read_cmdhdr(ap);
 		break;
 
@@ -141,12 +149,13 @@ static void on_cmd_start(airplay_t *ap) {
 	}
 }
 
-static void on_cmd_stop(airplay_t *ap) {
+static void on_cmd_end(airplay_t *ap) {
 	info("stat=%d", ap->stat);
 
 	switch (ap->stat) {
-	case WAITING_CMDHDR:
-		enter_stopped(ap);
+	case READING_CMD:
+		ap->stat = ENDED;
+		ap->ai_read_done(ap->ai, -1);
 		break;
 
 	default:
@@ -158,12 +167,12 @@ static void on_cmd_data(airplay_t *ap) {
 	debug("stat=%d", ap->stat);
 
 	switch (ap->stat) {
-	case WAITING_CMDHDR:
-		ap->stat = ATTACHED;
-		ap->ai_read_done(ap->ai, ap->data_len);
+	case READING_CMD:
+		ap->stat = ATTACHED_READ_DATA;
+		ap->ai_read_done(ap->ai, 0);
 		break;
 
-	case WAITING_START_DATAHDR:
+	case READING_FIRST_DATA:
 		ap->stat = STARTED;
 		lua_emit_start(ap);
 		break;
@@ -177,10 +186,9 @@ static void on_data_done(airplay_t *ap, int len) {
 	debug("stat=%d", ap->stat);
 
 	switch (ap->stat) {
-	case WAITING_DATA:
-		ap->stat = WAITING_CMDHDR;
-		ap->data_len = len;
-		pdata_read_cmdhdr(ap);
+	case READING_DATA:
+		ap->stat = ATTACHED_READ_CMD;
+		ap->ai_read_done(ap->ai, len);
 		break;
 
 	default:
@@ -192,8 +200,8 @@ static void on_data_halfdone(airplay_t *ap, int len) {
 	debug("stat=%d", ap->stat);
 
 	switch (ap->stat) {
-	case WAITING_DATA:
-		ap->stat = ATTACHED;
+	case READING_DATA:
+		ap->stat = ATTACHED_READ_DATA;
 		ap->ai_read_done(ap->ai, len);
 		break;
 
@@ -212,8 +220,8 @@ static void pdata_on_got_cmdhdr(airplay_t *ap) {
 		on_cmd_start(ap);
 		break;
 
-	case CMD_STOP:
-		on_cmd_stop(ap);
+	case CMD_END:
+		on_cmd_end(ap);
 		break;
 
 	case CMD_DATA:
@@ -285,6 +293,16 @@ static void pdata_pipe_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	debug("n=%d stat=%d", n, ap->stat);
 	uv_read_stop(st);
 
+	switch (ap->stat) {
+	case RESTARTING_WAIT_READ:
+		enter_closing(ap, enter_restart);
+		return;
+	
+	case STOPPING_WAIT_READ:
+		enter_stopped(ap);
+		return;
+	}
+
 	if (n < 0) {
 		on_read_eof(ap);
 		return;
@@ -323,37 +341,26 @@ static void pdata_read_data(airplay_t *ap, void *buf, int len) {
 }
 
 static void enter_restart(airplay_t *ap) {
+	debug("restart");
 	proc_init(ap);
-	proc_start(ap);
-}
-
-static void on_exited_closing_done(airplay_t *ap) {
-	ap->ai_close_done(ap->ai);
-	proc_init(ap);
-	proc_start(ap);
-}
-
-static void enter_exited(airplay_t *ap) {
-	if (ap->pending_ai_close) {
-		on_exited_closing_done(ap);
-	} else {
-		ap->stat = EXITED;
-	}
-}
-
-static void on_stopped_closing_done(airplay_t *ap) {
-	ap->ai_close_done(ap->ai);
 	proc_start(ap);
 }
 
 static void enter_stopped(airplay_t *ap) {
-	if (ap->pending_ai_close) {
-		on_stopped_closing_done(ap);
-	} else {
-		ap->stat = STOPPED;
-	}
+	ap->stat = STOPPED;
+	ap->ai_read_done(ap->ai, -1);
 }
 
+static void enter_close_then_start(airplay_t *ap) {
+	ap->ai_close_done(ap->ai);
+	proc_start(ap);
+}
+
+static void enter_close_then_restart(airplay_t *ap) {
+	ap->ai_close_done(ap->ai);
+	proc_init(ap);
+	proc_start(ap);
+}
 
 static void enter_closing(airplay_t *ap, void (*done)(airplay_t *)) {
 	ap->stat = CLOSING;
@@ -395,14 +402,15 @@ static void on_read_eof(airplay_t *ap) {
 	debug("stat=%d", ap->stat);
 
 	switch (ap->stat) {
-	case WAITING_START_CMDHDR:
-	case WAITING_START_DATAHDR:
+	case READING_FIRST_START:
+	case READING_FIRST_DATA:
 		enter_closing(ap, enter_restart);
 		break;
 
-	case WAITING_DATA:
-	case WAITING_CMDHDR:
-		enter_closing(ap, enter_exited);
+	case READING_DATA:
+	case READING_CMD:
+		ap->stat = READ_EOF;
+		ap->ai_read_done(ap->ai, -1);
 		break;
 
 	default:
@@ -429,12 +437,11 @@ static void proc_init(airplay_t *ap) {
 	ap->ai_close_done = NULL;
 	ap->ai_read_done = NULL;
 	ap->pending_killed = 0;
-	ap->pending_ai_close = 0;
 	ap->on_close = NULL;
 	ap->stat_close = 0;
 
 	int i;
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < 1; i++) {
 		ap->pipe[i] = (uv_pipe_t *)zalloc(sizeof(uv_pipe_t));
 		ap->pipe[i]->data = ap;
 		uv_pipe_init(ap->loop, ap->pipe[i], 0);
@@ -444,7 +451,7 @@ static void proc_init(airplay_t *ap) {
 		{.flags = UV_IGNORE},
 		{.flags = UV_IGNORE},
 		{.flags = UV_IGNORE},
-		{.flags = UV_IGNORE}, //{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[PCTRL]},
+		{.flags = UV_IGNORE},
 		{.flags = UV_CREATE_PIPE|UV_WRITABLE_PIPE, .data.stream = (uv_stream_t *)ap->pipe[PDATA]},
 	};
 
@@ -483,7 +490,7 @@ static void proc_init(airplay_t *ap) {
 }
 
 static void proc_start(airplay_t *ap) {
-	ap->stat = WAITING_START_CMDHDR;
+	ap->stat = READING_FIRST_START;
 	pdata_read_cmdhdr(ap);
 }
 
@@ -494,19 +501,34 @@ static void proc_close(airplay_t *ap) {
 }
 
 static void proc_kill(airplay_t *ap) {
-	info("pid=%d", ap->proc->pid);
-	debug("stat=%d", ap->stat);
+	info("pid=%d stat=%d", ap->proc->pid, ap->stat);
 	uv_process_kill(ap->proc, 15);
 }
 
 static void proc_restart(airplay_t *ap) {
 	info("stat=%d", ap->stat);
 
-	if (ap->stat == STARTED) {
+	switch (ap->stat) {
+	case READING_FIRST_START:
+	case READING_FIRST_DATA:
+		ap->stat = RESTARTING_WAIT_READ;
 		proc_kill(ap);
+		break;
+
+	case STARTED:
 		enter_closing(ap, enter_restart);
-	} else {
+		break;
+
+	case READING_DATA:
+	case READING_CMD:
+		ap->stat = STOPPING_WAIT_READ;
 		proc_kill(ap);
+		break;
+
+	case ATTACHED_READ_DATA:
+	case ATTACHED_READ_CMD:
+		ap->stat = STOPPING_WAIT_AI_READ;
+		break;
 	}
 }
 
@@ -514,22 +536,38 @@ static void proc_restart(airplay_t *ap) {
 static void audio_in_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb done) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
-	if (ap->stat != ATTACHED)
-		panic("stat=%d invalid: must be ATTACHED", ap->stat);
+	debug("stat=%d len=%d", ap->stat, len);
 
 	int left = ap->rb.len - ap->rb.got;
 	if (len > left)
 		len = left;
 
-	ap->stat = WAITING_DATA;
+	switch (ap->stat) {
+	case ATTACHED_READ_DATA:
+		ap->stat = READING_DATA;
+		pdata_read_data(ap, buf, len);
+		break;
+
+	case ATTACHED_READ_CMD:
+		ap->stat = READING_CMD;
+		pdata_read_cmdhdr(ap);
+		break;
+
+	case STOPPING_WAIT_AI_READ:
+		enter_ai_closing(ap, STOPPING_WAIT_AI_READING, enter_stopped);
+		break;
+
+	default:
+		panic("stat=%d invalid", ap->stat);
+	}
+
 	ap->ai_read_done = done;
-	pdata_read_data(ap, buf, len);
 }
 
-static void audio_in_stop(audio_in_t *ai) {
+static void audio_in_stop_read(audio_in_t *ai) {
 	airplay_t *ap = (airplay_t *)ai->in;
 
-	proc_kill(ap);
+	proc_restart(ap);
 }
 
 static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
@@ -539,38 +577,23 @@ static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 	ap->ai_close_done = done;
 
 	switch (ap->stat) {
-	case EXITED:
-		enter_ai_closing(ap, EXITED_CLOSING, on_exited_closing_done);
+	case ATTACHED_READ_DATA:
+	case ATTACHED_READ_CMD:
+	case STOPPED:
+		enter_closing(ap, enter_close_then_restart);
+		break;
+		
+	case ENDED:
+		enter_ai_closing(ap, ENDED_CLOSING, enter_close_then_start);
 		break;
 
-	case STOPPED:
-		enter_ai_closing(ap, STOPPED_CLOSING, on_stopped_closing_done);
+	case READ_EOF:
+		enter_closing(ap, enter_close_then_restart);
 		break;
 
 	default:
-		ap->pending_ai_close++;
+		panic("stat=%d invalid", ap->stat);
 	}
-}
-
-static int audio_in_is_eof(audio_in_t *ai) {
-	airplay_t *ap = (airplay_t *)ai->in;
-
-	debug("stat=%d", ap->stat);
-
-	switch (ap->stat) {
-	case ATTACHED:
-	case WAITING_DATA:
-	case WAITING_CMDHDR:
-		return 0;
-	}
-	return 1;
-}
-
-static int audio_in_can_read(audio_in_t *ai) {
-	airplay_t *ap = (airplay_t *)ai->in;
-
-	debug("stat=%d", ap->stat);
-	return ap->stat == ATTACHED;
 }
 
 void audio_in_airplay_init_v2(uv_loop_t *loop, audio_in_t *ai) {
@@ -591,15 +614,13 @@ void audio_in_airplay_init_v2(uv_loop_t *loop, audio_in_t *ai) {
 	}
 
 	g_ap->ai = ai;
-	g_ap->stat = ATTACHED;
+	g_ap->stat = ATTACHED_READ_DATA;
 	info("attached");
 
 	ai->in = g_ap;
 	ai->read = audio_in_read;
-	ai->stop = audio_in_stop;
+	ai->stop_read = audio_in_stop_read;
 	ai->close = audio_in_close;
-	ai->can_read = audio_in_can_read;
-	ai->is_eof = audio_in_is_eof;
 }
 
 static void lua_emit_start(airplay_t *ap) {

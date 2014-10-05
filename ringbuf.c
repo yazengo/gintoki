@@ -44,4 +44,3 @@ void ringbuf_push_tail(ringbuf_t *b, int len) {
 	b->tailpos += len;
 }
 
-
