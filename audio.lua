@@ -5,9 +5,9 @@ audio.alert = function (url, vol)
 	audio.setfilter { 
 		enabled = true,
 		slot = 0,
-		type = highlight,
+		type = 'highlight',
 		i = 1,
-		vol = 20,
+		vol = vol,
 	}
 
 	audio.play {

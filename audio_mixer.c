@@ -714,10 +714,12 @@ static int lua_audio_setfilter(lua_State *L) {
 
 	audio_filter_t *f = &am->filters[slot];
 
+	info("enabled=%d slot=%d type=%s", enabled, slot, type);
+
 	if (!enabled) {
 		f->type = NONE;
 	} else {
-		if (!strcmp(type, "highlight")) {
+		if (type && !strcmp(type, "highlight")) {
 			f->type = HIGHLIGHT;
 
 			lua_getfield(L, 1, "vol");
