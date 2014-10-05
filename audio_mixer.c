@@ -28,6 +28,8 @@ typedef struct {
 	int stat;
 	unsigned paused:1;
 
+	unsigned firstplay:1;
+
 	ringbuf_t buf;
 	float vol;
 	float dur;
@@ -111,6 +113,13 @@ static int fvol2vol(float v) {
 	return v*100;
 }
 
+static void track_on_buffering_to_playing(audio_track_t *tr) {
+	if (!tr->firstplay) {
+		lua_track_stat_change(tr);
+		tr->firstplay = 1;
+	}
+}
+
 static void track_on_free(audio_track_t *tr) {
 	audio_mixer_t *am = tr->am;
 
@@ -131,7 +140,7 @@ static void track_on_buf_full(audio_track_t *tr, int op) {
 		switch (tr->stat) {
 		case READING_BUF_EMPTY:
 			tr->stat = WAITING_BUF_FULL;
-			lua_track_stat_change(tr);
+			track_on_buffering_to_playing(tr);
 			mixer_on_newdata(am);
 			break;
 
@@ -156,7 +165,7 @@ static void track_on_buf_halffull(audio_track_t *tr, int op) {
 		switch (tr->stat) {
 		case READING_BUF_EMPTY:
 			tr->stat = READING_BUF_HALFFULL;
-			lua_track_stat_change(tr);
+			track_on_buffering_to_playing(tr);
 			mixer_on_newdata(am);
 			track_read(tr);
 			break;
