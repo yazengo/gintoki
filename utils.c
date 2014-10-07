@@ -1,4 +1,5 @@
 
+#include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +29,8 @@ void log_ban(const char *file, const char *func) {
 }
 
 static int log_level = LOG_INFO;
+
+static void print_traceback_and_exit();
 
 void setloglevel(int level) {
 	log_level = level;
@@ -63,10 +66,8 @@ void _log(
 
 	fprintf(stderr, "[%8.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
 
-	if (level == LOG_PANIC) {
-		print_trackback();
-		exit(-1);
-	}
+	if (level == LOG_PANIC)
+		print_traceback_and_exit();
 }
 
 void log_init() {
@@ -97,12 +98,13 @@ void *zalloc(int len) {
 	return p;
 }
 
-void print_trackback() {
-	fprintf(stderr, "native trackback:\n");
+void print_traceback() {
+	fprintf(stderr, "native traceback:\n");
 	void *array[128];
 	size_t size;
 	size = backtrace(array, 128);
 	backtrace_symbols_fd(array, size, 2);
+	fprintf(stderr, "\n");
 }
 
 static void globalptr_name(char *name, const char *pref, void *p) {
@@ -410,9 +412,7 @@ static int lua_docall(lua_State *L, int narg, int nres) {
 
 void lua_dostring_or_die_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L, const char *str) {
 	if (luaL_dostring(L, str)) {
-		_log(LOG_ERROR, at_func, at_file, at_lineno, "lua_dostring: %s", lua_tostring(L, -1));
-		print_trackback();
-		exit(-1);
+		_log(LOG_PANIC, at_func, at_file, at_lineno, "lua_dostring: %s", lua_tostring(L, -1));
 	}
 }
 
@@ -420,21 +420,18 @@ void lua_dofile_or_die_at(const char *at_func, const char *at_file, int at_linen
 	int r = luaL_loadfile(L, fname);
 	if (r) {
 		if (r == LUA_ERRFILE) 
-			_log(LOG_ERROR, at_func, at_file, at_lineno, "'%s' open failed", fname);
+			_log(LOG_PANIC, at_func, at_file, at_lineno, "'%s' open failed", fname);
 		else if (r == LUA_ERRSYNTAX) 
-			_log(LOG_ERROR, at_func, at_file, at_lineno, "'%s' has syntax error", fname);
+			_log(LOG_PANIC, at_func, at_file, at_lineno, "'%s' has syntax error", fname);
 		else 
-			_log(LOG_ERROR, at_func, at_file, at_lineno, "'%s' has unknown error", fname);
-		exit(-1);
+			_log(LOG_PANIC, at_func, at_file, at_lineno, "'%s' has unknown error", fname);
 	}
 	lua_call_or_die_at(at_func, at_file, at_lineno, L, 0, LUA_MULTRET);
 }
 
 void lua_call_or_die_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L, int nargs, int nresults) {
 	if (lua_docall(L, nargs, nresults)) {
-		_log(LOG_ERROR, at_func, at_file, at_lineno, "lua_call: %s", lua_tostring(L, -1));
-		print_trackback();
-		exit(-1);
+		_log(LOG_PANIC, at_func, at_file, at_lineno, "lua_call: %s", lua_tostring(L, -1));
 	}
 }
 
@@ -546,20 +543,22 @@ void *lua_touserptr(lua_State *L, int index) {
 	return p;
 }
 
-static void fault(int sig) {
-	error("sig=%d", sig);
-	print_trackback();
+static void print_traceback_and_exit() {
+	signal(SIGTERM, SIG_IGN);
+	print_traceback();
+	if (getenv("TERM_NOT_KILL0") == NULL)
+		kill(0, SIGTERM);
 	exit(-1);
 }
 
 static void term(int sig) {
-	info("sig=%d", sig);
-	static int i;
-	if (i++)
-		return;
-	if (getenv("TERM_NOT_KILL0") == NULL)
-		kill(0, SIGTERM);
-	exit(-1);
+	error("sig=%d", sig);
+	print_traceback_and_exit();
+}
+
+static void fault(int sig) {
+	error("sig=%d", sig);
+	print_traceback_and_exit();
 }
 
 void utils_preinit() {
@@ -621,6 +620,13 @@ static int lua_system(lua_State *L) {
 	return 0;
 }
 
+static int lua_hostname(lua_State *L) {
+	char name[512] = {};
+	gethostname(name, sizeof(name)-1);
+	lua_pushstring(L, name);
+	return 1;
+}
+
 void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, luv_set_timeout, 1);
@@ -658,5 +664,8 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, stdin_open, 1);
 	lua_setglobal(L, "stdin_open");
+
+	lua_pushcfunction(L, lua_hostname);
+	lua_setglobal(L, "hostname");
 }
 
