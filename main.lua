@@ -1,6 +1,7 @@
 
 require('localmusic')
 require('pandora')
+require('douban')
 require('bbcradio')
 require('radio')
 require('audio')
@@ -15,6 +16,10 @@ end
 ar_info = function ()
 	local ai = audio.info()
 	local ri = radio.info()
+	if ri.fetching then
+		ai.stat = 'fetching'
+	end
+	ri.fetching = nil
 	local r = table.add({}, ai, ri)
 	if r.url then r.url = nil end
 	return r
@@ -33,7 +38,7 @@ upnp.loadconfig = function ()
 	local xml = io.open('upnpweb/munodevicedesc.xml', 'w+')
 	if not xml then error('upnp xml open failed') end
 
-	local name = prop.get('upnp.name', 'Muno')
+	local name = hostname()
 	local s = tpl:read('*a')
 	s = string.gsub(s, '{NAME}', name)
 	xml:write(s)
@@ -102,6 +107,7 @@ upnp.on_action = function (a, done)
 end
 
 radio.change = function (opt)
+	info('radio.change', opt)
 	local to
 	if opt.type == 'pandora' then
 		to = pandora
@@ -109,6 +115,8 @@ radio.change = function (opt)
 		to = localmusic
 	elseif opt.type == 'bbcradio' then
 		to = bbcradio
+	elseif opt.type == 'douban' then
+		to = douban
 	end
 	if to and radio.source ~= to then
 		radio.start(to)
@@ -221,10 +229,25 @@ on_inputevent = function (e)
 	end
 end
 
+if input then
+	input.cmds = {
+		[[ audio.pause_resume_toggle() ]],
+		[[ radio.next() ]],
+		[[ audio.setvol(audio.getvol() - 10); print(audio.getvol()) ]],
+		[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
+		[[ radio.change{type = 'pandora'} ]],
+		[[ radio.change{type = 'local'} ]],
+		[[ gsensor_next() ]],
+		[[ gsensor_prev() ]],
+	}
+end
+
+info('hostname', hostname())
+
 prop.load()
 audio.setvol(50)
 radio.start(localmusic)
-airplay_start(prop.get('upnp.name', 'Muno') .. ' 的 Airplay')
+airplay_start(hostname() .. ' 的 Airplay')
 upnp.loadconfig()
 upnp.start()
 
