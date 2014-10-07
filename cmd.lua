@@ -1,17 +1,6 @@
 
 local I = {}
 
-I.cmds = {
-	[[ audio.pause_resume_toggle() ]],
-	[[ radio.next() ]],
-	[[ audio.setvol(audio.getvol() - 10); print(audio.getvol()) ]],
-	[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
-	[[ radio.change{type = 'pandora'} ]],
-	[[ radio.change{type = 'local'} ]],
-	[[ gsensor_next() ]],
-	[[ gsensor_prev() ]],
-}
-
 I.handle = function (line) 
 	if line == '' then
 		I.usage()
