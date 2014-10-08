@@ -66,7 +66,7 @@ emitter_init = function (t)
 	end
 end
 
-_info = function (caller_at, ...) 
+_log_at = function (level, caller_at, ...) 
 	local s = ''
 	local t = {...}
 	for i = 1,table.maxn(t) do
@@ -86,10 +86,12 @@ _info = function (caller_at, ...)
 
 	local di = debug.getinfo(caller_at)
 
-	_log(1, di.name, di.short_src, di.currentline, s)
+	_log(level, di.name, di.short_src, di.currentline, s)
 end
 
-info = function (...) _info(3, ...) end
+ldebug = function (...) _log_at(0, 3, ...) end
+info = function (...) _log_at(1, 3, ...) end
+panic = function (...) _log_at(4, 3, ...) end
 
 os.basename = function (s)
 	local x = string.gsub(s, '%.[^%.]*$', '')
@@ -137,12 +139,6 @@ prop.save = function ()
 end
 
 math.randomseed(os.time())
-
-logger = function (name)
-	return function (...) 
-		_info(3, name, ...)
-	end
-end
 
 urlencode = function (s)
 	return string.gsub(s, "([!*'%(%);:@&=+$,/?%%#%[%]])", function (ch) 
