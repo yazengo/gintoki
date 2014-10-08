@@ -198,7 +198,7 @@ static void curl_thread_done(uv_work_t *w, int _) {
 		lc->stat = DONE;
 
 	// 1
-	if (lc->stat == DONE && lc->retsb) {
+	if (lc->curl_ret == 0 && lc->retsb) {
 		strbuf_append_char(lc->retsb, 0);
 		lua_pushstring(L, lc->retsb->buf);
 	} else 
@@ -212,7 +212,7 @@ static void curl_thread_done(uv_work_t *w, int _) {
 	push_curl_stat(lc);
 
 	lua_do_global_callback(lc->L, "curl_done", lc->c, 2, 1);
-	lua_do_global_callback(lc->L, "curl_cancel", lc->c, 0, 1);
+	lua_do_global_callback(lc->L, "curl_cancel", lc->c, 0, 0);
 
 	curl_easy_cleanup(lc->c);
 	if (lc->retsb)
