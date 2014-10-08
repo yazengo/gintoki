@@ -25,6 +25,7 @@ B.setopt = function (o, done)
 	done = done or function () end
 	if o.op == 'bbcradio.stations_list' then
 		done{stations=B.json}
+		return true
 	elseif o.op == 'bbcradio.station_choose' then
 		local i = tonumber(o.id)
 		local r = B.json[i]
@@ -37,6 +38,7 @@ B.setopt = function (o, done)
 			B.next_callback()
 		end
 		done{result=0}
+		return true
 	end
 end
 

@@ -29,12 +29,17 @@ P.list = P.loadlist(os.getenv('MUSIC_DIR') or '/mnt/sdcard/musics')
 P.i = 1
 
 P.setopt = function (opt, done)
-	if opt.id then
+	done = done or function () end
+
+	if opt.op == 'audio.play' and opt.id then
 		local i = tonumber(opt.id)
 		if i > 0 and i <= table.maxn(P.list) then
 			P.i = i-1
 			if P.next_callback then P.next_callback() end
 		end
+
+		done{result=0}
+		return true
 	end
 
 	if opt.op == 'local.toggle_repeat_mode' then
@@ -44,7 +49,8 @@ P.setopt = function (opt, done)
 			P.mode = 'repeat_all'
 		end
 
-		if done then done{mode=P.mode}; return end
+		done{result=0, mode=P.mode}
+		return true
 	end
 
 	if opt.op == 'local.set_play_mode' then
@@ -58,14 +64,14 @@ P.setopt = function (opt, done)
 			P.mode = opt.mode
 		end
 
-		if done then done{mode=P.mode}; return end
+		done{result=0, mode=P.mode}
+		return true
 	end
 
 	if opt.op == 'local.songs_list' then
-		if done then done{['songs_list']=P.list}; return end
+		done{result=0, songs_list=P.list}
+		return true
 	end
-
-	if done then done{result=0}; return end
 end
 
 -- return song or nil
