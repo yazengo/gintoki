@@ -566,6 +566,7 @@ void utils_preinit() {
 		signal(SIGILL, fault);
 		signal(SIGBUS, fault);
 		signal(SIGSEGV, fault);
+		signal(SIGABRT, fault);
 	} else 
 		info("coredump enabled");
 
