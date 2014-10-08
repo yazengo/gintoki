@@ -3,6 +3,7 @@ require('localmusic')
 require('pandora')
 require('douban')
 require('bbcradio')
+require('airplay')
 require('radio')
 require('audio')
 require('muno')
@@ -53,10 +54,31 @@ upnp.on_subscribe = function (a, done)
 	done(all_info())
 end
 
-upnp.on_action = function (a, done)
-	a = a or {}
+local done_once = function (f)
+	local called
+	local fisrt
+	return function (r)
+		if called then
+			panic('call twice', first, r)
+		end
+		called = true
+		first = r
+		f(r)
+	end
+end
+
+handle = function (a, done)
+	done = done or function () end
+	done = done_once(done)
 	
-	M.log('muno stat ->', muno.info())
+	if not a or not a.op or not isstr(a.op) then
+		done{result=1, msg='params invalid'}
+		return
+	end
+
+	if radio.setopt(a, done) then
+		return
+	end
 
 	if a.op == 'audio.volume' then 
 		local vol = muno.setvol(a.value)
@@ -64,34 +86,29 @@ upnp.on_action = function (a, done)
 	elseif a.op == 'muno.info' then
 		done(muno.info())
 	elseif a.op == 'audio.prev' then
-		if airplaying then airplay_stop() end
 		radio.prev()
 		done{result=0}
 	elseif a.op == 'audio.next' then
-		if airplaying then airplay_stop() end
 		radio.next()
 		done{result=0}
 	elseif a.op == 'audio.play_pause_toggle' then
-		if airplaying then
-			audio.pause_resume_toggle{track=2}
-		else
-			audio.pause_resume_toggle()
-		end
+		audio.pause_resume_toggle()
 		done{result=0}
-	elseif a.op == 'audio.play' then
-		if airplaying then airplay_stop() end
-		if a.id then
-			radio.source_setopt({id=a.id})
-		end
+	elseif a.op == 'audio.pause' then
+		audio.pause()
+		done{result=0}
+	elseif a.op == 'audio.resume' then
+		audio.resume()
 		done{result=0}
 	elseif string.hasprefix(a.op, 'local.') then
 		localmusic.setopt(a, done)
 	elseif string.hasprefix(a.op, 'pandora.') then
-		radio.source_setopt(a, done)
+		pandora.setopt(a, done)
 	elseif string.hasprefix(a.op, 'bbcradio.') then
-		radio.source_setopt(a, done)
+		bbcradio.setopt(a, done)
+	elseif string.hasprefix(a.op, 'douban.') then
+		douban.setopt(a, done)
 	elseif a.op == 'radio.change_type' then
-		if airplaying then airplay_stop() end
 		radio.change(a)
 		done{result=0}
 	elseif a.op == 'muno.check_update' then
@@ -102,9 +119,11 @@ upnp.on_action = function (a, done)
 		upnp.notify{['audio.info']=ar_info()}
 		done{result=0}
 	else
-		done{result=0}
+		done{result=1, msg='params invalid'}
 	end
 end
+
+upnp.on_action = handle
 
 radio.change = function (opt)
 	info('radio.change', opt)
@@ -124,14 +143,12 @@ radio.change = function (opt)
 end
 
 muno.stat_change = function () 
-	M.log('muno stat ->', muno.info())
 	upnp.notify{['muno.info']=muno.info()}
 end
 
 audio.track_stat_change = function (i)
 	if i ~= 0 then return end
 	local r = ar_info()
-	M.log('audio stat ->', r)
 	upnp.notify{['audio.info']=r}
 end
 
@@ -146,31 +163,11 @@ radio.play = function (song)
 	}
 end
 
-airplay_stop = function ()
-	audio.stop{track=2}
-end
-
-airplay_on_done = function ()
-	airplaying = false
-end
-
-airplay_on_start = function ()
-	airplaying = true
-	audio.pause()
-	audio.play {
-		url = 'airplay://',
-		track = 2,
-		done = function ()
-			airplay_on_done()
-		end,
-	}
-end
-
 local say_and_do = function (url, action)
 	local doing
 	return function ()
 		if doing then return end
-		if airplaying then airplay_stop() end
+		handle{op='audio.pause'}
 		doing = true
 		audio.play {
 			url = url,
@@ -182,8 +179,8 @@ local say_and_do = function (url, action)
 	end
 end
 
-gsensor_prev = say_and_do('testaudios/prev.mp3', radio.prev)
-gsensor_next = say_and_do('testaudios/next.mp3', radio.next)
+gsensor_prev = say_and_do('testaudios/prev.mp3', function () handle{op='audio.prev'} end)
+gsensor_next = say_and_do('testaudios/next.mp3', function () handle{op='audio.next'} end)
 
 on_inputevent = function (e) 
 	if e == 33 then
@@ -231,15 +228,31 @@ end
 
 if input then
 	input.cmds = {
-		[[ audio.pause_resume_toggle() ]],
-		[[ radio.next() ]],
 		[[ audio.setvol(audio.getvol() - 10); print(audio.getvol()) ]],
 		[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
-		[[ radio.change{type = 'pandora'} ]],
-		[[ radio.change{type = 'local'} ]],
+		[[ audio.setvol(80); print(audio.getvol()) ]],
+		[[ handle{op='audio.play_pause_toggle'} ]],
+		[[ handle{op='audio.next'} ]],
 		[[ gsensor_next() ]],
-		[[ gsensor_prev() ]],
+		[[ handle{op='radio.change_type', type='pandora'} ]],
+		[[ handle{op='radio.change_type', type='local'} ]],
+		[[ handle{op='radio.change_type', type='douban'} ]],
+		[[ handle{op='radio.change_type', type='bbcradio'} ]],
 	}
+end
+
+http_server {
+	port = 8881,
+	handler = function (hr)
+		local js = cjson.decode(hr:body()) or {}
+		handle(js, function (r)
+			hr:retjson(cjson.encode(r))
+		end)
+	end,
+}
+
+airplay_on_start = function ()
+	radio.start(airplay, radio.source)
 end
 
 info('hostname', hostname())
