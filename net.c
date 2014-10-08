@@ -52,6 +52,7 @@ typedef struct tcpcli_s {
 	char sbuf[4096];
 
 	void *data;
+	unsigned written:1;
 } tcpcli_t;
 
 typedef struct {
@@ -88,12 +89,20 @@ static void tcpcli_on_handle_closed(uv_handle_t *h) {
 	free(tc);
 }
 
-static void tcpcli_write(uv_write_t *wr, int stat) {
+static void tcpcli_write_done(uv_write_t *wr, int stat) {
 	tcpcli_t *tc = (tcpcli_t *)wr->data;
 
 	debug("done");
 
 	uv_close((uv_handle_t *)tc->h, tcpcli_on_handle_closed);
+}
+
+static void tcpcli_write_once(tcpcli_t *tc, uv_buf_t *buf, int n, uv_write_cb done) {
+	if (tc->written)
+		panic("write twice");
+	tc->written = 1;
+	tc->wr.data = tc;
+	uv_write(&tc->wr, (uv_stream_t *)tc->h, buf, n, done);
 }
 
 static tcpcli_t *lua_totcpcli(lua_State *L, int i) {
@@ -110,8 +119,7 @@ static int tcpcli_ret(lua_State *L) {
 	char *retstr = (char *)lua_tostring(L, 2);
 
 	tc->buf = uv_buf_init(retstr, strlen(retstr));
-	tc->wr.data = tc;
-	uv_write(&tc->wr, (uv_stream_t *)tc->h, &tc->buf, 1, tcpcli_write);
+	tcpcli_write_once(tc, &tc->buf, 1, tcpcli_write_done);
 
 	return 0;
 }
@@ -186,7 +194,7 @@ static void tcp_on_conn(uv_stream_t *st, int stat) {
 		uv_close((uv_handle_t *)tc->h, tcpcli_on_handle_closed);
 		return;
 	}
-	info("accepted");
+	debug("accepted");
 
 	uv_read_start((uv_stream_t *)tc->h, ts->allocbuf, ts->read);
 }
@@ -416,9 +424,9 @@ static void httpcli_retfile_open_done(uv_work_t *w, int stat) {
 			"Content-Length: 0\r\n"
 			"\r\n"
 		);
+
 		hc->buf[0] = uv_buf_init(hc->rethdr->buf, hc->rethdr->length);
-		tc->wr.data = tc;
-		uv_write(&tc->wr, (uv_stream_t *)tc->h, hc->buf, 1, httpcli_write_done);
+		tcpcli_write_once(tc, hc->buf, 1, httpcli_write_done);
 		return;
 	}
 
@@ -430,8 +438,7 @@ static void httpcli_retfile_open_done(uv_work_t *w, int stat) {
 
 	hc->buf[0] = uv_buf_init(hc->rethdr->buf, hc->rethdr->length);
 	hc->buf[1] = uv_buf_init(hc->fdata, hc->flen);
-	tc->wr.data = tc;
-	uv_write(&tc->wr, (uv_stream_t *)tc->h, hc->buf, 2, httpcli_write_done);
+	tcpcli_write_once(tc, hc->buf, 2, httpcli_write_done);
 }
 
 static void httpcli_retfile_open(uv_work_t *w) {
@@ -501,9 +508,7 @@ static int httpcli_resp_retjson(lua_State *L) {
 
 	hc->buf[0] = uv_buf_init(hc->rethdr->buf, hc->rethdr->length);
 	hc->buf[1] = uv_buf_init(hc->retbody, bodylen);
-
-	tc->wr.data = tc;
-	uv_write(&tc->wr, (uv_stream_t *)tc->h, hc->buf, 2, httpcli_write_done);
+	tcpcli_write_once(tc, hc->buf, 2, httpcli_write_done);
 
 	return 0;
 }
