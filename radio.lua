@@ -8,9 +8,9 @@ R.info = function ()
 	return r
 end
 
-R.source_setopt = function (opt, done) 
+R.setopt = function (opt, done) 
 	if R.source.setopt then
-		R.source.setopt(opt, done)
+		return R.source.setopt(opt, done)
 	end
 end
 
@@ -30,14 +30,20 @@ R.prev = function ()
 	if R.play then R.play(R.song) end
 end
 
-R.start = function (source)
+R.start = function (source, source_prev)
 	info("start")
 	R.source = source
+
 	source.next_callback = function ()
 		if R.source == source then R.next() end
 	end
+
+	source.stop_callback = function ()
+		if R.stop then R.stop() end
+	end
+
 	if R.source.start then
-		R.source.start()
+		R.source.start(source_prev)
 	end
 	R.next()
 end
