@@ -1,4 +1,5 @@
 
+#include <unistd.h>
 #include <fcntl.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -49,6 +50,8 @@ typedef struct {
 	double rx;
 	double time;
 	double speed;
+
+	int retry;
 
 	lua_State *L;
 } luv_curl_t;
@@ -189,15 +192,13 @@ static void curl_thread_done(uv_work_t *w, int _) {
 	luv_curl_t *lc = (luv_curl_t *)w->data;
 	lua_State *L = lc->L;
 
-	info("done");
-
 	free(w);
 
 	if (lc->stat == DOWNLOADING)
 		lc->stat = DONE;
 
 	// 1
-	if (lc->retsb) {
+	if (lc->stat == DONE && lc->retsb) {
 		strbuf_append_char(lc->retsb, 0);
 		lua_pushstring(L, lc->retsb->buf);
 	} else 
@@ -220,11 +221,26 @@ static void curl_thread_done(uv_work_t *w, int _) {
 		free(lc->retfname);
 }
 
+static void curl_perform(luv_curl_t *lc) {
+	if (lc->retry) {
+		for (;;) {
+			if (lc->stat == CANCELLED)
+				return;
+			lc->curl_ret = curl_easy_perform(lc->c);
+			if (lc->curl_ret == 0)
+				return;
+			usleep(lc->retry*1000);
+		}
+	} else {
+		lc->curl_ret = curl_easy_perform(lc->c);
+	}
+}
+
 static void curl_thread(uv_work_t *w) {
 	luv_curl_t *lc = (luv_curl_t *)w->data;
 
 	if (lc->stat != ERROR)
-		lc->curl_ret = curl_easy_perform(lc->c);
+		curl_perform(lc);
 
 	if (lc->headers)
 		curl_slist_free_all(lc->headers);
@@ -324,7 +340,11 @@ static int curl(lua_State *L) {
 
 	char *url = (char *)lua_tostring(L, 3);
 	if (url == NULL) 
-		return 0;
+		panic("url must be set");
+
+	lua_getfield(L, 1, "retry");
+	lc->retry = lua_tonumber(L, -1);
+	lua_pop(L, 1);
 
 	char *retfname = (char *)lua_tostring(L, 4);
 	if (retfname)
