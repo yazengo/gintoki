@@ -93,7 +93,7 @@ typedef struct {
 	int len;
 } do_mix_t;
 
-static void lua_call_play_done(audio_track_t *tr, const char *stat);
+static void lua_call_play_done(audio_track_t *tr);
 static void lua_track_stat_change(audio_track_t *tr);
 static void mixer_do_track_change(audio_mixer_t *am, do_mix_t *dm);
 static void mixer_play(audio_mixer_t *am);
@@ -126,7 +126,7 @@ static void track_on_free(audio_track_t *tr) {
 	info("closed");
 
 	am->tracks[tr->ti] = NULL;
-	lua_call_play_done(tr, "closed");
+	lua_call_play_done(tr);
 	free(tr);
 }
 
@@ -511,10 +511,10 @@ static void mixer_play(audio_mixer_t *am) {
 	audio_out_play(am->ao, dm.buf, dm.len, mixer_on_play_done);
 }
 
-static void lua_call_play_done(audio_track_t *tr, const char *stat) {
+static void lua_call_play_done(audio_track_t *tr) {
 	lua_State *L = tr->am->L;
 
-	lua_pushstring(L, stat);
+	lua_pushnumber(L, (int)tr->dur);
 	lua_do_global_callback(L, "audio_mixer_play_done", tr, 1, 1);
 }
 
