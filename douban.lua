@@ -5,10 +5,6 @@ songs_fetching == fetching
 songs_ready == auth_ok / auth_none
 server_error == fetching
 
-启动时 login，不重新 login
-不 login 的时候自动播放电台
-login 之后播放红心电台
-
 >> login ok
 << access_token is set
 
@@ -142,6 +138,8 @@ D.grep_songs = function (songs)
 			album = s.albumtitle,
 			id = s.sid,
 			cover_url = s.picture,
+			dur = s.length,
+			like = (s.like == 1),
 		})
 	end
 	return r
@@ -156,8 +154,35 @@ D.songs_add = function (r)
 	end
 end
 
+D.report = function (c, done)
+	local s; if radio and radio.song then s = radio.song end; s = s or {}
+	local sid = s.id or ''
+	return D.curl {
+		access_token = c.access_token,
+		url = 'https://api.douban.com/v2/fm/playlist?' .. encode_params(D.common_params{
+			type = c.type,
+			sid = s.id,
+		}),
+		done = function (r, st)
+			done(r, nil)
+		end,
+	}
+end
+
+D.rate = function (c, type, sid, done)
+	local s
+	if radio and radio.song then s = radio.song end
+	if not sid then sid = s.id end
+	if type == 't' then
+		if s and s.like then type = 'u' else type = 'r' end
+	end
+	if s and type == 'r' then s.like = true end
+	if s and type == 'u' then s.like = false end
+	D.report(table.add({id=sid, type=type}, D.cookie), done)
+end
+
 D.songs_list = function (c, done)
-	local p = {
+	return D.curl {
 		access_token = c.access_token,
 		url = 'https://api.douban.com/v2/fm/playlist?' .. encode_params(D.common_params{
 			type = 'n',
@@ -177,7 +202,6 @@ D.songs_list = function (c, done)
 			end
 		end,
 	}
-	return D.curl(p)
 end
 
 D.auto_auth = function (cookie, cb, done) 
@@ -226,15 +250,12 @@ D.auto_auth = function (cookie, cb, done)
 	end)
 end
 
-D.add_feedback = function (c, done)
-end
-
-D.next = function ()
+D.next = function (opt)
 	local left = table.maxn(D.songs) - D.songs_i
 
 	if left <= 1 and D.stat == 'songs_ready' then
 		D.stat = 'songs_fetching'
-		D.task = D.auto_auth(D.cookie, D.songs_list, function (c, r, err)
+		D.auto_auth(D.cookie, D.songs_list, function (c, r, err)
 			if c then
 				D.cookie = c
 				D.savecookie(c)
@@ -263,7 +284,6 @@ D.setopt_login = function (o, done)
 	D.stat = 'songs_fetching'
 	D.songs = {}
 	D.songs_i = 1
-	if D.stop_callback then D.stop_callback() end
 
 	local c = table.copy(D.cookie)
 	c.username = o.username
@@ -272,10 +292,19 @@ D.setopt_login = function (o, done)
 	c.name = nil
 	c.icon = nil
 
+	local finish = function (r)
+		done(r)
+		D.stat = 'songs_ready'
+	end
+
 	D.auto_auth(c, D.songs_list, function (c, r, err)
 		if err then
-			D.stat = err
-			done{result=1}
+			finish{result=1}
+			return
+		end
+
+		if not c or not c.username then
+			finish{result=1}
 			return
 		end
 
@@ -284,18 +313,12 @@ D.setopt_login = function (o, done)
 			D.savecookie(c)
 		end
 
-		if not c or not c.username then
-			done{result=1}
-			return
-		end
-
-		D.stat = 'songs_ready'
 		D.songs_add(r)
-		done{result=0, icon=c.icon, name=c.name}
+		finish{result=0, icon=c.icon, name=c.name}
 	end)
 end
 
-D.setopt_channel_choose = function (o, done, on_cancel) 
+D.setopt_channel_choose = function (o, done) 
 	D.stat = 'songs_fetching'
 	D.songs = {}
 	D.songs_i = 1
@@ -304,10 +327,14 @@ D.setopt_channel_choose = function (o, done, on_cancel)
 	local c = table.copy(D.cookie)
 	c.channel = o.id
 
+	local finish = function (r)
+		done(r)
+		D.stat = 'songs_ready'
+	end
+
 	D.auto_auth(c, D.songs_list, function (c, r, err)
 		if err then
-			D.stat = err
-			done{result=1}
+			finish{result=1}
 			return
 		end
 
@@ -316,13 +343,12 @@ D.setopt_channel_choose = function (o, done, on_cancel)
 			D.savecookie(c)
 		end
 
-		D.stat = 'songs_ready'
 		D.songs_add(r)
-		done{result=0}
+		finish{result=0}
 	end)
 end
 
-D.setopt_channels_list = function (o, done, on_cancel) 
+D.setopt_channels_list = function (o, done) 
 	D.channels_list(D.cookie, function (r) 
 		if r then
 			r.result = 0
@@ -333,16 +359,47 @@ D.setopt_channels_list = function (o, done, on_cancel)
 	end)
 end
 
+D.setopt_logout = function (o, done)
+	D.stat = 'songs_fetching'
+	D.songs = {}
+	D.songs_i = 1
+
+	local c = D.cookie
+	c.username = nil
+	c.password = nil
+	c.access_token = nil
+	c.name = nil
+	c.icon = nil
+	D.savecookie(c)
+
+	if D.stop_callback then D.stop_callback() end
+
+	local finish = function (r)
+		done(r)
+		D.stat = 'songs_ready'
+	end
+
+	D.auto_auth(c, D.songs_list, function (c, r, err)
+		if err then
+			finish{result=1}
+			return
+		end
+
+		D.songs_add(r)
+		finish{result=0}
+	end)
+end
+
 D.setopt = function (o, done)
 	done = done or function (r) end
 
 	if o.op == 'douban.login' and isstr(o.username) and isstr(o.password) then
 		D.setopt_login(o, done)
 		return true
-	elseif o.op == 'douban.logout' and isstr(o.id) then
+	elseif o.op == 'douban.logout' then
 		D.setopt_logout(o, done)
 		return true
-	elseif o.op == 'douban.channel_choose' and isstr(o.id) then
+	elseif o.op == 'douban.channel_choose' and o.id then
 		D.setopt_channel_choose(o, done)
 		return true
 	elseif o.op == 'douban.channels_list' then
@@ -350,6 +407,15 @@ D.setopt = function (o, done)
 		return true
 	elseif o.op == 'douban.stat' then
 		done(table.add({result=0}, D.info_login()))
+		return true
+	elseif o.op == 'douban.rate_like' then
+		D.rate(D.cookie, 'r', o.id, function () done{result=0} end)
+		return true
+	elseif o.op == 'douban.rate_unlike' then
+		D.rate(D.cookie, 'u', o.id, function () done{result=0} end)
+		return true
+	elseif o.op == 'douban.rate_toggle_like' then
+		D.rate(D.cookie, 't', o.id, function () done{result=0} end)
 		return true
 	end
 end
@@ -363,7 +429,7 @@ D.info_login = function ()
 end
 
 D.is_fetching = function ()
-	return D.stat == 'songs_fetching' and table.maxn(D.songs) == D.songs_i 
+	return D.stat == 'songs_fetching' and table.maxn(D.songs)+1 == D.songs_i 
 		or D.stat == 'server_error'
 end
 
