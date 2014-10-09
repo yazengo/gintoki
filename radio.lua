@@ -9,7 +9,7 @@ R.info = function ()
 end
 
 R.setopt = function (opt, done) 
-	if R.source.setopt then
+	if R.source and R.source.setopt then
 		return R.source.setopt(opt, done)
 	end
 end
@@ -22,10 +22,10 @@ R.next = function (opt)
 	if R.play then R.play(R.song) end
 end
 
-R.prev = function ()
+R.prev = function (opt)
 	info('prev')
 
-	R.song = R.source.prev()
+	R.song = R.source.prev(opt)
 	if not R.song then return end
 	if R.play then R.play(R.song) end
 end
@@ -39,7 +39,9 @@ R.start = function (source, source_prev)
 	end
 
 	source.stop_callback = function ()
-		if R.stop then R.stop() end
+		if R.source == source then 
+			if R.stop then R.stop() end 
+		end
 	end
 
 	if R.source.start then
