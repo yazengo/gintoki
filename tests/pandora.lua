@@ -12,6 +12,7 @@ P.start()
 
 if input then
 	input.cmds = {
+		[[ pandora.test_login() ]],
 		[[ info(pandora.info()) ]],
 		[[ info(pandora.next()) ]],
 		[[ pandora.setopt{op='pandora.login', username='enliest@qq.com', password='enliest1653'} ]],
