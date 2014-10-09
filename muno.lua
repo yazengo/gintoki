@@ -8,7 +8,7 @@ M.info = function ()
 		volume = audio.getvol(),
 		wifi = {ssid="Sugr"},
 		firmware_version = "1.0.1",
-		name = 'K.B.Z',
+		name = hostname(),
 		local_music_num = table.maxn(localmusic.list),
 	}
 end
