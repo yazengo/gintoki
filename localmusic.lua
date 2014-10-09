@@ -26,7 +26,13 @@ P.log_max = 40
 P.log_i = 1
 
 P.list = P.loadlist(os.getenv('MUSIC_DIR') or '/mnt/sdcard/musics')
+if table.maxn(P.list) == 0 then
+	P.list = P.loadlist('musics')
+end
 P.i = 1
+
+P.start = function ()
+end
 
 P.setopt = function (opt, done)
 	done = done or function () end
