@@ -9,6 +9,19 @@ songs_fetching => fetching
 songs_ready => auth_ok
 server_error => fetching
 
+login
+	code1012 -> invalid_userpass
+	other -> server_error
+
+songs_list
+	xxx -> wrong_channel
+	code1001 -> invalid_token
+	other -> server_error
+
+other_call
+	code1001 -> invalid_token
+	other -> server_error
+
 ]]--
 
 local P = {}
@@ -99,7 +112,7 @@ P.partner_login = function (cookie, done)
 			r.partnerAuthToken = tostr(r.partnerAuthToken)
 
 			done({
-				partner_time_offset = P.decode_synctime(r.syncTime) - os.time(),
+				partner_time_offset = tonumber(P.decode_synctime(r.syncTime)) - os.time(),
 				partner_id = r.partnerId,
 				partner_auth_token = r.partnerAuthToken,
 			}, stat)
@@ -392,9 +405,7 @@ P.auto_auth = function (cookie, cb, done, cancel)
 end
 
 P.start = function ()
-	if not P.cookie then 
-		P.cookie = P.loadcookie()
-	end
+	P.cookie = P.loadcookie()
 	P.songs = {}
 	P.songs_i = 0
 	P.stat = 'songs_ready'
@@ -609,6 +620,55 @@ P.info = function ()
 		type = 'pandora',
 		fetching = P.is_fetching(),
 	}
+end
+
+P.songs_list_v2 = function (c, done) 
+end
+
+P.login_v2 = function (c, done)
+	local ret = {}
+
+	P.partner_login({}, function (r, st)
+		info('partner', r, err)
+
+		if st.stat ~= 'ok' then
+			done(r, 'server_error')
+			return
+		end
+
+		ret.partner_id = r.partner_id
+		ret.partner_time_offset = r.partner_time_offset
+		ret.partner_auth_token = r.partner_auth_token
+		ret.username = c.username
+		ret.password = c.password
+
+		P.user_login(ret, function (r, st)
+			if st.stat == 'ok' then
+				-- ok
+				ret.user_auth_token = r.user_auth_token
+				ret.user_id = r.user_id
+				done(ret, nil)
+			elseif st.code == 9 or st.code == 1002 then
+				-- invalid_userpass
+				done(nil, 'invalid_userpass')
+			else
+				-- server_error
+				done(nil, 'server_error')
+			end
+		end)
+	end)
+end
+
+P.test_login = function ()
+	local done = function () end
+
+	P.login_v2({
+		username = 'cfanfrank@gmail.com',
+		password = 'enliest1653',
+	}, function (c, err)
+		P.songs_list(c, function (r)
+		end)
+	end)
 end
 
 pandora = P
