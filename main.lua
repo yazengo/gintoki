@@ -1,6 +1,6 @@
 
 require('localmusic')
-require('pandora')
+require('pandora2')
 require('douban')
 require('bbcradio')
 require('airplay')
@@ -54,25 +54,12 @@ upnp.on_subscribe = function (a, done)
 	done(all_info())
 end
 
-local done_once = function (f)
-	local called
-	local fisrt
-	return function (r)
-		if called then
-			panic('call twice', first, r)
-		end
-		called = true
-		first = r
-		f(r)
-	end
-end
-
 handle = function (a, done)
 	done = done or function () end
-	done = done_once(done)
+	local fail = function () done{result=1, msg='params invalid'} end
 	
 	if not a or not a.op or not isstr(a.op) then
-		done{result=1, msg='params invalid'}
+		fail()
 		return
 	end
 
@@ -101,13 +88,13 @@ handle = function (a, done)
 		audio.resume()
 		done{result=0}
 	elseif string.hasprefix(a.op, 'local.') then
-		localmusic.setopt(a, done)
+		if not localmusic.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'pandora.') then
-		pandora.setopt(a, done)
+		if not pandora.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'bbcradio.') then
-		bbcradio.setopt(a, done)
+		if not bbcradio.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'douban.') then
-		douban.setopt(a, done)
+		if not douban.setopt(a, done) then fail() end
 	elseif a.op == 'radio.change_type' then
 		radio.change(a)
 		done{result=0}
@@ -119,26 +106,34 @@ handle = function (a, done)
 		upnp.notify{['audio.info']=ar_info()}
 		done{result=0}
 	else
-		done{result=1, msg='params invalid'}
+		fail()
 	end
 end
 
 upnp.on_action = handle
 
+radio.name2obj = function (s)
+	if s == 'pandora' then
+		return pandora
+	elseif s == 'local' then
+		return localmusic
+	elseif s == 'bbcradio' then
+		return bbcradio
+	elseif s == 'douban' then
+		return douban
+	end
+end
+
 radio.change = function (opt)
 	info('radio.change', opt)
-	local to
-	if opt.type == 'pandora' then
-		to = pandora
-	elseif opt.type == 'local' then
-		to = localmusic
-	elseif opt.type == 'bbcradio' then
-		to = bbcradio
-	elseif opt.type == 'douban' then
-		to = douban
-	end
+
+	radio.stop()
+
+	local to = radio.name2obj(opt.type)
+
 	if to and radio.source ~= to then
 		radio.start(to)
+		prop.set('radio.default', opt.type)
 	end
 end
 
@@ -156,11 +151,15 @@ radio.play = function (song)
 	M.log('play', song.title)
 	audio.play {
 		url = song.url,
-		done = function () 
+		done = function (dur) 
 			info('playdone')
-			radio.next{playdone=true}
+			radio.next{dur=dur, playdone=true}
 		end
 	}
+end
+
+radio.stop = function ()
+	audio.stop()
 end
 
 local say_and_do = function (url, action)
@@ -259,8 +258,9 @@ info('hostname', hostname())
 
 prop.load()
 audio.setvol(50)
-radio.start(localmusic)
 airplay_start(hostname() .. ' 的 Airplay')
 upnp.loadconfig()
 upnp.start()
+
+handle{op='radio.change_type', type=prop.get('radio.default', 'local')}
 
