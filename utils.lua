@@ -89,7 +89,7 @@ _log_at = function (level, caller_at, ...)
 	_log(level, di.name, di.short_src, di.currentline, s)
 end
 
-ldebug = function (...) _log_at(0, 3, ...) end
+dbp = function (...) _log_at(0, 3, ...) end
 info = function (...) _log_at(1, 3, ...) end
 panic = function (...) _log_at(4, 3, ...) end
 
@@ -128,6 +128,7 @@ prop.set = function (pk, pv)
 		end
 		v = v[k]
 	end
+	prop.save()
 end
 
 prop.load = function ()
