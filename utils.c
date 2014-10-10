@@ -543,11 +543,20 @@ void *lua_touserptr(lua_State *L, int index) {
 	return p;
 }
 
+typedef void (*onexit_cb)();
+
+#define EXITCB_NR 16
+static onexit_cb exitcbs[EXITCB_NR];
+
 static void print_traceback_and_exit() {
 	signal(SIGTERM, SIG_IGN);
 	print_traceback();
-	if (getenv("TERM_NOT_KILL0") == NULL)
-		kill(0, SIGTERM);
+
+	int i;
+	for (i = 0; i < EXITCB_NR; i++)
+		if (exitcbs[i])
+			exitcbs[i]();
+
 	exit(-1);
 }
 
@@ -559,6 +568,14 @@ static void term(int sig) {
 static void fault(int sig) {
 	error("sig=%d", sig);
 	print_traceback_and_exit();
+}
+
+void utils_onexit(onexit_cb cb) {
+	int i;
+	for (i = 0; i < EXITCB_NR; i++) {
+		if (exitcbs[i] == NULL)
+			exitcbs[i] = cb;
+	}
 }
 
 void utils_preinit() {

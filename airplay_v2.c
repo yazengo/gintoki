@@ -49,6 +49,7 @@ typedef struct airplay_s {
 
 	uv_pipe_t *pipe[1];
 	uv_process_t *proc;
+	int pid;
 
 	lua_State *L;
 	uv_loop_t *loop;
@@ -487,6 +488,7 @@ static void proc_init(airplay_t *ap) {
 
 	int r = uv_spawn(ap->loop, proc, opts);
 	info("proc=%s spawn=%d pid=%d", args[0], r, proc->pid);
+	ap->pid = proc->pid;
 }
 
 static void proc_start(airplay_t *ap) {
@@ -661,10 +663,20 @@ static int lua_airplay_start(lua_State *L) {
 	return 0;
 }
 
+static void onexit() {
+	if (g_ap && g_ap->pid) {
+		int r;
+		kill(g_ap->pid, SIGTERM);
+		waitpid(g_ap->pid, &r, 0);
+	}
+}
+
 void luv_airplay_init_v2(lua_State *L, uv_loop_t *loop) {
 	// airplay_start = [native function]
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, lua_airplay_start, 1);
 	lua_setglobal(L, "airplay_start");
+
+	utils_onexit(onexit);
 }
 

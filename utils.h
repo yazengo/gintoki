@@ -60,6 +60,7 @@ void print_trackback();
 
 void utils_init(lua_State *L, uv_loop_t *loop);
 void utils_preinit();
+void utils_onexit(void (*cb)());
 
 void lua_setglobalptr(lua_State *L, const char *pref, void *p);
 void lua_getglobalptr(lua_State *L, const char *pref, void *p);
