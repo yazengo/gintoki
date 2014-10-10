@@ -1,29 +1,4 @@
 
---[[
-
-need_auth
-need_station_id
-auth_processing => fetching
-auth_failed
-songs_fetching => fetching
-songs_ready => auth_ok
-server_error => fetching
-
-login
-	code1012 -> invalid_userpass
-	other -> server_error
-
-songs_list
-	xxx -> wrong_channel
-	code1001 -> invalid_token
-	other -> server_error
-
-other_call
-	code1001 -> invalid_token
-	other -> server_error
-
-]]--
-
 local P = {}
 
 P.url = '://tuner.pandora.com/services/json/?'
@@ -41,9 +16,12 @@ P.savecookie = function (c)
 end
 
 P.call = function (p)
+	local v = false
 
 	p.data = p.data or {}
 	p.proto = p.proto or 'https'
+
+	if v then info(p.params, p.data) end
 
 	local url = p.proto .. P.url .. encode_params(p.params)
 
@@ -52,8 +30,6 @@ P.call = function (p)
 		reqstr = P.bf_encode:encode_hex(reqstr)
 	end
 
-	if P.verbose then info(url, p.data) end
-
 	return curl {
 		retry = 1000,
 		proxy = 'sugrsugr.com:8889',
@@ -61,11 +37,12 @@ P.call = function (p)
 		content_type = 'text/plain',
 		user_agent = 'pithos',
 		reqstr = reqstr,
-		done = function (r, stat) 
-			if P.verbose then info(r, stat) end
-			if stat.stat == 'cancelled' then
+		done = function (r, st) 
+			if not r then
+				p.done()
 				return
 			end
+
 			r = cjson.decode(r) or {}
 			if r.stat ~= 'ok' or type(r.result) ~= 'table' then
 				p.done(nil, r)
@@ -87,23 +64,55 @@ P.decode_synctime = function (s)
 	return r
 end
 
-P.partner_login = function (cookie, done)
-	info('partner login')
+P.data_user = function (c, p)
+	return table.add(p, {
+		syncTime = os.time() + c.partner_time_offset,
+		userAuthToken = c.user_auth_token,
+		auth_token = c.user_auth_token,
+	})
+end
 
+P.params_user = function (c, p)
+	return table.add(p, {
+		user_id = c.user_id,
+		partner_id = c.partner_id,
+		auth_token = c.user_auth_token,
+	})
+end
+
+P.user_cookie_keys = {
+	'user_id', 'user_auth_token',
+	'partner_id', 'partner_time_offset', 'partner_auth_token'
+}
+
+P.has_all_user_cookie = function (c)
+	for _,k in ipairs(P.user_cookie_keys) do
+		if not c[k] then return false end
+	end
+	return true
+end
+
+P.clean_user_cookie = function (c)
+	for _,k in ipairs(P.user_cookie_keys) do
+		c[k] = nil
+	end
+end
+
+P.partner_login = function (c, done)
 	return P.call {
 		proto = 'https',
 		blowfish = false,
 
-		params = { method = 'auth.partnerLogin' },
+		params = P.params_user(c, { method = 'auth.partnerLogin' }),
 		data = {
 			deviceModel = 'android-generic',
 			username = 'android',
 			password = 'AC7IBG09A3DTSYM4R41UJWL07VLN8JI7',
 			version = '5',
 		},
-		done = function (r, stat)
-			if not r then
-				done(nil, stat)
+		done = function (r, st)
+			if err then
+				done(nil, 'server_error')
 				return
 			end
 
@@ -111,47 +120,58 @@ P.partner_login = function (cookie, done)
 			r.partnerId = tostr(r.partnerId)
 			r.partnerAuthToken = tostr(r.partnerAuthToken)
 
-			done({
+			done {
 				partner_time_offset = tonumber(P.decode_synctime(r.syncTime)) - os.time(),
 				partner_id = r.partnerId,
 				partner_auth_token = r.partnerAuthToken,
-			}, stat)
+			}
 		end,
 	}
 end
 
-P.user_login = function (cookie, done)
+P.user_login = function (c, done)
+	local v = false
+
 	return P.call {
 		proto = 'https',
 		blowfish = true,
 
 		params = { 
 			method = 'auth.userLogin',
-			partner_id = cookie.partner_id,
-			auth_token = cookie.partner_auth_token,
+			partner_id = c.partner_id,
+			auth_token = c.partner_auth_token,
 		},
-		data = {
-			syncTime = os.time() + cookie.partner_time_offset,
-			partnerAuthToken = cookie.partner_auth_token,
+		data = P.data_user(c, {
 			loginType = 'user',
-			username = cookie.username,
-			password = cookie.password,
-		},
-		done = function (r, stat)
-			if not r then
-				done(nil, stat)
+			username = c.username,
+			password = c.password,
+			syncTime = os.time() + c.partner_time_offset,
+			partnerAuthToken = c.partner_auth_token,
+		}),
+
+		done = function (r, st)
+			if st.stat ~= 'ok' then
+				if v then info(st) end
+				done(nil, 'invalid_userpass')
 				return
 			end
 
-			r.userId = tostr(r.userId)
-			r.userAuthToken = tostr(r.userAuthToken)
-
-			done({
-				user_id = r.userId,
-				user_auth_token = r.userAuthToken,
-			}, stat)
+			done {
+				user_id = tostr(r.userId),
+				user_auth_token = tostr(r.userAuthToken),
+			}
 		end,
 	}
+end
+
+P.handle_common = function (r, st, done)
+	if st.code == 1001 or st.code == 1010 or st.code == 13 then
+		done(nil, 'invalid_token')
+	elseif not r then
+		done(nil, 'server_error')
+	else
+		done(r)
+	end
 end
 
 P.grep_songs = function (old)
@@ -215,424 +235,93 @@ P.grep_genres = function (old)
 	return r
 end
 
-P.choose_genres = function (cookie, done)
+P.choose_genres = function (c, done)
 	return P.call {
 		proto = 'http',
 		blowfish = true,
-		params = {
+		params = P.params_user(c, {
 			method = 'station.createStation',
-			user_id = cookie.user_id,
-			partner_id = cookie.partner_id,
-			auth_token = cookie.user_auth_token,
-		},
-		data = {
-			syncTime = os.time() + cookie.partner_time_offset,
-			userAuthToken = cookie.user_auth_token,
-			musicToken = cookie.genres_id,
-		},
-		done = function (r, stat) 
-			done(r, stat)
+		}),
+		data = P.data_user(c, {
+			musicToken = c.genres_id,
+		}),
+		done = function (r, st) 
+			P.handle_common(r, st, done)
 		end,
 	}
 end
 
-P.stations_list = function (cookie, done)
+P.stations_list = function (c, done)
 	return P.call {
 		proto = 'http',
 		blowfish = true,
-		params = {
+		params = P.params_user(c, {
 			method = 'user.getStationList',
-			user_id = cookie.user_id,
-			partner_id = cookie.partner_id,
-			auth_token = cookie.user_auth_token,
-		},
-		data = {
-			syncTime = os.time() + cookie.partner_time_offset,
-			userAuthToken = cookie.user_auth_token,
-		},
-		done = function (r, stat) 
+		}),
+		data = P.data_user(c, {}),
+		done = function (r, st) 
 			if r then r = P.grep_stations(r) end
-			done(r, stat)
+			P.handle_common(r, st, done)
 		end,
 	}
 end
 
-P.genres_list = function (cookie, done)
+P.genres_list = function (c, done)
 	return P.call {
 		proto = 'http',
 		blowfish = true,
-		params = {
+		params = P.params_user(c, {
 			method = 'station.getGenreStations',
-			user_id = cookie.user_id,
-			partner_id = cookie.partner_id,
-			auth_token = cookie.user_auth_token,
-		},
-		data = {
-			syncTime = os.time() + cookie.partner_time_offset,
-			userAuthToken = cookie.user_auth_token,
-		},
-		done = function (r, stat) 
+		}),
+		data = P.data_user(c, {}),
+		done = function (r, st) 
 			if r then r = P.grep_genres(r) end
-			done(r, stat)
+			P.handle_common(r, st, done)
 		end,
 	}
 end
 
-P.songs_list = function (cookie, done)
+P.songs_list = function (c, done)
 	return P.call {
 		proto = 'https',
 		blowfish = true,
-		params = {
+		params = P.params_user(c, {
 			method = 'station.getPlaylist',
-			user_id = cookie.user_id,
-			partner_id = cookie.partner_id,
-			auth_token = cookie.user_auth_token,
-		},
-		data = {
-			stationToken = cookie.station_id,
-			syncTime = os.time() + cookie.partner_time_offset,
-			userAuthToken = cookie.user_auth_token,
-		},
-		done = function (r, stat)
+		}),
+		data = P.data_user(c, {
+			stationToken = c.station_id,
+		}),
+		done = function (r, st)
 			if r then r = P.grep_songs(r) end
-			done(r, stat)
+			P.handle_common(r, st, done)
 		end,
 	}
 end
 
-P.add_feedback = function (cookie, done)
+P.add_feedback = function (c, done)
 	return P.call {
 		proto = 'http',
 		blowfish = true,
-		params = {
+		params = P.params_user(c, {
 			method = 'station.addFeedback',
-			user_id = cookie.user_id,
-			partner_id = cookie.partner_id,
-			auth_token = cookie.user_auth_token,
-		},
-		data = {
-			syncTime = os.time() + cookie.partner_time_offset,
-			userAuthToken = cookie.user_auth_token,
-			trackToken = cookie.song_id,
-			isPositive = cookie.like,
-		},
-		done = function (r, stat)
-			done(r, stat)
+		}),
+		data = P.data_user(c, {
+			trackToken = c.song_id,
+			isPositive = c.like,
+		}),
+		done = function (r, st)
+			P.handle_common(r, st, done)
 		end,
 	}
 end
 
---
--- err = 'auth_failed/need_station_id/server_error'
---
-P.auto_auth = function (cookie, cb, done, cancel)
-	local handle
-
-	handle = {
-		cancel = function ()
-			if handle.task then
-				info('cancelled')
-				handle.task.cancel(cancel)
-				handle.task = nil
-			end
-		end
-	}
-
-	function funcname(f) 
-		for k,v in pairs(P) do
-			if v == f then
-				return k
-			end
-		end
-	end
-
-	function fail(err)
-		info('err', err)
-		done(cookie, nil, err)
-	end
-
-	function on_done(func, r, stat)
-		if r then on_ok(func, r, stat) else on_error(func, r, stat) end
-	end
-
-	function on_ok(func, r, stat)
-		info(funcname(func), 'ok')
-
-		if func == P.partner_login then
-			table.add(cookie, r)
-			if not cookie.username or not cookie.password then
-				fail('need_auth')
-				return
-			end
-			handle.task = P.user_login(cookie, function (...) on_done(P.user_login, ...) end)
-		elseif func == P.user_login then
-			table.add(cookie, r)
-			handle.task = cb(cookie, function (...) on_done(cb, ...) end)
-		else
-			done(cookie, r, nil)
-		end
-	end
-
-	function on_error(func, r, stat)
-		info(funcname(func), 'error')
-
-		if func == P.partner_login then
-			fail('auth_failed')
-		elseif func == P.user_login then
-			fail('auth_failed')
-		else 
-			if stat.code == 1001 or stat.code == 1010 or stat.code == 13 then
-				handle.task = P.partner_login(cookie, function (...) on_done(P.partner_login, ...) end)
-			elseif func == P.choose_genres or func == P.songs_list then
-				fail('need_station_id')
-			else
-				fail('server_error')
-			end
-		end
-	end
-
-	if not cookie.partner_id or not cookie.partner_time_offset or not cookie.partner_auth_token or
-		not cookie.user_id or not cookie.user_auth_token
-	then
-		handle.task = P.partner_login(cookie, function (...) on_done(P.partner_login, ...) end)
-	elseif func == P.songs_list and not cookie.station_id then
-		fail('need_station_id')
-	else
-		handle.task = cb(cookie, function (...) on_done(cb, ...) end)
-	end
-
-	return handle
-end
-
-P.start = function ()
-	P.cookie = P.loadcookie()
-	P.songs = {}
-	P.songs_i = 0
-	P.stat = 'songs_ready'
-	P.next()
-end
-
-P.setopt_genre_choose = function (o, done, on_cancel)
-	if not o.id then
-		info('need id')
-		done{result=1, msg='need_id'}
-		return
-	end
-
-	P.stat = 'songs_fetching'
-	if P.task then P.task.cancel() end
-	P.songs = {}
-	P.songs_i = 0
-
-	local c = P.cookie
-	c.station_id = nil
-	c.genres_id = o.id
-
-	P.task = P.auto_auth(c, P.choose_genres, function (c, r, err)
-		if not r or not r.stationId then
-			P.stat = 'need_station_id'
-			done{result=1, msg='need_id'}
-			return
-		end
-
-		c.station_id = r.stationId
-
-		P.task = P.auto_auth(c, P.songs_list, function (c, r, err)
-			P.savecookie(c)
-			if r then
-				P.stat = 'songs_ready'
-				P.songs_add(r)
-				done{result=0}
-			else
-				P.stat = err
-				done{result=1, msg=err}
-			end
-		end, on_cancel)
-	end, on_cancel)
-end
-
-P.setopt_station_choose = function (o, done, on_cancel) 
-	if not o.id then
-		info('need id')
-		done{result=1, msg='need_id'}
-		return
-	end
-
-	P.stat = 'songs_fetching'
-	if P.task then P.task.cancel() end
-	P.songs = {}
-	P.songs_i = 0
-
-	local c = P.cookie
-	c.station_id = o.id
-
-	P.task = P.auto_auth(c, P.songs_list, function (c, r, err)
-		P.savecookie(c)
-		if r then
-			P.stat = 'songs_ready'
-			P.songs_add(r)
-			done{result=0}
-		else
-			P.stat = err
-			done{result=1, msg=err}
-		end
-	end, on_cancel)
-end
-
-P.setopt_login = function (o, done, on_cancel) 
-	P.stat = 'auth_processing'
-	if P.task then P.task.cancel() end
-	P.songs = {}
-	P.songs_i = 0
-
-	local c = P.cookie
-	c.user_auth_token = nil
-	c.user_id = nil
-	c.partner_auth_token = nil
-	c.partner_time_offset = nil
-	c.partner_id = nil
-	c.username = o.username
-	c.password = o.password
-
-	P.task = P.auto_auth(c, P.stations_list, function (c, r, err)
-		if not r then
-			P.stat = err
-			done{result=1}
-			return
-		end
-
-		if table.maxn(r) == 0 then
-			P.stat = 'need_station_id'
-			done{result=0}
-			return
-		end
-		c.station_id = r[1].id
-
-		P.task = P.auto_auth(c, P.songs_list, function (c, r, err)
-			P.savecookie(c)
-			if r then
-				P.stat = 'songs_ready'
-				P.songs_add(r)
-				done{result=0}
-			else
-				P.stat = err
-				done{result=1, msg=err}
-			end
-		end, on_cancel)
-	end, on_cancel)
-end
-
-P.setopt = function (o, done)
-	done = done or function () end
-	local on_cancel = function () done{result=1, msg='cancelled'} end
-
-	info('setopt', o)
-
-	if o.op == 'pandora.genre_choose' and isstr(o.id) then
-		P.setopt_genre_choose(o, done, on_cancel)
-		return true
-	elseif o.op == 'pandora.station_choose' and isstr(o.id) then
-		P.setopt_station_choose(o, done, on_cancel)
-		return true
-	elseif o.op == 'pandora.login' and isstr(o.username) and isstr(o.password) then
-		P.setopt_login(o, done, on_cancel)
-		return true
-	elseif o.op == 'pandora.genres_list' then
-		local c = table.copy(P.cookie)
-		P.auto_auth(c, P.genres_list, function (c, r, err)
-			if r then
-				done(r)
-			else
-				done{result=1}
-			end
-		end)
-		return true
-	elseif o.op == 'pandora.stations_list' then
-		local c = table.copy(P.cookie)
-		P.auto_auth(c, P.stations_list, function (c, r, err)
-			if r then
-				done(r)
-			else
-				done{result=1}
-			end
-		end)
-		return true
-	elseif o.op == 'pandora.songs_list' then
-		P.songs_list(P.cookie, function () end)
-		return true
-	elseif o.op == 'pandora.rate_like' or o.op == 'pandora.rate_ban' then
-		if not o.id then
-			local s = P.songs[P.songs_i] or {}
-			o.id = s.id
-		end
-		local like = (o.op == 'pandora.rate_like')
-		P.add_feedback(table.add(P.cookie, {song_id=o.id, like=like}), function ()
-			done{result=0}
-		end)
-		if not like then
-			if P.next_callback then P.next_callback() end
-		end
-		return true
-	end
-end
-
-P.songs_add = function (r)
-	info('got songs nr', table.maxn(r))
-	local left = table.maxn(P.songs) - P.songs_i
-	table.append(P.songs, r)
-	if left == 0 and P.next_callback then
-		P.next_callback()
-	end
-end
-
-P.next = function ()
-	local left = table.maxn(P.songs) - P.songs_i
-
-	if left <= 1 and P.stat == 'songs_ready' then
-		P.stat = 'songs_fetching'
-		P.task = P.auto_auth(P.cookie, P.songs_list, function (c, r, err)
-			P.savecookie(c)
-			P.stat = 'songs_ready'
-			if r then
-				P.songs_add(r)
-			else
-				P.stat = err
-			end
-		end)
-	end
-
-	if left == 0 then
-		return nil
-	end
-
-	P.songs_i = P.songs_i + 1
-	return P.songs[P.songs_i]
-end
-
-P.is_fetching = function ()
-	return P.stat == 'auth_processing' or
-		P.stat == 'songs_fetching' and table.maxn(P.songs) == P.songs_i or
-		P.stat == 'server_error'
-end
-
-P.info = function ()
-	return {
-		type = 'pandora',
-		fetching = P.is_fetching(),
-	}
-end
-
-P.songs_list_v2 = function (c, done) 
-end
-
-P.login_v2 = function (c, done)
+P.login = function (c, done)
+	local v = false
 	local ret = {}
 
-	P.partner_login({}, function (r, st)
-		info('partner', r, err)
-
-		if st.stat ~= 'ok' then
-			done(r, 'server_error')
+	P.partner_login({}, function (r, err)
+		if err then
+			done(r, err)
 			return
 		end
 
@@ -641,34 +330,343 @@ P.login_v2 = function (c, done)
 		ret.partner_auth_token = r.partner_auth_token
 		ret.username = c.username
 		ret.password = c.password
+		if v then info(ret) end
 
-		P.user_login(ret, function (r, st)
-			if st.stat == 'ok' then
-				-- ok
+		P.user_login(ret, function (r, err)
+			if v then info(r, err) end
+			if r then
 				ret.user_auth_token = r.user_auth_token
 				ret.user_id = r.user_id
-				done(ret, nil)
-			elseif st.code == 9 or st.code == 1002 then
-				-- invalid_userpass
-				done(nil, 'invalid_userpass')
+				done(ret)
 			else
-				-- server_error
-				done(nil, 'server_error')
+				done(nil, err)
 			end
 		end)
 	end)
 end
 
-P.test_login = function ()
-	local done = function () end
+P.grep_stations = function (old)
+	local r = {}
+	for _, s in pairs(totable(old.stations)) do
+		if isstr(s.stationId) and isstr(s.stationName) then
+			table.insert(r, {id=s.stationId, name=s.stationName})
+		end
+	end
 
-	P.login_v2({
+	if table.maxn(r) == 0 then r = nil end
+	return r
+end
+
+P.stations_list = function (c, done)
+	return P.call {
+		proto = 'http',
+		blowfish = true,
+		params = P.params_user(c, {
+			method = 'user.getStationList',
+		}),
+		data = P.data_user(c, {}),
+		done = function (r, st) 
+			if r then r = P.grep_stations(r) end
+			P.handle_common(r, st, done)
+		end,
+	}
+end
+
+P.fetch_songs = function ()
+	info('fetch songs')
+	P.stat = 'songs_fetching'
+	local c = table.copy(P.cookie)
+
+	P.auto_auth(c, P.songs_list, function (r, err)
+		if err == 'need_auth' then
+			P.stat = err
+			return
+		end
+		if err then
+			P.fetch_songs()
+			return
+		end
+		P.cookie = c
+		P.savecookie(c)
+		P.stat = 'songs_ready'
+		P.songs_add(r)
+	end)
+end
+
+P.songs_add = function (r)
+	info('got songs nr', table.maxn(r))
+	local left = table.maxn(P.songs) - P.songs_i
+	table.append(P.songs, r)
+	if left == -1 and P.next_callback then
+		P.next_callback()
+	end
+end
+
+P.next = function ()
+	local left = table.maxn(P.songs) - P.songs_i
+
+	if left <= 1 and P.stat == 'songs_ready' then
+		P.fetch_songs()
+	end
+
+	local r = P.songs[P.songs_i]
+	if left > -1 then
+		P.songs_i = P.songs_i + 1
+	end
+	return r
+end
+
+P.start = function ()
+	info('starts')
+	P.cookie = P.loadcookie()
+	P.songs = {}
+	P.songs_i = 1
+	P.stat = 'songs_ready'
+	P.next()
+end
+
+P.auto_auth = function (c, cb, done)
+	local login = function ()
+		P.login(c, function (r, err)
+			if err then
+				done(nil, err)
+				return
+			end
+
+			table.add(c, r)
+			P.stations_list(c, function (r, err)
+				if err then
+					done(nil, err)
+				end
+				c.station_id = r[1].id
+				info('station_id ->', c.station_id)
+
+				cb(c, function (r, err)
+					done(r, err)
+				end)
+			end)
+		end)
+	end
+	
+	if not c.username or not c.password then
+		done(nil, 'need_auth')
+		return
+	end
+
+	if not P.has_all_user_cookie(c) then
+		info('need login', c)
+		login()
+		return
+	end
+
+	cb(c, function (r, err)
+		if not err then
+			done(r, nil)
+		elseif err == 'invalid_token' then
+			login()
+		else
+			done(nil, err)
+		end
+	end)
+end
+
+P.setopt_genres_choose = function (o, done)
+	P.stat = 'songs_fetching'
+	P.songs = {}
+	P.songs_i = 1
+	if P.stop_callback then P.stop_callback() end
+
+	local c = table.copy(P.cookie)
+	c.station_id = nil
+	c.genres_id = o.id
+
+	local finish = function (r)
+		done(r)
+		P.stat = 'songs_ready'
+	end
+
+	P.auto_auth(c, P.choose_genres, function (r, err)
+		if err then
+			finish{result=1}
+			return
+		end
+
+		c.station_id = r.stationId
+		P.auto_auth(c, P.songs_list, function (r, err)
+			if err then
+				finish{result=1}
+				return
+			end
+
+			P.cookie = c
+			P.savecookie(c)
+
+			finish{result=0}
+			P.songs_add(r)
+		end)
+	end)
+end
+
+P.setopt_station_choose = function (o, done)
+	P.stat = 'songs_fetching'
+	P.songs = {}
+	P.songs_i = 1
+	if P.stop_callback then P.stop_callback() end
+
+	local c = table.copy(P.cookie)
+	c.station_id = o.id
+
+	local finish = function (r)
+		done(r)
+		P.stat = 'songs_ready'
+	end
+
+	P.auto_auth(c, P.songs_list, function (r, err)
+		if err then
+			finish{result=1}
+			return
+		end
+
+		P.cookie = c
+		P.savecookie(c)
+
+		finish{result=0}
+		P.songs_add(r)
+	end)
+end
+
+P.setopt_login = function (o, done)
+	P.stat = 'songs_fetching'
+	P.songs = {}
+	P.songs_i = 1
+	if P.stop_callback then P.stop_callback() end
+
+	local c = table.copy(P.cookie)
+	P.clean_user_cookie(c)
+	c.username = o.username
+	c.password = o.password
+
+	local finish = function (r)
+		done(r)
+		P.stat = 'songs_ready'
+	end
+
+	P.auto_auth(c, P.songs_list, function (r, err)
+		if err then
+			finish{result=1}
+			return
+		end
+
+		P.cookie = c
+		P.savecookie(c)
+
+		finish{result=0}
+		P.songs_add(r)
+	end)
+end
+
+P.setopt_genres_list = function (o, done)
+	local c = table.copy(P.cookie)
+	P.auto_auth(c, P.genres_list, function (r, err)
+		if err then
+			done{result=1}
+		else
+			done{result=0, genres=r}
+		end
+	end)
+end
+
+P.setopt_stations_list = function (o, done)
+	local c = table.copy(P.cookie)
+	P.auto_auth(c, P.stations_list, function (r, err)
+		if err then
+			done{result=1}
+		else
+			done{result=0, stations=r}
+		end
+	end)
+end
+
+P.setopt_rate = function (o, done)
+	local s; if radio and radio.song then s = radio.song end; s = s or {}
+	o.id = o.id or s.id
+	local like = (o.op == 'pandora.rate_like')
+
+	local c = table.add({song_id=o.id, like=like}, P.cookie)
+	P.add_feedback(c, function ()
+		done{result=0}
+	end)
+	if not like then
+		if P.next_callback then P.next_callback() end
+	end
+end
+
+P.setopt = function (o, done)
+	done = done or function () end
+	if o.op == 'pandora.genre_choose' and isstr(o.id) then
+		P.setopt_genres_choose(o, done)
+		return true
+	elseif o.op == 'pandora.station_choose' and isstr(o.id) then
+		P.setopt_station_choose(o, done)
+		return true
+	elseif o.op == 'pandora.login' and isstr(o.username) and isstr(o.password) then
+		P.setopt_login(o, done)
+		return true
+	elseif o.op == 'pandora.genres_list' then
+		P.setopt_genres_list(o, done)
+		return true
+	elseif o.op == 'pandora.stations_list' then
+		P.setopt_stations_list(o, done)
+		return true
+	elseif o.op == 'pandora.rate_like' or o.op == 'pandora.rate_ban' then
+		P.setopt_rate(o, done)
+		return true
+	end
+end
+
+P.info_login = function ()
+	return {login=true, username=D.cookie.username, password=D.cookie.password}
+end
+
+P.is_fetching = function ()
+	return P.stat == 'songs_fetching' and table.maxn(P.songs)+1 == P.songs_i 
+		or P.stat == 'server_error'
+end
+
+
+P.info = function ()
+	return {
+		type = 'pandora',
+		fetching = P.is_fetching(),
+	}
+end
+
+P.test = function ()
+	P.savecookie{}
+	P.start()
+	P.setopt({op='pandora.login', username='enliest@qq.com', password='enliest1653'}, info)
+end
+
+P.test_login = function ()
+
+	P.login({
 		username = 'cfanfrank@gmail.com',
 		password = 'enliest1653',
 	}, function (c, err)
-		P.songs_list(c, function (r)
+		info('login ok', c)
+		P.stations_list(c, function (r, err)
+			local cid = r[1].id
+			info('station_id', cid)
+			c.station_id = cid
+			-- c.partner_time_offset = -112312 > code=13
+			-- c.partner_auth_token = '123'
+			
+			P.songs_list(c, function (r, err)
+				info(r, err)
+			end)
 		end)
 	end)
+
 end
 
 pandora = P

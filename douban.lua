@@ -272,12 +272,11 @@ D.next = function (opt)
 	return r
 end
 
-D.start = function ()
+D.init = function ()
 	D.cookie = D.loadcookie()
 	D.songs = {}
 	D.songs_i = 1
 	D.stat = 'songs_ready'
-	D.next()
 end
 
 D.setopt_login = function (o, done)
@@ -439,6 +438,8 @@ D.info = function ()
 		fetching = D.is_fetching(),
 	}
 end
+
+D.init()
 
 douban = D
 

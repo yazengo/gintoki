@@ -1,6 +1,6 @@
 
 require('localmusic')
-require('pandora2')
+require('pandora')
 require('douban')
 require('bbcradio')
 require('airplay')
