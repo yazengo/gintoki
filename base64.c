@@ -2,6 +2,7 @@
 #include <uv.h>
 #include <lua.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "utils.h"
 
