@@ -88,7 +88,7 @@ inst-x86: server-x86
 	tar cf $@.tar server-x86 $(inst-files)
 
 cp-minifs-mips: inst-mips
-	tar xvf inst-mips.tar -C minifs/usr/app
+	tar xvf inst-mips.tar -C ../../../system/minifs/usr/app
 
 sumcode:
 	wc -l audio*.[ch] utils.[ch] luv_curl.[ch] main.c ringbuf.[ch] inputdev.[ch] airplay*.[ch]
