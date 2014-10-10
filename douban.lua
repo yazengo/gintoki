@@ -177,7 +177,7 @@ D.rate = function (c, type, sid, done)
 		if s and s.like then type = 'u' else type = 'r' end
 	end
 	if s and type == 'r' then s.like = true end
-	if s and type == 'u' then s.like = false end
+	if s and (type == 'u' or type == 'b') then s.like = false end
 	D.report(table.add({id=sid, type=type}, D.cookie), done)
 end
 
@@ -412,6 +412,12 @@ D.setopt = function (o, done)
 		return true
 	elseif o.op == 'douban.rate_unlike' then
 		D.rate(D.cookie, 'u', o.id, function () done{result=0} end)
+		return true
+	elseif o.op == 'douban.rate_ban' then
+		D.rate(D.cookie, 'b', o.id, function () 
+			done{result=0} 
+			if D.next_callback then D.next_callback() end
+		end)
 		return true
 	elseif o.op == 'douban.rate_toggle_like' then
 		D.rate(D.cookie, 't', o.id, function () done{result=0} end)
