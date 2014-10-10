@@ -1,0 +1,4 @@
+*.o
+testdata
+.*.swp
+server-*
