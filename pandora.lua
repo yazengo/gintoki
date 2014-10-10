@@ -591,6 +591,7 @@ P.setopt_rate = function (o, done)
 	local s; if radio and radio.song then s = radio.song end; s = s or {}
 	o.id = o.id or s.id
 	local like = (o.op == 'pandora.rate_like')
+	if s then s.like = like end
 
 	local c = table.add({song_id=o.id, like=like}, P.cookie)
 	P.add_feedback(c, function ()
