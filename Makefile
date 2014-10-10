@@ -9,6 +9,7 @@ objs += lua_cjson.o lua_cjson_fpconv.o
 objs += ringbuf.o pcm.o
 objs += audio_in_avconv.o 
 objs += blowfish.o 
+objs += base64.o 
 objs += audio_in.o
 objs += airplay.o
 objs += airplay_v2.o

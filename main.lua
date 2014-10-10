@@ -7,6 +7,7 @@ require('airplay')
 require('radio')
 require('audio')
 require('muno')
+require('upnp')
 
 local M = {}
 
@@ -127,11 +128,10 @@ end
 radio.change = function (opt)
 	info('radio.change', opt)
 
-	radio.stop()
-
 	local to = radio.name2obj(opt.type)
 
 	if to and radio.source ~= to then
+		radio.stop()
 		radio.start(to)
 		prop.set('radio.default', opt.type)
 	end
@@ -230,6 +230,7 @@ if input then
 		[[ audio.setvol(audio.getvol() - 10); print(audio.getvol()) ]],
 		[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
 		[[ audio.setvol(80); print(audio.getvol()) ]],
+		[[ audio.setvol(0); print(audio.getvol()) ]],
 		[[ handle{op='audio.play_pause_toggle'} ]],
 		[[ handle{op='audio.next'} ]],
 		[[ gsensor_next() ]],
