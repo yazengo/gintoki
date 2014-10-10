@@ -42,49 +42,31 @@ typedef struct {
 	const char *method;
 } upnp_luv_t;
 
-// arg[1] = data
+// arg[1] = [userptr ul]
 // arg[2] = ret
 static int upnp_luv_action_done(lua_State *L) {
 	upnp_luv_t *ul = (upnp_luv_t *)lua_touserptr(L, 1);
 
-	// out = cjson.encode(ret)
-	
-	lua_getglobal(L, "cjson");
-	lua_getfield(L, -1, "encode");
-	lua_remove(L, -2);
-
-	lua_pushvalue(L, 2);
-	lua_call_or_die(L, 1, 1);
-
-	ul->out = (char *)lua_tostring(L, -1);
+	ul->out = (char *)lua_tostring(L, 2);
 	if (ul->out)
 		ul->out = strdup(ul->out);
 
 	return 0;
 }
 
-// arg[1] = data
+// arg[1] = [userptr ul]
 // arg[2] = done
 static int upnp_luv_action_start(lua_State *L) {
 	upnp_luv_t *ul = (upnp_luv_t *)lua_touserptr(L, 1);
 
-	// upnp.<method>(cjson.decode(in), done)
+	// <method>(in, done)
 	
-	lua_getglobal(L, "upnp");
-	lua_getfield(L, -1, ul->method);
-	lua_remove(L, -2);
-	
-	lua_getglobal(L, "cjson");
-	lua_getfield(L, -1, "decode");
-	lua_remove(L, -2);
-
-	lua_pushstring(L, ul->in);
-	lua_call_or_die(L, 1, 1);
-
-	lua_pushvalue(L, 2);
-
+	lua_getglobal(L, ul->method);
 	if (lua_isnil(L, -1))
 		return 0;
+
+	lua_pushstring(L, ul->in);
+	lua_pushvalue(L, 2);
 	lua_call_or_die(L, 2, 0);
 
 	return 0;
@@ -98,20 +80,20 @@ static int upnp_control_action_request(Upnp_EventType EventType, void *Event, vo
 	// ca_event->ActionName;
 
 	char *in = SampleUtil_GetFirstDocumentItem(ca_event->ActionRequest, "Params");
-	info("in=%s", in);
+	debug("in=%s", in);
 	if (in == NULL)
 		return -1;
 
 	upnp_luv_t ul = {
 		.udn = ca_event->DevUDN, .srv = ca_event->ServiceID,
-		.in = in, .method = "on_action",
+		.in = in, .method = "upnp_on_action",
 	};
 	pthread_call_luv_sync_v2(
 		upnp->L, upnp->loop,
 		upnp_luv_action_start, upnp_luv_action_done, &ul
 	);
 
-	info("out=%s", ul.out);
+	debug("out=%s", ul.out);
 	if (ul.out == NULL)
 		return -1;
 
@@ -137,11 +119,11 @@ static int upnp_subscription_request(struct Upnp_Subscription_Request *sr_event)
 		.srv = sr_event->ServiceId,
 		.udn = sr_event->UDN,
 		.sid = sr_event->Sid,
-		.in = "", .method = "on_subscribe",
+		.in = "", .method = "upnp_on_subscribe",
 	};
-	info("srv=%s sid=%s udn=%s", ul.srv, ul.sid, ul.udn);
+	debug("srv=%s sid=%s udn=%s", ul.srv, ul.sid, ul.udn);
 	pthread_call_luv_sync_v2(upnp->L, upnp->loop, upnp_luv_action_start, upnp_luv_action_done, &ul);
-	info("out=%s", ul.out);
+	debug("out=%s", ul.out);
 
 	const char *names[] = { "sync_data" };
 	const char *vals[] = { ul.out };
@@ -266,13 +248,10 @@ static int PlayerDeviceStart(
 
 	ip = UpnpGetServerIpAddress();
 	port = UpnpGetServerPort();
-	//info("init done ip=%s port=%u", ip, port);
 
 	if (!desc_doc_name) {
 		if (combo) {
-			//desc_doc_name = "tvcombodesc.xml";
 		} else {
-			//desc_doc_name = "munodevicedesc.xml";
 			desc_doc_name = STR_DEVICE_DESC_XML;
 		}
 	}
@@ -282,7 +261,6 @@ static int PlayerDeviceStart(
 		web_dir_path = "upnpweb";
 
 	snprintf(desc_doc_url, DESC_URL_SIZE, "http://%s:%d/%s", ip, port, desc_doc_name);
-	//info("webroot=%s", web_dir_path);
 
 	ret = UpnpSetWebServerRootDir(web_dir_path);
 	if (ret != UPNP_E_SUCCESS) {
@@ -291,7 +269,6 @@ static int PlayerDeviceStart(
 		return ret;
 	}
 
-	//info("desc_doc_url=%s", desc_doc_url);
 	ret = UpnpRegisterRootDevice(desc_doc_url, PlayerDeviceCallbackEventHandler, &upnp->h, &upnp->h);
 	if (ret != UPNP_E_SUCCESS) {
 		warn("UpnpRegisterRootDevice failed: %d", ret);
@@ -299,7 +276,6 @@ static int PlayerDeviceStart(
 		return ret;
 	}
 	
-	//info("dev reg ok");
 	PlayerDeviceStateInit(desc_doc_url);
 
 	ret = UpnpSendAdvertisement(upnp->h, DEFAULT_ADVR_EXPIRE);
@@ -352,23 +328,16 @@ static void upnp_notify_thread(uv_work_t *w) {
 	free(ul->in);
 }
 
-// upnp.notify(table/strbuf)
+// upnp_notify(str)
 static int upnp_notify(lua_State *L) {
 	if (upnp->srv == NULL || upnp->udn == NULL) {
 		warn("failed: upnp srv or udn == NULL");
 		return 0;
 	}
 
-	// out = cjson.encode(p)
-	lua_getglobal(L, "cjson");
-	lua_getfield(L, -1, "encode");
-	lua_remove(L, -2);
-	lua_insert(L, -2);
-	lua_call_or_die(L, 1, 1);
+	char *json = (char *)lua_tostring(L, 1);
 
-	char *json = (char *)lua_tostring(L, -1);
-
-	info("udn=%s srv=%s json=%s", upnp->udn, upnp->srv, json);
+	//info("udn=%s srv=%s json=%s", upnp->udn, upnp->srv, json);
 
 	if (json == NULL)
 		return 0;
@@ -383,30 +352,14 @@ static int upnp_notify(lua_State *L) {
 	return 0;
 }
 
-static void *test_thread(void *_) {
-	for (;;) {
-		upnp_luv_t ul = {
-			.udn = "12", .srv = "34",
-			.method = "on_subscribe",
-		};
-		pthread_call_luv_sync_v2(
-			upnp->L, upnp->loop,
-			upnp_luv_action_start, upnp_luv_action_done, &ul
-		);
-		info("out=%s %s %s p=%p", ul.out, ul.udn, ul.method, &ul);
-
-		sleep(3);
-	}
-}
-
-// upnp.start()
+// upnp_start()
 static int upnp_start(lua_State *L) {
 	pthread_t tid;
 	pthread_create(&tid, NULL, upnp_thread_start, NULL);
 	return 0;
 }
 
-// upnp.stop()
+// upnp_stop()
 static int upnp_stop(lua_State *L) {
 	pthread_t tid;
 	pthread_create(&tid, NULL, upnp_thread_stop, NULL);
@@ -417,26 +370,16 @@ void upnp_init(lua_State *L, uv_loop_t *loop) {
 	upnp->L = L;
 	upnp->loop = loop;
 
-	// upnp = {}
-	lua_newtable(L);
-	lua_setglobal(L, "upnp");
-
-	// upnp.notify = [native function]
-	lua_getglobal(L, "upnp");
+	// upnp_notify = [native function]
 	lua_pushcfunction(L, upnp_notify);
-	lua_setfield(L, -2, "notify");
-	lua_pop(L, 1);
+	lua_setglobal(L, "upnp_notify");
 
-	// upnp.start = [native function]
-	lua_getglobal(L, "upnp");
+	// upnp_start = [native function]
 	lua_pushcfunction(L, upnp_start);
-	lua_setfield(L, -2, "start");
-	lua_pop(L, 1);
+	lua_setglobal(L, "upnp_start");
 
-	// upnp.stop = [native function]
-	lua_getglobal(L, "upnp");
+	// upnp_stop = [native function]
 	lua_pushcfunction(L, upnp_stop);
-	lua_setfield(L, -2, "stop");
-	lua_pop(L, 1);
+	lua_setglobal(L, "upnp_stop");
 }
 
