@@ -256,13 +256,12 @@ airplay_on_start = function ()
 end
 
 info('hostname', hostname())
-
 prop.load()
 audio.setvol(50)
 airplay_start(hostname() .. ' 的 Airplay')
 upnp.loadconfig()
 upnp.start()
-inputdev_init()
+if inputdev_init then inputdev_init() end
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}
 
