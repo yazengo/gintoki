@@ -123,7 +123,7 @@ static inputdev_t _dev, *dev = &_dev;
 static void inputdev_emit_event(int e) {
 	lua_State *L = dev->L;
 
-	lua_getglobal(L, "on_inputevent");
+	lua_getglobal(L, "inputdev_on_event");
 	if (lua_isnil(L, -1)) {
 		lua_pop(L, 1);
 		return;
@@ -418,8 +418,8 @@ static void inputdev_on_create(fsevent_t *e, char *name) {
 	inputdev_open(path);
 }
 
-void luv_inputdev_init(lua_State *L, uv_loop_t *loop) {
-	int r;
+static void lua_inputdev_init(lua_State *L) {
+	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 
 	info("init");
 
@@ -435,5 +435,11 @@ void luv_inputdev_init(lua_State *L, uv_loop_t *loop) {
 	fsevent_init(loop, dev->fsevent, "/dev/input");
 
 	inputdev_scan();
+}
+
+void luv_inputdev_init(lua_State *L, uv_loop_t *loop) {
+	lua_pushuserptr(L, loop);
+	lua_pushcclosure(L, lua_inputdev_init, 1);
+	lua_setglobal(L, "inputdev_init");
 }
 

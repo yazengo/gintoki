@@ -181,7 +181,7 @@ end
 gsensor_prev = say_and_do('testaudios/prev.mp3', function () handle{op='audio.prev'} end)
 gsensor_next = say_and_do('testaudios/next.mp3', function () handle{op='audio.next'} end)
 
-on_inputevent = function (e) 
+inputdev_on_event = function (e) 
 	if e == 33 then
 		info('inputdev: keypress')
 		audio.pause_resume_toggle()
@@ -262,6 +262,7 @@ audio.setvol(50)
 airplay_start(hostname() .. ' 的 Airplay')
 upnp.loadconfig()
 upnp.start()
+intputdev_init()
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}
 
