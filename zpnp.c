@@ -3,6 +3,7 @@
 #include <uv.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "utils.h"
 
@@ -115,6 +116,7 @@ static int lua_zpnp_start(lua_State *L) {
  * zpnp_start(uuid)
  * zpnp_on_recv(r, done)
  * zpnp_notify(r)
+ * zpnp_setopt{uuid=0x1234, name='Muno'}
  */
 void luv_zpnp_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
