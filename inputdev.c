@@ -418,7 +418,7 @@ static void inputdev_on_create(fsevent_t *e, char *name) {
 	inputdev_open(path);
 }
 
-static void lua_inputdev_init(lua_State *L) {
+static int lua_inputdev_init(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 
 	info("init");
@@ -435,6 +435,8 @@ static void lua_inputdev_init(lua_State *L) {
 	fsevent_init(loop, dev->fsevent, "/dev/input");
 
 	inputdev_scan();
+
+	return 0;
 }
 
 void luv_inputdev_init(lua_State *L, uv_loop_t *loop) {
