@@ -11,6 +11,7 @@
 #include "lua_cjson.h"
 #include "luv_curl.h"
 #include "net.h"
+#include "zpnp.h"
 #include "airplay.h"
 #include "airplay_v2.h"
 #include "blowfish.h"
@@ -87,6 +88,8 @@ int main(int argc, char *argv[]) {
 		luv_airplay_init(L, loop);
 	else
 		luv_airplay_init_v2(L, loop);
+
+	luv_zpnp_init(L, loop);
 
 	luv_blowfish_init(L, loop);
 	luv_base64_init(L, loop);
