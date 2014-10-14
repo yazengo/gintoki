@@ -31,9 +31,6 @@ if table.maxn(P.list) == 0 then
 end
 P.i = 1
 
-P.start = function ()
-end
-
 P.setopt = function (opt, done)
 	done = done or function () end
 

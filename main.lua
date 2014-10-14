@@ -64,7 +64,7 @@ handle = function (a, done)
 		return
 	end
 
-	if radio.setopt(a, done) then
+	if airplay.setopt(a, done) then
 		return
 	end
 
@@ -162,9 +162,12 @@ radio.stop = function ()
 	audio.stop()
 end
 
-local say_and_do = function (url, action)
+local say_and_do = function (url, k, action)
 	local doing
 	return function ()
+		if not (radio.source and radio.source[k]) then
+			return 
+		end
 		if doing then return end
 		handle{op='audio.pause'}
 		doing = true
@@ -178,8 +181,8 @@ local say_and_do = function (url, action)
 	end
 end
 
-gsensor_prev = say_and_do('testaudios/prev.mp3', function () handle{op='audio.prev'} end)
-gsensor_next = say_and_do('testaudios/next.mp3', function () handle{op='audio.next'} end)
+gsensor_prev = say_and_do('testaudios/prev.mp3', 'prev', function () handle{op='audio.prev'} end)
+gsensor_next = say_and_do('testaudios/next.mp3', 'next', function () handle{op='audio.next'} end)
 
 inputdev_on_event = function (e) 
 	if e == 33 then
@@ -252,7 +255,7 @@ http_server {
 }
 
 airplay_on_start = function ()
-	radio.start(airplay, radio.source)
+	airplay.start()
 end
 
 info('hostname', hostname())

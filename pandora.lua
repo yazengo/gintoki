@@ -422,7 +422,6 @@ P.start = function ()
 	P.songs = {}
 	P.songs_i = 1
 	P.stat = 'songs_ready'
-	P.next()
 end
 
 P.auto_auth = function (c, cb, done)
