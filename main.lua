@@ -262,7 +262,7 @@ audio.setvol(50)
 airplay_start(hostname() .. ' 的 Airplay')
 upnp.loadconfig()
 upnp.start()
-intputdev_init()
+inputdev_init()
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}
 
