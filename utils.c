@@ -18,16 +18,6 @@
 
 #include "utils.h"
 
-static const char *ban[128];
-static int ban_nr;
-static int ban_all = 0;
-
-void log_ban(const char *file, const char *func) {
-	ban[ban_nr*2] = file;
-	ban[ban_nr*2+1] = func;
-	ban_nr++;
-}
-
 static int log_level = LOG_INFO;
 
 static void print_traceback_and_exit();
@@ -47,19 +37,6 @@ void _log(
 	if (level < log_level)
 		return;
 
-	if (ban_all)
-		return;
-
-	int i;
-	for (i = 0; i < ban_nr; i++) {
-		if (!strcmp(ban[i*2], file)) {
-			if (ban[i*2+1] == NULL)
-				return;
-		 	if (!strcmp(ban[i*2+1], func))
-				return;
-		}
-	}
-
 	va_start(ap, fmt);
 	vsnprintf(buf, sizeof(buf)-2, fmt, ap);
 	va_end(ap);
@@ -68,11 +45,6 @@ void _log(
 
 	if (level == LOG_PANIC)
 		print_traceback_and_exit();
-}
-
-void log_init() {
-	if (getenv("LOG") && !strcmp(getenv("LOG"), "0"))
-		ban_all = 1;
 }
 
 float now() {
