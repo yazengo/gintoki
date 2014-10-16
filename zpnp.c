@@ -186,7 +186,7 @@ static uv_buf_t udp_allocbuf(uv_handle_t *h, size_t len) {
 }
 
 static void udp_write_done(uv_udp_send_t *sr, int stat) {
-	debug("sent");
+	free(sr->data);
 }
 
 static void udp_read(uv_udp_t *h, ssize_t n, uv_buf_t buf, struct sockaddr *addr, unsigned flags) {
@@ -206,9 +206,8 @@ static void udp_read(uv_udp_t *h, ssize_t n, uv_buf_t buf, struct sockaddr *addr
 	debug("n=%d", m.len);
 
 	zs->ubuf = uv_buf_init(m.buf, m.len);
+	zs->sr.data = m.buf;
 	uv_udp_send(&zs->sr, &zs->udpcli, &zs->ubuf, 1, *(struct sockaddr_in *)addr, udp_write_done);
-
-	free(m.buf);
 }
 
 static void tcpcli_on_handle_closed(uv_handle_t *h) {
