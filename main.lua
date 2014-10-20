@@ -185,6 +185,8 @@ gsensor_prev = say_and_do('testaudios/prev.mp3', 'prev', function () handle{op='
 gsensor_next = say_and_do('testaudios/next.mp3', 'next', function () handle{op='audio.next'} end)
 
 inputdev_on_event = function (e) 
+	info('e=', e)
+
 	if e == 33 then
 		info('inputdev: keypress')
 		audio.pause_resume_toggle()
@@ -243,6 +245,23 @@ if input then
 		[[ handle{op='radio.change_type', type='bbcradio'} ]],
 	}
 end
+
+http_server {
+	addr = '127.0.0.1',
+	port = 9991,
+	handler = function (hr)
+		local cmd = hr:body()
+		local func = loadstring(cmd)
+		local r, err = pcall(func)
+		local s = ''
+		if err then
+			s = cjson.encode{err=tostring(err)}
+		else
+			s = cjson.encode{err=0}
+		end
+		hr:retjson(s)
+	end,
+}
 
 http_server {
 	port = 8881,
