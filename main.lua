@@ -223,6 +223,7 @@ if input then
 		[[ audio.setvol(0); print(audio.getvol()) ]],
 		[[ handle{op='audio.play_pause_toggle'} ]],
 		[[ handle{op='audio.next'} ]],
+		[[ gsensor_prev() ]],
 		[[ gsensor_next() ]],
 		[[ handle{op='radio.change_type', type='pandora'} ]],
 		[[ handle{op='radio.change_type', type='local'} ]],
@@ -263,14 +264,21 @@ airplay_on_start = function ()
 	airplay.start()
 end
 
-zpnp.on_subscribe = function (a, done)
+upnp.on_subscribe = function (a, done)
 	done(all_info())
 end
 
 zpnp.on_action = handle
+upnp.on_action = handle
 
 pnp_notify = function (r)
 	zpnp.notify(r)
+	upnp.notify(r)
+end
+
+pnp_start = function ()
+	zpnp.start()
+	upnp.start()
 end
 
 pnp_notify_event = function (r) pnp_notify(table.add(r, {type='event'})) end
@@ -280,7 +288,7 @@ info('hostname', hostname())
 prop.load()
 audio.setvol(50)
 airplay_start('Muno_' .. hostname())
-zpnp.start()
+pnp_start()
 if inputdev_init then inputdev_init() end
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}

@@ -46,8 +46,6 @@ upnp.loadconfig = function ()
 	s = string.gsub(s, '{NAME}', name)
 	xml:write(s)
 
-	info('upnp.name', name)
-
 	tpl:close()
 	xml:close()
 end
