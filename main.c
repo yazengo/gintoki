@@ -16,6 +16,7 @@
 #include "airplay_v2.h"
 #include "blowfish.h"
 #include "base64.h"
+#include "sha1.h"
 #include "upnp_device.h"
 #include "audio_mixer.h"
 #include "audio_in.h"
@@ -93,6 +94,7 @@ int main(int argc, char *argv[]) {
 
 	luv_blowfish_init(L, loop);
 	luv_base64_init(L, loop);
+	luv_sha1_init(L, loop);
 
 	if (getenv("DISABLE_UPNP") == NULL) 
 		upnp_init(L, loop);
