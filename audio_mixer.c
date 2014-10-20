@@ -298,7 +298,7 @@ static void audio_in_on_meta(audio_in_t *ai, const char *key, void *_val) {
 }
 
 static float track_get_pos(audio_track_t *tr) {
-	return (float)tr->buf.tailpos / (44100*2*2); // int16_t*2 per sample
+	return (float)tr->buf.tailpos / (tr->am->rate*2*2); // int16_t*2 per sample
 }
 
 static void track_close(audio_track_t *tr) {
@@ -581,6 +581,13 @@ static int lua_audio_on_stopped(lua_State *L) {
 static int lua_audio_play(lua_State *L) {
 	audio_mixer_t *am = lua_getam(L);
 
+	if (am->ao == NULL) {
+		am->ao = (audio_out_t *)zalloc(sizeof(audio_out_t));
+		am->ao->data = am;
+		am->rate = 44100;
+		audio_out_init(am->loop, am->ao, am->rate);
+	}
+
 	lua_getfield(L, 1, "url");
 	char *url = (char *)lua_tostring(L, -1);
 	if (url == NULL) 
@@ -766,11 +773,6 @@ void luv_audio_mixer_init(lua_State *L, uv_loop_t *loop) {
 	am->L = L;
 
 	am->vol = 1.0;
-
-	am->ao = (audio_out_t *)zalloc(sizeof(audio_out_t));
-	am->ao->data = am;
-	am->rate = 44100;
-	audio_out_init(loop, am->ao, am->rate);
 
 	// audio = {}
 	lua_newtable(L);

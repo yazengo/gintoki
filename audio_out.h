@@ -15,8 +15,6 @@ typedef struct audio_out_s {
 	void *play_buf;
 	int play_len;
 
-	int rate;
-
 	void (*on_play_done)(struct audio_out_s *ao, int len);
 
 #ifndef USE_JZCODEC
@@ -32,6 +30,5 @@ typedef struct audio_out_s {
 } audio_out_t;
 
 void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int sample_rate);
-void audio_out_set_rate(audio_out_t *ao, int rate);
 void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_t *, int));
 

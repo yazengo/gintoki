@@ -37,7 +37,7 @@ static void done(audio_out_t *ao, int len) {
 	if (freq_i % 2) {
 		rate = 48000;
 	}
-	audio_out_set_rate(ao, rate);
+	ao->set_rate(ao, rate);
 
 	fillbuf(buf, sizeof(buf)/2, freq_i%7, rate);
 	audio_out_play(ao, buf, sizeof(buf), done);

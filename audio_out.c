@@ -37,10 +37,6 @@ static void libao_play(audio_out_t *ao, void *buf, int len) {
 
 #endif
 
-static void dummy_play(audio_out_t *ao, void *buf, int len) {
-	usleep(1e6 * (len / (ao->rate*4.0)));
-}
-
 #ifdef USE_JZCODEC
 static void jzcodec_init(audio_out_t *ao) {
 }
@@ -123,13 +119,6 @@ void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_
 	uv_queue_work(ao->loop, &w, play_thread, play_done);
 }
 
-void audio_out_set_rate(audio_out_t *ao, int rate) {
-	info("rate=%d", rate);
-
-	ao->set_rate(ao, rate);
-	ao->rate = rate;
-}
-
 void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int rate) {
 	ao->loop = loop;
 
@@ -144,7 +133,7 @@ void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int rate) {
 #endif
 
 	ao->init(ao);
-	audio_out_set_rate(ao, rate);
+	ao->set_rate(ao, rate);
 	info("done");
 }
 
