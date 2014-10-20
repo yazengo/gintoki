@@ -508,6 +508,11 @@ void lua_pushuserptr(lua_State *L, void *p) {
 	memcpy(ud, &p, sizeof(p));
 }
 
+void lua_pushuserdata(lua_State *L, void *p, int len) {
+	void *ud = lua_newuserdata(L, sizeof(p));
+	memcpy(ud, p, len);
+}
+
 void *lua_touserptr(lua_State *L, int index) {
 	void *p;
 	void *ud = lua_touserdata(L, index);
@@ -617,6 +622,15 @@ static int lua_hostname(lua_State *L) {
 	return 1;
 }
 
+static int lua_hostplat(lua_State *L) {
+#if defined(__mips__)
+	lua_pushstring(L, "mips");
+#else
+	lua_pushstring(L, "x86");
+#endif
+	return 1;
+}
+
 void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, luv_set_timeout, 1);
@@ -657,5 +671,8 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 
 	lua_pushcfunction(L, lua_hostname);
 	lua_setglobal(L, "hostname");
+
+	lua_pushcfunction(L, lua_hostplat);
+	lua_setglobal(L, "hostplat");
 }
 

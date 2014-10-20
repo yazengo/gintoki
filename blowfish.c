@@ -488,7 +488,7 @@ void blowfish_decode(blowfish_t *b, void *in, int len) {
 static void hex_encode(void *in, int inlen, char *out) {
 	uint8_t *p = (uint8_t *)in;
 	const char *map = "0123456789abcdef";
-while (inlen--) {
+	while (inlen--) {
 		*out++ = map[*p>>4];
 		*out++ = map[*p&15];
 		p++;

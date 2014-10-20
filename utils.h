@@ -70,6 +70,7 @@ void lua_set_global_callback(lua_State *L, const char *name, void *p);
 int lua_do_global_callback(lua_State *L, const char *name, void *p, int nargs, int setnil);
 
 void lua_pushuserptr(lua_State *L, void *p);
+void lua_pushuserdata(lua_State *L, void *p, int len);
 void *lua_touserptr(lua_State *L, int index);
 void lua_setuserptr(lua_State *L, int index, void *p);
 
