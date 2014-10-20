@@ -186,12 +186,13 @@ static uv_buf_t udp_allocbuf(uv_handle_t *h, size_t len) {
 	return uv_buf_init(zs->buf, sizeof(zs->buf));
 }
 
-static void udp_write_done(uv_udp_send_t *sr, int stat) {
+static void udpsubs_write_done(uv_udp_send_t *sr, int stat) {
 	free(sr->data);
 }
 
-static void udp_read(uv_udp_t *h, ssize_t n, uv_buf_t buf, struct sockaddr *addr, unsigned flags) {
+static void udpsubs_read(uv_udp_t *h, ssize_t n, uv_buf_t buf, struct sockaddr *addr, unsigned flags) {
 	zpnpsrv_t *zs = (zpnpsrv_t *)h->data;
+	lua_State *L = zs->L;
 
 	debug("n=%d", n);
 
@@ -208,7 +209,7 @@ static void udp_read(uv_udp_t *h, ssize_t n, uv_buf_t buf, struct sockaddr *addr
 
 	zs->ubuf = uv_buf_init(m.buf, m.len);
 	zs->sr.data = m.buf;
-	uv_udp_send(&zs->sr, &zs->udpcli, &zs->ubuf, 1, *(struct sockaddr_in *)addr, udp_write_done);
+	uv_udp_send(&zs->sr, &zs->udpcli, &zs->ubuf, 1, *(struct sockaddr_in *)addr, udpsubs_write_done);
 }
 
 static void tcpcli_on_handle_closed(uv_handle_t *h) {
@@ -265,7 +266,7 @@ static void parser_on_end(parser_t *p, msg_t *m) {
 	debug("type=%x", m->type);
 
 	if (m->type == MT_DATA) {
-		lua_getglobal(L, "zpnp_on_recv");
+		lua_getglobal(L, "zpnp_on_action");
 		lua_pushstring(L, m->data);
 		lua_pushuserptr(L, zc);
 		lua_pushcclosure(L, lua_tcpcli_ret, 1);
@@ -424,7 +425,7 @@ static int lua_zpnp_start(lua_State *L) {
 	if (uv_listen((uv_stream_t *)&zs->tcp, 128, tcpcli_on_conn))
 		panic("listen :%d failed", PORT_DATA);
 	
-	uv_udp_recv_start(&zs->udp, udp_allocbuf, udp_read);
+	uv_udp_recv_start(&zs->udp, udp_allocbuf, udpsubs_read);
 
 	info("starts");
 
@@ -441,7 +442,7 @@ static int lua_zpnp_start(lua_State *L) {
 
 /*
  * zpnp_start()
- * zpnp_on_recv(r, done)
+ * zpnp_on_action(r, done)
  * zpnp_notify(r)
  * zpnp_setopt{uuid=0x1234, name='Muno'}
  */
