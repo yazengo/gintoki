@@ -102,9 +102,11 @@ D.user_login = function (c, done)
 				D.user_info({access_token=r.access_token}, done)
 			elseif r.code == 120 then
 				info('login', c.username, c.password, 'fail')
+				dbp('error', r)
 				done(nil, 'invalid_userpass')
 			else
 				info('login', c.username, c.password, 'error')
+				dbp('error', r)
 				done(nil, 'server_error')
 			end
 		end,
@@ -193,7 +195,7 @@ D.songs_list = function (c, done)
 			s = D.grep_songs(r.song or {})
 			if table.maxn(s) > 0 then
 				done(s, nil)
-			elseif r.code == 103 then
+			elseif r.msg == 'invalid_token_error' or r.msg == 'token_expired_error' then
 				done(nil, 'invalid_token')
 			elseif r.r == 1 then
 				done(nil, 'wrong_channel')
@@ -260,6 +262,12 @@ D.next = function (opt)
 				D.cookie = c
 				D.savecookie(c)
 			end
+
+			if err then
+				D.stat = err
+				return
+			end
+
 			D.stat = 'songs_ready'
 			D.songs_add(r)
 		end)

@@ -2,8 +2,6 @@
 require('douban')
 require('cmd')
 
-douban.start()
-
 --P.cookie.station_id = '2178401799297707427'
 
 if input then
