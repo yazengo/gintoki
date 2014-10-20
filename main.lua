@@ -118,6 +118,8 @@ radio.name2obj = function (s)
 		return pandora
 	elseif s == 'local' then
 		return localmusic
+	elseif s == 'slumber' then
+		return slumbermusic
 	elseif s == 'bbcradio' then
 		return bbcradio
 	elseif s == 'douban' then
@@ -241,6 +243,7 @@ if input then
 		[[ gsensor_next() ]],
 		[[ handle{op='radio.change_type', type='pandora'} ]],
 		[[ handle{op='radio.change_type', type='local'} ]],
+		[[ handle{op='radio.change_type', type='slumber'} ]],
 		[[ handle{op='radio.change_type', type='douban'} ]],
 		[[ handle{op='radio.change_type', type='bbcradio'} ]],
 	}
