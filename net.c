@@ -209,18 +209,24 @@ static void lua_tcpsrv_init(lua_State *L, tcpsrv_t *ts) {
 	if (port == 0)
 		panic("port must be set");
 
+	lua_getfield(L, 1, "addr");
+	char *addr = (char *)lua_tostring(L, -1);
+	if (addr == NULL)
+		addr = "127.0.0.1";
+
 	ts->h = (uv_tcp_t *)zalloc(sizeof(uv_tcp_t));
 	ts->h->data = ts;
 	ts->L = L;
 	ts->loop = loop;
 
 	uv_tcp_init(loop, ts->h);
-	uv_tcp_bind(ts->h, uv_ip4_addr("0.0.0.0", port));
+	uv_tcp_bind(ts->h, uv_ip4_addr(addr, port));
 
+	info("tcp listening at %s:%d", addr, port);
 	if (uv_listen((uv_stream_t *)ts->h, 128, tcp_on_conn))
-		panic("listen :%d failed", port);
-	info("tcp listening at :%d", port);
+		panic("bind failed");
 	
+	lua_pushvalue(L, 1);
 	lua_setglobalptr(L, "tcp", ts);
 }
 
@@ -327,6 +333,11 @@ static int lua_udp_server(lua_State *L) {
 	if (port == 0)
 		panic("port must be set");
 
+	lua_getfield(L, 1, "addr");
+	char *addr = (char *)lua_tostring(L, -1);
+	if (addr == NULL)
+		addr = "127.0.0.1";
+
 	udpsrv_t *us = (udpsrv_t *)zalloc(sizeof(udpsrv_t));
 	us->L = L;
 	us->loop = loop;
@@ -335,12 +346,13 @@ static int lua_udp_server(lua_State *L) {
 	uv_udp_init(loop, &us->srv);
 	uv_udp_init(loop, &us->cli);
 
-	if (uv_udp_bind(&us->srv, uv_ip4_addr("0.0.0.0", port), 0) == -1) 
-		panic("bind :%d failed", port);
+	info("udp listening on %s:%d", addr, port);
+	if (uv_udp_bind(&us->srv, uv_ip4_addr(addr, port), 0) == -1) 
+		panic("bind failed");
 	
 	uv_udp_recv_start(&us->srv, udp_allocbuf, udp_read);
-	info("udp listening on :%d", port);
 
+	lua_pushvalue(L, 1);
 	lua_setglobalptr(L, "udp", us);
 
 	return 0;
