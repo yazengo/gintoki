@@ -99,6 +99,5 @@ void pcm_do_mix(void *_out, void *_in, int len) {
 
 void pcm_init() {
 	mode = DIV;
-	info("vol: use div");
 }
 

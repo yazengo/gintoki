@@ -336,9 +336,7 @@ static int upnp_notify(lua_State *L) {
 	}
 
 	char *json = (char *)lua_tostring(L, 1);
-
 	//info("udn=%s srv=%s json=%s", upnp->udn, upnp->srv, json);
-
 	if (json == NULL)
 		return 0;
 
