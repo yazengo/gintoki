@@ -231,9 +231,9 @@ static void gsensor_read(struct input_event e) {
 	if (e.type == EV_SYN && last_e.type != EV_SYN) {
 		if (last_e.value == 1) {
 			if (last_e.code == KEY_BACK) 
-				inputdev_emit_event(PREV);
-			if (last_e.code == KEY_FORWARD)
 				inputdev_emit_event(NEXT);
+			if (last_e.code == KEY_FORWARD)
+				inputdev_emit_event(PREV);
 		}
 	}
 
