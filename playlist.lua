@@ -42,7 +42,7 @@ P.i = 1
 P.setopt = function (opt, done)
 	done = done or function () end
 
-	if opt.op == 'audio.play' and opt.id then
+	if opt.op == 'local.play' and opt.id then
 		local i = tonumber(opt.id)
 		if i > 0 and i <= table.maxn(P.list) then
 			P.i = i-1

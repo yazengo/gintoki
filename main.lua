@@ -49,6 +49,10 @@ handle = function (a, done)
 		return
 	end
 
+	if a.op == 'audio.play' then
+		a.op = 'local.play'
+	end
+
 	if a.op == 'audio.volume' then 
 		local vol = muno.setvol(a.value)
 		done{result=vol}
@@ -217,6 +221,7 @@ end
 
 if input then
 	input.cmds = {
+		[[ zpnp_notify('test') ]],
 		[[ audio.setvol(audio.getvol() - 10); print(audio.getvol()) ]],
 		[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
 		[[ audio.setvol(80); print(audio.getvol()) ]],

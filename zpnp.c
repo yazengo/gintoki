@@ -148,11 +148,14 @@ static void parser_parse(parser_t *p, void *buf, int len) {
 
 struct zpnpcli_s;
 
+#define MAX_PEERS 64
+
 typedef struct {
 	uv_udp_t udp;
 	uv_udp_t udpcli;
 	uv_udp_t udpbc;
 	uv_tcp_t tcp;
+	uv_tcp_t tcptrack;
 
 	uv_udp_send_t sr;
 
@@ -165,6 +168,8 @@ typedef struct {
 
 	char *name;
 	uint32_t uuid;
+
+	struct sockaddr_in peers[MAX_PEERS];
 } zpnpsrv_t;
 
 typedef struct zpnpcli_s {
@@ -173,6 +178,8 @@ typedef struct zpnpcli_s {
 	char buf[2048];
 	uv_buf_t ubuf;
 	msg_t m;
+
+	struct sockaddr_in peer;
 
 	parser_t parser;
 
@@ -212,8 +219,40 @@ static void udpsubs_read(uv_udp_t *h, ssize_t n, uv_buf_t buf, struct sockaddr *
 	uv_udp_send(&zs->sr, &zs->udpcli, &zs->ubuf, 1, *(struct sockaddr_in *)addr, udpsubs_write_done);
 }
 
+static int ip4addr_same(struct sockaddr_in a, struct sockaddr_in b) {
+	return a.sin_addr.s_addr == b.sin_addr.s_addr;
+}
+
+static int ip4addr_iszero(struct sockaddr_in sa) {
+	return sa.sin_addr.s_addr == 0;
+}
+
+static void trackconn_del(zpnpsrv_t *zs, struct sockaddr_in sa) {
+	int i;
+	for (i = 0; i < MAX_PEERS; i++) {
+		if (ip4addr_same(zs->peers[i], sa)) {
+			struct sockaddr_in sa = {};
+			zs->peers[i] = sa;
+			return;
+		}
+	}
+}
+
+static void trackconn_add(zpnpsrv_t *zs, struct sockaddr_in sa) {
+	int i, empty = -1;
+	for (i = 0; i < MAX_PEERS; i++) {
+		if (ip4addr_same(zs->peers[i], sa))
+			return;
+		if (ip4addr_iszero(zs->peers[i]))
+			empty = i;
+	}
+	if (empty != -1)
+		zs->peers[empty] = sa;
+}
+
 static void tcpcli_on_handle_closed(uv_handle_t *h) {
 	zpnpcli_t *zc = (zpnpcli_t *)h->data;
+	zpnpsrv_t *zs = zc->zs;
 
 	debug("closed");
 	free(zc);
@@ -261,6 +300,7 @@ static int lua_tcpcli_ret(lua_State *L) {
 
 static void parser_on_end(parser_t *p, msg_t *m) {
 	zpnpcli_t *zc = (zpnpcli_t *)p->data;
+	zpnpsrv_t *zs = zc->zs;
 	lua_State *L = zc->zs->L;
 
 	debug("type=%x", m->type);
@@ -286,6 +326,50 @@ static void tcpcli_readdone(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	}
 
 	parser_parse(&zc->parser, buf.base, n);
+}
+
+static void tcptrack_on_handle_closed(uv_handle_t *h) {
+	zpnpcli_t *zc = (zpnpcli_t *)h->data;
+	zpnpsrv_t *zs = zc->zs;
+
+	trackconn_del(zs, zc->peer);
+
+	debug("closed");
+	free(zc);
+}
+
+static void tcptrack_readdone(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
+	zpnpcli_t *zc = (zpnpcli_t *)st->data;
+
+	debug("n=%d", n);
+
+	if (n < 0) {
+		uv_close((uv_handle_t *)st, tcptrack_on_handle_closed);
+		return;
+	}
+}
+
+static void tcptrack_on_conn(uv_stream_t *st, int stat) {
+	zpnpsrv_t *zs = (zpnpsrv_t *)st->data;
+
+	zpnpcli_t *zc = (zpnpcli_t *)zalloc(sizeof(zpnpcli_t));
+	zc->zs = zs;
+
+	zc->tcp.data = zc;
+	uv_tcp_init(st->loop, &zc->tcp);
+
+	if (uv_accept(st, (uv_stream_t *)&zc->tcp)) {
+		warn("accept failed");
+		uv_close((uv_handle_t *)&zc->tcp, tcptrack_on_handle_closed);
+		return;
+	}
+	info("accepted");
+
+	int len = sizeof(zc->peer);
+	uv_tcp_getpeername(&zc->tcp, (struct sockaddr *)&zc->peer, &len);
+	trackconn_add(zs, zc->peer);
+
+	uv_read_start((uv_stream_t *)&zc->tcp, tcpcli_allocbuf, tcptrack_readdone);
 }
 
 static void tcpcli_on_conn(uv_stream_t *st, int stat) {
@@ -330,49 +414,67 @@ static int lua_zpnp_setopt(lua_State *L) {
 
 static void udpbc_notify_done(uv_work_t *w, int stat) {
 	zpnpsrv_t *zs = (zpnpsrv_t *)w->data;
+
+	free(zs->ubuf2.base);
 }
 
-static void udpbc_notify_thread(uv_work_t *w) {
+static void udpbc_notify_broadcast_thread(uv_work_t *w) {
 	zpnpsrv_t *zs = (zpnpsrv_t *)w->data;
+
+	info("n=%d", zs->ubuf2.len);
 
 	int fd = socket(AF_INET, SOCK_DGRAM, 0); 
 	if (fd < 0)
-		goto out;
+		return;
 
 	int v = 1;
 	setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &v, sizeof(v));
 
-	struct sockaddr_in si; 
-	memset(&si, 0, sizeof(si));
+	struct sockaddr_in si = {}; 
 	si.sin_family = AF_INET;
 	si.sin_port = htons(PORT_NOTIFY);
 	si.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 
 	sendto(fd, zs->ubuf2.base, zs->ubuf2.len, 0, (struct sockaddr *)&si, sizeof(si));
 	close(fd);
-
-out:
-	free(zs->ubuf2.base);
 }
 
-static void udpbc_notify(zpnpsrv_t *zs, void *buf, int len) {
+static void udpbc_notify_peers_thread(uv_work_t *w) {
+	zpnpsrv_t *zs = (zpnpsrv_t *)w->data;
+
+	int fd = socket(AF_INET, SOCK_DGRAM, 0); 
+	if (fd < 0)
+		return;
+
+	int i;
+	for (i = 0; i < MAX_PEERS; i++) {
+		struct sockaddr_in si = zs->peers[i];
+		if (ip4addr_iszero(si))
+			continue;
+		si.sin_port = htons(PORT_NOTIFY);
+		sendto(fd, zs->ubuf2.base, zs->ubuf2.len, 0, (struct sockaddr *)&si, sizeof(si));
+	}
+	close(fd);
+}
+
+enum {
+	NOTIFY_BROADCAST,
+	NOTIFY_PEERS,
+};
+
+static void udpbc_notify(zpnpsrv_t *zs, void *buf, int len, int type) {
 	zs->ubuf2 = uv_buf_init(buf, len);
 	zs->work.data = zs;
-	uv_queue_work(zs->loop, &zs->work, udpbc_notify_thread, udpbc_notify_done);
-}
 
-static void udpbc_uv_notify_done(uv_udp_send_t *sr, int stat) {
-	zpnpcli_t *zc = (zpnpcli_t *)sr->data;
-	free(zc->ubuf.base);
-}
+	switch (type) {
+	case NOTIFY_BROADCAST:
+		uv_queue_work(zs->loop, &zs->work, udpbc_notify_broadcast_thread, udpbc_notify_done);
+		break;
 
-static void udpbc_uv_notify(zpnpsrv_t *zs, void *buf, int len) {
-	zpnpcli_t *zc = (zpnpcli_t *)zalloc(sizeof(zpnpcli_t));
-
-	debug("testing uv send broadcast");
-	zc->ubuf = uv_buf_init(buf, len);
-	zc->sr.data = zc;
-	uv_udp_send(&zc->sr, &zs->udpbc, &zc->ubuf, 1, uv_ip4_addr("255.255.255.255", PORT_NOTIFY), udpbc_uv_notify_done);
+	case NOTIFY_PEERS:
+		uv_queue_work(zs->loop, &zs->work, udpbc_notify_peers_thread, udpbc_notify_done);
+		break;
+	}
 }
 
 static int lua_zpnp_notify(lua_State *L) {
@@ -383,19 +485,20 @@ static int lua_zpnp_notify(lua_State *L) {
 		.name = zs->name,
 		.uuid = zs->uuid,
 	};
+	int type;
+
 	if (str == NULL) {
 		m.type = MT_DISCOVERY;
+		type = NOTIFY_BROADCAST;
 	} else {
 		m.type = MT_DATA;
 		m.data = str;
 		m.datalen = strlen(str);
+		type = NOTIFY_PEERS;
 	}
 	msg_allocfill(&m);
 
-	if (getenv("ZNOTIFYUV"))
-		udpbc_uv_notify(zs, m.buf, m.len);
-	else
-		udpbc_notify(zs, m.buf, m.len);
+	udpbc_notify(zs, m.buf, m.len, type);
 
 	return 0;
 }
@@ -408,22 +511,29 @@ static int lua_zpnp_start(lua_State *L) {
 	zs->loop = loop;
 
 	uv_tcp_init(loop, &zs->tcp);
+	uv_tcp_init(loop, &zs->tcptrack);
 	uv_udp_init(loop, &zs->udp);
 	uv_udp_init(loop, &zs->udpcli);
+
 	uv_udp_init(loop, &zs->udpbc);
 	uv_udp_set_broadcast(&zs->udpbc, 1);
 
 	zs->udp.data = zs;
 	zs->tcp.data = zs;
+	zs->tcptrack.data = zs;
 
 	if (uv_udp_bind(&zs->udp, uv_ip4_addr("0.0.0.0", PORT_DISCOVERY), 0) == -1) 
 		panic("bind udp :%d failed", PORT_DISCOVERY);
 	
 	if (uv_tcp_bind(&zs->tcp, uv_ip4_addr("0.0.0.0", PORT_DATA)) == -1) 
 		panic("bind tcp :%d failed", PORT_DATA);
-
 	if (uv_listen((uv_stream_t *)&zs->tcp, 128, tcpcli_on_conn))
 		panic("listen :%d failed", PORT_DATA);
+	
+	if (uv_tcp_bind(&zs->tcptrack, uv_ip4_addr("0.0.0.0", PORT_TRACKALIVE)) == -1) 
+		panic("bind tcp :%d failed", PORT_TRACKALIVE);
+	if (uv_listen((uv_stream_t *)&zs->tcptrack, 128, tcptrack_on_conn))
+		panic("listen :%d failed", PORT_TRACKALIVE);
 	
 	uv_udp_recv_start(&zs->udp, udp_allocbuf, udpsubs_read);
 
