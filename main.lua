@@ -151,19 +151,13 @@ radio.stop = function ()
 end
 
 local say_and_do = function (k)
-	local doing
-
 	return function ()
 		if not (radio.source and radio.source[k]) and k == 'prev' then
 			k = 'next'
 		end
-		if doing then return end
-		handle{op='audio.pause'}
-		doing = true
-		audio.play {
+		audio.alert {
 			url = 'testaudios/' .. k .. '.mp3',
 			done = function ()
-				doing = nil
 				handle { op = 'audio.' .. k}
 			end,
 		}
@@ -188,12 +182,18 @@ inputdev_on_event = function (e)
 
 	if e == 332 then
 		info('long press')
-		audio.alert('testaudios/hello-muno.mp3', 0)
+		audio.alert {
+			url = 'testaudios/hello-muno.mp3',
+			vol = 0,
+		}
 	end
 
 	-- network up
 	if e == 36 then
-		audio.alert('testaudios/connected.mp3', 20)
+		audio.alert {
+			url = 'testaudios/connected.mp3',
+			vol = 20,
+		}
 		info('network up')
 		upnp.start()
 	end

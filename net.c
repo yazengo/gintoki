@@ -212,7 +212,7 @@ static void lua_tcpsrv_init(lua_State *L, tcpsrv_t *ts) {
 	lua_getfield(L, 1, "addr");
 	char *addr = (char *)lua_tostring(L, -1);
 	if (addr == NULL)
-		addr = "127.0.0.1";
+		addr = "0.0.0.0";
 
 	ts->h = (uv_tcp_t *)zalloc(sizeof(uv_tcp_t));
 	ts->h->data = ts;
@@ -336,7 +336,7 @@ static int lua_udp_server(lua_State *L) {
 	lua_getfield(L, 1, "addr");
 	char *addr = (char *)lua_tostring(L, -1);
 	if (addr == NULL)
-		addr = "127.0.0.1";
+		addr = "0.0.0.0";
 
 	udpsrv_t *us = (udpsrv_t *)zalloc(sizeof(udpsrv_t));
 	us->L = L;

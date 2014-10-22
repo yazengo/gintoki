@@ -1,6 +1,9 @@
 
 zpnp_start()
-zpnp_setopt{uuid=0x1133, name=hostname()}
+zpnp_setopt { 
+	uuid = 0x1133, 
+	name = hostname(),
+}
 zpnp_notify()
 zpnp_notify('hello_first_notify')
 

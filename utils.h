@@ -55,6 +55,7 @@ void lua_dostring_or_die_at(const char *at_func, const char *at_file, int at_lin
 void lua_call_or_die_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L, int nargs, int nresults);
 
 void *zalloc(int len);
+void *memdup(void *buf, int len);
 
 void print_trackback();
 

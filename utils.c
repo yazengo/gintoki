@@ -70,6 +70,14 @@ void *zalloc(int len) {
 	return p;
 }
 
+void *memdup(void *buf, int len) {
+	void *p = malloc(len);
+	if (p == NULL)
+		panic("no memory");
+	memcpy(p, buf, len);
+	return p;
+}
+
 void print_traceback() {
 	fprintf(stderr, "native traceback:\n");
 	void *array[128];

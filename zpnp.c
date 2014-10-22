@@ -177,6 +177,7 @@ typedef struct zpnpcli_s {
 
 	char buf[2048];
 	uv_buf_t ubuf;
+
 	msg_t m;
 
 	struct sockaddr_in peer;
@@ -267,7 +268,6 @@ static void tcpcli_writedone(uv_write_t *wr, int stat) {
 	cli_t *zc = (cli_t *)wr->data;
 
 	free(zc->m.buf);
-	uv_close((uv_handle_t *)&zc->tcp, tcpcli_on_handle_closed);
 }
 
 static int lua_tcpcli_ret(lua_State *L) {
@@ -298,7 +298,7 @@ static int lua_tcpcli_ret(lua_State *L) {
 	return 0;
 }
 
-static void parser_on_end(parser_t *p, msg_t *m) {
+static void tcpcli_parser_on_end(parser_t *p, msg_t *m) {
 	cli_t *zc = (cli_t *)p->data;
 	srv_t *zs = zc->zs;
 	lua_State *L = zc->zs->L;
@@ -327,6 +327,33 @@ static void tcpcli_readdone(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	}
 
 	parser_parse(&zc->parser, buf.base, n);
+}
+
+static void tcpcli_on_conn(uv_stream_t *st, int stat) {
+	srv_t *zs = (srv_t *)st->data;
+
+	cli_t *zc = (cli_t *)zalloc(sizeof(cli_t));
+	zc->zs = zs;
+
+	zc->tcp.data = zc;
+	uv_tcp_init(st->loop, &zc->tcp);
+
+	zc->parser.data = zc;
+	zc->parser.on_end = tcpcli_parser_on_end;
+	parser_init(&zc->parser);
+
+	if (uv_accept(st, (uv_stream_t *)&zc->tcp)) {
+		warn("accept failed");
+		uv_close((uv_handle_t *)&zc->tcp, tcpcli_on_handle_closed);
+		return;
+	}
+	debug("accepted");
+
+	int len = sizeof(zc->peer);
+	uv_tcp_getpeername(&zc->tcp, (struct sockaddr *)&zc->peer, &len);
+	trackconn_add(zs, zc->peer);
+
+	uv_read_start((uv_stream_t *)&zc->tcp, tcpcli_allocbuf, tcpcli_readdone);
 }
 
 static void tcptrack_on_handle_closed(uv_handle_t *h) {
@@ -371,50 +398,6 @@ static void tcptrack_on_conn(uv_stream_t *st, int stat) {
 	trackconn_add(zs, zc->peer);
 
 	uv_read_start((uv_stream_t *)&zc->tcp, tcpcli_allocbuf, tcptrack_readdone);
-}
-
-static void tcpcli_on_conn(uv_stream_t *st, int stat) {
-	srv_t *zs = (srv_t *)st->data;
-
-	cli_t *zc = (cli_t *)zalloc(sizeof(cli_t));
-	zc->zs = zs;
-
-	zc->tcp.data = zc;
-	uv_tcp_init(st->loop, &zc->tcp);
-
-	zc->parser.data = zc;
-	zc->parser.on_end = parser_on_end;
-	parser_init(&zc->parser);
-
-	if (uv_accept(st, (uv_stream_t *)&zc->tcp)) {
-		warn("accept failed");
-		uv_close((uv_handle_t *)&zc->tcp, tcpcli_on_handle_closed);
-		return;
-	}
-	debug("accepted");
-
-	int len = sizeof(zc->peer);
-	uv_tcp_getpeername(&zc->tcp, (struct sockaddr *)&zc->peer, &len);
-	trackconn_add(zs, zc->peer);
-
-	uv_read_start((uv_stream_t *)&zc->tcp, tcpcli_allocbuf, tcpcli_readdone);
-}
-
-static int lua_zpnp_setopt(lua_State *L) {
-	srv_t *zs = (srv_t *)lua_touserptr(L, lua_upvalueindex(1));
-	
-	lua_getfield(L, 1, "uuid");
-	if (!lua_isnil(L, -1))
-		zs->uuid = lua_tonumber(L, -1);
-
-	lua_getfield(L, 1, "name");
-	if (!lua_isnil(L, -1)) {
-		if (zs->name)
-			free(zs->name);
-		zs->name = strdup(lua_tostring(L, -1));
-	}
-
-	return 0;
 }
 
 typedef struct {
@@ -480,7 +463,7 @@ static void notify_broadcast(srv_t *zs, void *buf, int len) {
 	zn->zs = zs;
 	zn->buf = uv_buf_init(buf, len);
 	zn->w.data = zn;
-	info("n=%d", len);
+	debug("n=%d", len);
 	uv_queue_work(zs->loop, &zn->w, notify_broadcast_thread, notify_broadcast_done);
 }
 
@@ -516,7 +499,24 @@ static int lua_zpnp_notify(lua_State *L) {
 
 	return 0;
 }
+
+static int lua_zpnp_setopt(lua_State *L) {
+	srv_t *zs = (srv_t *)lua_touserptr(L, lua_upvalueindex(1));
 	
+	lua_getfield(L, 1, "uuid");
+	if (!lua_isnil(L, -1))
+		zs->uuid = lua_tonumber(L, -1);
+
+	lua_getfield(L, 1, "name");
+	if (!lua_isnil(L, -1)) {
+		if (zs->name)
+			free(zs->name);
+		zs->name = strdup(lua_tostring(L, -1));
+	}
+
+	return 0;
+}
+
 static int lua_zpnp_start(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 
