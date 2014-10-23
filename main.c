@@ -11,6 +11,7 @@
 #include "lua_cjson.h"
 #include "luv_curl.h"
 #include "net.h"
+#include "popen.h"
 #include "zpnp.h"
 #include "airplay.h"
 #include "airplay_v2.h"
@@ -78,7 +79,7 @@ int main(int argc, char *argv[]) {
 
 	pcm_init();
 	luv_audio_mixer_init(L, loop);
-
+	luv_popen_init(L, loop);
 	luv_curl_init(L, loop);
 
 #ifdef USE_INPUTDEV

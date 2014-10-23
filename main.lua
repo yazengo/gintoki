@@ -54,7 +54,8 @@ handle = function (a, done)
 	end
 
 	if a.op == 'audio.volume' then 
-		local vol = muno.setvol(a.value)
+		local vol = audio.setvol(a.value)
+		muno.notify_vol_change(vol)
 		done{result=vol}
 	elseif a.op == 'muno.info' then
 		done(muno.info())
@@ -150,75 +151,6 @@ radio.stop = function ()
 	audio.stop()
 end
 
-local say_and_do = function (k)
-	return function ()
-		if not (radio.source and radio.source[k]) and k == 'prev' then
-			k = 'next'
-		end
-		audio.alert {
-			url = 'testaudios/' .. k .. '.mp3',
-			done = function ()
-				handle { op = 'audio.' .. k}
-			end,
-		}
-	end
-end
-
-gsensor_prev = say_and_do('prev')
-gsensor_next = say_and_do('next')
-
-inputdev_on_event = function (e) 
-	info('e=', e)
-
-	if e == 33 then
-		info('inputdev: keypress')
-		handle{op='audio.play_pause_toggle', source='inputdev'}
-	end
-
-	if e == 38 then
-		info('inputdev: volend')
-		audio.setvol(0)
-	end
-
-	if e == 332 then
-		info('long press')
-		audio.alert {
-			url = 'testaudios/hello-muno.mp3',
-			vol = 0,
-		}
-	end
-
-	-- network up
-	if e == 36 then
-		audio.alert {
-			url = 'testaudios/connected.mp3',
-			vol = 20,
-		}
-		info('network up')
-		upnp.start()
-	end
-
-	-- network down
-	if e == 37 then
-		info('network down')
-		upnp.stop()
-	end
-
-	if e == 40 then
-		gsensor_next()
-	end
-
-	if e == 41 then
-		gsensor_prev()
-	end
-
-	if e >= 0 and e <= 15 then
-		local vol = math.ceil(100*e/15)
-		info('inputdev: vol', e, '->', vol)
-		audio.setvol(vol)
-	end
-end
-
 if input then
 	input.cmds = {
 		[[ zpnp_notify('test') ]],
@@ -231,6 +163,8 @@ if input then
 		[[ gsensor_prev() ]],
 		[[ gsensor_next() ]],
 		[[ inputdev_on_event(33); -- keypress ]],
+		[[ inputdev_on_event(1); -- vol 1 ]],
+		[[ inputdev_on_event(4); -- vol 4 ]],
 		[[ handle{op='radio.change_type', type='pandora'} ]],
 		[[ handle{op='radio.change_type', type='local'} ]],
 		[[ handle{op='radio.change_type', type='slumber'} ]],
@@ -294,10 +228,14 @@ pnp.notify_sync  = function (r) pnp.notify(table.add(r, {type='sync'})) end
 
 info('hostname', hostname())
 prop.load()
-audio.setvol(50)
 airplay_start('Muno_' .. hostname())
 pnp.start()
-if inputdev_init then inputdev_init() end
+
+if hostplat() == 'mips' then
+	require('mips')
+else
+	audio.setvol(50)
+end
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}
 

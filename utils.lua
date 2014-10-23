@@ -197,3 +197,40 @@ isstr = function (s)
 	return true
 end
 
+readint = function (path)
+	local f = io.open(path, 'r')
+	if not f then return 0 end
+	local s = f:read('*a')
+	f:close()
+	return tonumber(s)
+end
+
+oncer = function () 
+	return {
+		n = 0,
+		last_n = 0,
+		interval = 1000,
+
+		timeout = function (self)
+			if self.n == 0 then
+				if self.done then self.done() end
+				self.last_n = 0
+				self.running = nil
+			else
+				self.last_n = self.n
+				self.n = 0
+				set_timeout(function () self:timeout() end, self.interval)
+			end
+		end,
+
+		update = function (self)
+			if self.running then
+				self.n = self.n + 1
+			else
+				self.running = true
+				set_timeout(function () self:timeout() end, self.interval)
+			end
+		end,
+	}
+end
+

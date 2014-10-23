@@ -1,21 +1,19 @@
 
 local M = {}
 
-M.vol = 100
 M.info = function () 
 	return {
 		battery = 90,
 		volume = audio.getvol(),
-		wifi = {ssid="Sugr"},
+		wifi = {ssid = M.ssid or 'Unknown'},
 		firmware_version = "1.0.1",
 		name = hostname(),
 		local_music_num = table.maxn(localmusic.list),
 	}
 end
 
-M.setvol = function (vol) 
-	if M.stat_change then M.stat_change() end
-	return audio.setvol(vol)
+M.notify_vol_change = function (vol)
+	pnp.notify { ['muno.info'] = { volume = vol } }
 end
 
 M.firmwares = {}
@@ -82,14 +80,14 @@ M.do_update = function (done)
 	end
 
 	local downloading = function ()
-		upnp.notify { ['muno.update_stat'] = {
+		pnp.notify { ['muno.update_stat'] = {
 			stat = 'downloading',
 			progress = 0,
 		}}
 	end
 
 	local download_failed = function ()
-		upnp.notify { ['muno.update_stat'] = {
+		pnp.notify { ['muno.update_stat'] = {
 			stat = 'error',
 			code = 11,
 			msg = 'downloading failed',
@@ -97,14 +95,14 @@ M.do_update = function (done)
 	end
 
 	local installing = function ()
-		upnp.notify { ['muno.update_stat'] = {
+		pnp.notify { ['muno.update_stat'] = {
 			stat = 'installing',
 			progress = 0,
 		}}
 	end
 
 	local install_failed = function ()
-		upnp.notify { ['muno.update_stat'] = {
+		pnp.notify { ['muno.update_stat'] = {
 			stat = 'error',
 			code = 10,
 			msg = 'install failed',
@@ -112,7 +110,7 @@ M.do_update = function (done)
 	end
 
 	local complete = function ()
-		upnp.notify { ['muno.update_stat'] = {
+		pnp.notify { ['muno.update_stat'] = {
 			stat = 'complete',
 		}}
 		system('reboot_recovery')

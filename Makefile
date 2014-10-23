@@ -18,6 +18,7 @@ objs += luv_curl.o
 objs += net.o
 objs += http_parser.o
 objs += zpnp.o
+objs += popen.o
 
 ldflags += -lcurl
 
@@ -94,7 +95,7 @@ cp-minifs-mips: inst-mips
 	tar xvf inst-mips.tar -C ../../../system/minifs/usr/app
 
 sumcode:
-	wc -l audio*.[ch] utils.[ch] luv_curl.[ch] main.c ringbuf.[ch] inputdev.[ch] airplay*.[ch]
+	wc -l audio*.[ch] utils.[ch] luv_curl.[ch] main.c ringbuf.[ch] inputdev.[ch] airplay*.[ch] popen.[ch]
 	wc -l *.lua
 
 clean:
