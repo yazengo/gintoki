@@ -540,7 +540,7 @@ static int lua_parse_track_i(lua_State *L) {
 	int i = lua_tonumber(L, -1);
 	lua_pop(L, 1);
 
-	if (i > TRACKS_NR)
+	if (i >= TRACKS_NR)
 		i = TRACKS_NR-1;
 	else if (i < 0)
 		i = 0;

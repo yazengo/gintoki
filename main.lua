@@ -172,7 +172,7 @@ inputdev_on_event = function (e)
 
 	if e == 33 then
 		info('inputdev: keypress')
-		audio.pause_resume_toggle()
+		handle{op='audio.play_pause_toggle', source='inputdev'}
 	end
 
 	if e == 38 then
@@ -230,6 +230,7 @@ if input then
 		[[ handle{op='audio.next'} ]],
 		[[ gsensor_prev() ]],
 		[[ gsensor_next() ]],
+		[[ inputdev_on_event(33); -- keypress ]],
 		[[ handle{op='radio.change_type', type='pandora'} ]],
 		[[ handle{op='radio.change_type', type='local'} ]],
 		[[ handle{op='radio.change_type', type='slumber'} ]],
