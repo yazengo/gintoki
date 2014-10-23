@@ -45,12 +45,12 @@ handle = function (a, done)
 		return
 	end
 
-	if airplay.setopt(a, done) then
-		return
-	end
-
 	if a.op == 'audio.play' then
 		a.op = 'local.play'
+	end
+
+	if airplay.setopt(a, done) then
+		return
 	end
 
 	if a.op == 'audio.volume' then 
