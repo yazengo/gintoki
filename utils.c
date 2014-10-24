@@ -253,9 +253,11 @@ static void uv_call_done(uv_async_t *as, int _) {
 }
 */
 
-static void timer_free(uv_handle_t *t);
+static void timer_free(uv_handle_t *t) {
+	free(t);
+}
 
-void uv_call_timeout(uv_timer_t *t, int _) {
+static void uv_call_timeout(uv_timer_t *t, int _) {
 	uv_call_t *c = (uv_call_t *)t->data;
 	if (c->done_cb)
 		c->done_cb(c);
@@ -271,86 +273,60 @@ void uv_call(uv_loop_t *loop, uv_call_t *c) {
 	t->data = c;
 	uv_timer_init(loop, t);
 	uv_timer_start(t, uv_call_timeout, 0, 0);
-	/*
-	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
-	uv_async_init(loop, as, uv_call_done);
-	as->data = c;
-	uv_async_send(as);
-	*/
 }
 
-static void timer_free(uv_handle_t *t) {
-	free(t);
-}
+static void on_timeout(uv_timer_t *h, int stat) {
+	lua_State *L = (lua_State *)h->data;
 
-static void timeout_alarm(uv_timer_t *t, int _) {
-	uv_timeout_t *to = (uv_timeout_t *)t->data;
-
-	if (to->repeat) {
-		to->timeout_cb(to);
-	} else {
-		to->timeout_cb(to);
-		uv_timer_stop(t);
-		uv_close((uv_handle_t *)t, timer_free);
+	lua_getglobalptr(L, "timer", h);
+	if (lua_isnil(L, -1)) {
+		uv_close((uv_handle_t *)h, timer_free);
+		return;
 	}
-}
 
-void uv_set_timeout(uv_loop_t *loop, uv_timeout_t *to) {
-	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
-	t->data = to;
-	uv_timer_init(loop, t);
-	uv_timer_start(t, timeout_alarm, to->timeout, to->timeout);
-}
-
-static int luv_timeout_cb_inner(lua_State *L) {
-	//info("is_function %d", lua_isfunction(L, lua_upvalueindex(1)));
-	lua_pushvalue(L, lua_upvalueindex(1));
 	lua_call_or_die(L, 0, 0);
-	return 0;
-}
 
-static void luv_timeout_cb(uv_timeout_t *to) {
-	lua_State *L = (lua_State *)to->data;
-
-	if (!to->repeat) {
-		lua_do_global_callback(L, "timer", to, 0, 1);
-		free(to);
-	} else {
-		lua_do_global_callback(L, "timer", to, 0, 0);
+	if (uv_timer_get_repeat(h) == 0) {
+		uv_close((uv_handle_t *)h, timer_free);
+		return;
 	}
 }
 
 // arg[1] = callback
 // arg[2] = timeout
-static void _luv_set_timeout(lua_State *L, int repeat) {
+static int _lua_set_timeout(lua_State *L, int repeat) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
-	uv_timeout_t *to = (uv_timeout_t *)zalloc(sizeof(uv_timeout_t));
+	int timeout = lua_tonumber(L, 2);
 
-	to->timeout = lua_tonumber(L, 2);
-	to->timeout_cb = luv_timeout_cb;
-	to->data = L;
-	to->repeat = repeat;
-
-	uv_set_timeout(loop, to);
+	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
+	t->data = L;
+	uv_timer_init(loop, t);
+	uv_timer_start(t, on_timeout, timeout, repeat ? timeout : 0);
 
 	lua_pushvalue(L, 1);
-	lua_pushcclosure(L, luv_timeout_cb_inner, 1);
-
-	char name[128]; globalptr_name(name, "timer", to);
+	char name[128];
+	globalptr_name(name, "timer", t);
 	lua_setglobal(L, name);
 
 	lua_pushstring(L, name);
-	// return timer_xxx
-}
-
-static int luv_set_timeout(lua_State *L) {
-	_luv_set_timeout(L, 0);
 	return 1;
 }
 
-static int luv_set_interval(lua_State *L) {
-	_luv_set_timeout(L, 1);
-	return 1;
+static int lua_clear_timeout(lua_State *L) {
+	const char *name = lua_tostring(L, 1);
+	if (name == NULL)
+		panic("handle must be set");
+	lua_pushnil(L);
+	lua_setglobal(L, name);
+	return 0;
+}
+
+static int lua_set_timeout(lua_State *L) {
+	return _lua_set_timeout(L, 0);
+}
+
+static int lua_set_interval(lua_State *L) {
+	return _lua_set_timeout(L, 1);
 }
 
 static int lua_log(lua_State *L) {
@@ -645,12 +621,18 @@ static int lua_hostplat(lua_State *L) {
 
 void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, luv_set_timeout, 1);
+	lua_pushcclosure(L, lua_set_timeout, 1);
 	lua_setglobal(L, "set_timeout");
 
+	lua_pushcfunction(L, lua_clear_timeout);
+	lua_setglobal(L, "clear_timeout");
+
 	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, luv_set_interval, 1);
+	lua_pushcclosure(L, lua_set_interval, 1);
 	lua_setglobal(L, "set_interval");
+
+	lua_pushcfunction(L, lua_clear_timeout);
+	lua_setglobal(L, "clear_interval");
 
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, ttyraw_open, 1);
