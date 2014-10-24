@@ -22,7 +22,7 @@ A.setopt = function (a, done)
 		A.stop()
 	elseif a.op == 'audio.next' then
 		A.stop()
-	elseif a.op == 'local.play' then
+	elseif a.op == 'audio.play' then
 		A.stop()
 	end
 end

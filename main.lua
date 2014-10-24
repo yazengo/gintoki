@@ -11,33 +11,6 @@ require('upnp')
 require('zpnp')
 require('hostname')
 
-local M = {}
-
-M.log = function (...)
-	info('main:', ...)
-end
-
-ar_info = function ()
-	local ai = audio.info()
-	local ri = radio.info()
-	if ri.fetching then
-		ai.stat = 'fetching'
-	end
-	ri.fetching = nil
-	local r = table.add({}, ai, ri)
-	if r.url then r.url = nil end
-	return r
-end
-
-all_info = function (done)
-	muno.getinfo(function (r)
-		done {
-			['audio.info']=ar_info(),
-			['muno.info']=r,
-		}
-	end)
-end
-
 handle = function (a, done)
 	done = done or function () end
 	local fail = function () done{result=1, msg='params invalid'} end
@@ -45,10 +18,6 @@ handle = function (a, done)
 	if not a or not a.op or not isstr(a.op) then
 		fail()
 		return
-	end
-
-	if a.op == 'audio.play' then
-		a.op = 'local.play'
 	end
 
 	if airplay.setopt(a, done) then
@@ -59,10 +28,6 @@ handle = function (a, done)
 		local vol = audio.setvol(a.value)
 		muno.notify_vol_change(vol)
 		done{result=vol}
-	elseif a.op == 'muno.info' then
-		muno.getinfo(function (r)
-			done(r)
-		end)
 	elseif a.op == 'audio.prev' then
 		radio.prev()
 		done{result=0}
@@ -78,7 +43,7 @@ handle = function (a, done)
 	elseif a.op == 'audio.resume' then
 		audio.resume()
 		done{result=0}
-	elseif string.hasprefix(a.op, 'local.') then
+	elseif string.hasprefix(a.op, 'local.') or a.op == 'audio.play' then
 		if not localmusic.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'pandora.') then
 		if not pandora.setopt(a, done) then fail() end
@@ -86,20 +51,12 @@ handle = function (a, done)
 		if not bbcradio.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'douban.') then
 		if not douban.setopt(a, done) then fail() end
+	elseif string.hasprefix(a.op, 'slumber.') or a.op == 'audio.play' then
+		if not slumbermusic.setopt(a, done) then fail() end
+	elseif string.hasprefix(a.op, 'muno.') then
+		if not muno.setopt(a, done) then fail() end
 	elseif a.op == 'radio.change_type' then
 		radio.change(a)
-		done{result=0}
-	elseif a.op == 'muno.check_update' then
-		muno.check_update(done)
-	elseif a.op == 'muno.do_update' then
-		muno.do_update(done)
-	elseif a.op == 'muno.request_sync' then
-		pnp.notify_sync{['audio.info']=ar_info()}
-		done{result=0}
-	elseif a.op == 'muno.request_event' then
-		all_info(function (r)
-			pnp.notify_event(r)
-		end)
 		done{result=0}
 	else
 		fail()
@@ -132,18 +89,14 @@ radio.change = function (opt)
 	end
 end
 
-muno.stat_change = function () 
-	pnp.notify_event{['muno.info']=muno.info()}
-end
-
 audio.track_stat_change = function (i)
 	if i ~= 0 then return end
-	local r = ar_info()
+	local r = muno.audioinfo()
 	pnp.notify_event{['audio.info']=r}
 end
 
 radio.play = function (song) 
-	M.log('play', song.title)
+	info('play', song.title)
 	audio.play {
 		url = song.url,
 		done = function (dur) 

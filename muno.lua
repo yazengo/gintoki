@@ -1,7 +1,75 @@
 
 local M = {}
 
-M.getinfo = function (done) 
+M.setopt = function (a, done)
+	if a.op == 'muno.check_update' then
+		M.check_update(done)
+		return true
+	elseif a.op == 'muno.do_update' then
+		M.do_update(done)
+		return true
+	elseif a.op == 'muno.request_sync' then
+		pnp.notify_sync{['audio.info']=M.audioinfo()}
+		done{result=0}
+		return true
+	elseif a.op == 'muno.request_event' then
+		M.allinfo(function (r)
+			pnp.notify_event(r)
+		end)
+		done{result=0}
+		return true
+	elseif a.op == 'muno.info' then
+		M.info(function (r)
+			done(r)
+		end)
+		return true
+	elseif a.op == 'muno.set_poweroff_timeout' then
+		local timeout = tonumber(a.timeout)
+		if not timeout then
+			return
+		end
+		if M.poweroff then
+			clear_timeout(M.poweroff)
+		end
+		info('poweroff in', timeout, 's')
+		M.poweroff = set_timeout(M.on_poweroff, timeout*1000)
+		done{result=0}
+		return true
+	elseif a.op == 'muno.cancel_poweroff_timeout' then
+		if M.poweroff then
+			clear_timeout(M.poweroff)
+		end
+		done{result=0}
+		return true
+	end
+end
+
+M.on_poweroff = function ()
+	info('power off now')
+end
+
+M.audioinfo = function ()
+	local ai = audio.info()
+	local ri = radio.info()
+	if ri.fetching then
+		ai.stat = 'fetching'
+	end
+	ri.fetching = nil
+	local r = table.add({}, ai, ri)
+	if r.url then r.url = nil end
+	return r
+end
+
+M.allinfo = function (done)
+	M.info(function (r)
+		done {
+			['audio.info'] = M.audioinfo(),
+			['muno.info'] = r,
+		}
+	end)
+end
+
+M.info = function (done) 
 	local ret = function (ssid)
 		done {
 			battery = 90,

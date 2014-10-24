@@ -42,7 +42,7 @@ P.i = 1
 P.setopt = function (opt, done)
 	done = done or function () end
 
-	if opt.op == 'local.play' and opt.id then
+	if opt.op == 'audio.play' and opt.id then
 		local i = tonumber(opt.id)
 		if i > 0 and i <= table.maxn(P.list) then
 			P.i = i-1
@@ -53,7 +53,7 @@ P.setopt = function (opt, done)
 		return true
 	end
 
-	if opt.op == 'local.toggle_repeat_mode' then
+	if opt.op == popt.type .. '.toggle_repeat_mode' then
 		if P.mode == 'repeat_all' then
 			P.mode = 'repeat_one'
 		elseif P.mode == 'repeat_one' then
@@ -64,7 +64,7 @@ P.setopt = function (opt, done)
 		return true
 	end
 
-	if opt.op == 'local.set_play_mode' then
+	if opt.op == popt.type .. '.set_play_mode' then
 		if opt.mode == 'repeat_all' then
 			P.mode = opt.mode
 		elseif opt.mode == 'repeat_one' then
@@ -79,7 +79,7 @@ P.setopt = function (opt, done)
 		return true
 	end
 
-	if opt.op == 'local.songs_list' then
+	if opt.op == popt.type .. '.songs_list' then
 		done{result=0, songs_list=P.list}
 		return true
 	end
