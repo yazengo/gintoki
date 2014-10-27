@@ -45,12 +45,60 @@ local setvol = function (v)
 	vol_oncer.vol = vol
 end
 
+local keypress = {
+	n = 0,
+	mode = 'dblquick', -- single/dblquick/dblwait
+
+	interval = 700,
+
+	hit = function (p)
+		info('hit')
+
+		if p.mode == 'none' then
+			p:click()
+		elseif p.mode == 'dblquick' then
+			p.n = p.n + 1
+			if p.n == 1 then
+				p:click()
+				p.timer = set_timeout(function () 
+					p.n = 0
+				end, p.interval)
+			elseif p.n == 2 then
+				clear_timeout(p.timer)
+				p:dblclick()
+				p.n = 0
+			end
+		elseif p.mode == 'dblwait' then
+			p.n = p.n + 1
+			if p.n == 1 then
+				p.timer = set_timeout(function () 
+					p:click()
+					p.n = 0
+				end, p.interval)
+			elseif p.n == 2 then
+				clear_timeout(p.timer)
+				p:dblclick()
+				p.n = 0
+			end
+		end
+	end,
+
+	click = function (p)
+		info('click')
+		handle{op='audio.play_pause_toggle', source='inputdev'}
+	end,
+
+	dblclick = function (p)
+		info('dblclick')
+	end,
+}
+
 inputdev_on_event = function (e) 
 	info('e=', e)
 
 	if e == 33 then
 		info('inputdev: keypress')
-		handle{op='audio.play_pause_toggle', source='inputdev'}
+		keypress:hit()
 	end
 
 	if e == 38 then
