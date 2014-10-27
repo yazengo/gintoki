@@ -19,6 +19,7 @@
 #include "utils.h"
 
 static int log_level = LOG_INFO;
+static uv_loop_t *g_loop;
 
 static void print_traceback_and_exit();
 
@@ -48,18 +49,10 @@ void _log(
 }
 
 float now() {
-	struct timeval tv;
-	static struct timeval tv_start;
-
-	gettimeofday(&tv, NULL);
-	if (!tv_start.tv_sec)
-		tv_start = tv;
-	if (tv.tv_usec - tv_start.tv_usec < 0) {
-		tv.tv_usec += 1e6;
-		tv.tv_sec--;
-	}
-
-	return (tv.tv_sec - tv_start.tv_sec) + (tv.tv_usec - tv_start.tv_usec) / 1e6;
+	static uint64_t tm;
+	if (tm == 0)
+		tm = uv_now(g_loop);
+	return (float)(uv_now(g_loop) - tm)/1e3;
 }
 
 void *zalloc(int len) {
@@ -562,7 +555,9 @@ void utils_onexit(onexit_cb cb) {
 	}
 }
 
-void utils_preinit() {
+void utils_preinit(uv_loop_t *loop) {
+	g_loop = loop;
+
 	if (getenv("COREDUMP") == NULL) {
 		signal(SIGILL, fault);
 		signal(SIGBUS, fault);
@@ -638,6 +633,11 @@ static int lua_hostplat(lua_State *L) {
 	return 1;
 }
 
+static int lua_now(lua_State *L) {
+	lua_pushnumber(L, now());
+	return 1;
+}
+
 void utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, lua_set_timeout, 1);
@@ -687,5 +687,8 @@ void utils_init(lua_State *L, uv_loop_t *loop) {
 
 	lua_pushcfunction(L, lua_hostplat);
 	lua_setglobal(L, "hostplat");
+
+	lua_pushcfunction(L, lua_now);
+	lua_setglobal(L, "now");
 }
 
