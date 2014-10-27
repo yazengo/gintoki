@@ -144,37 +144,6 @@ static void gpiokeys_init() {
 	dev->gpiokeys_stat = NONE;
 }
 
-static void gpiokeys_timeout(uv_timer_t *t, int _) {
-	uv_close((uv_handle_t *)dev->gpiokeys_timer, gpiokeys_timer_free);
-	dev->gpiokeys_timer = NULL;
-
-	debug("single press");
-	inputdev_emit_event(KEYPRESS); 
-	dev->gpiokeys_stat_dblclk = NONE;
-}
-
-static void gpiokeys_onkey() {
-	debug("stat=%d", dev->gpiokeys_stat_dblclk);
-
-	switch (dev->gpiokeys_stat_dblclk) {
-	case NONE:
-		dev->gpiokeys_timer = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
-		uv_timer_init(dev->loop, dev->gpiokeys_timer);
-		uv_timer_start(dev->gpiokeys_timer, gpiokeys_timeout, 300, 0);
-		dev->gpiokeys_stat_dblclk = DBL1;
-		break;
-
-	case DBL1:
-		uv_timer_stop(dev->gpiokeys_timer);
-		uv_close((uv_handle_t *)dev->gpiokeys_timer, gpiokeys_timer_free);
-		dev->gpiokeys_timer = NULL;
-		debug("dbl click");
-		inputdev_emit_event(KEYDBLCLICK); 
-		dev->gpiokeys_stat_dblclk = NONE;
-		break;
-	}
-}
-
 static void gpiokeys_read(struct input_event e) {
 	int stat = dev->gpiokeys_stat;
 	struct input_event last_e = dev->last_ev[GPIOKEYS];
@@ -185,7 +154,6 @@ static void gpiokeys_read(struct input_event e) {
 		}
 
 		if (last_e.code == 0xa4) {
-
 			if (last_e.value == 1) {
 				// key down
 				if (stat == NONE) {
@@ -199,7 +167,6 @@ static void gpiokeys_read(struct input_event e) {
 				}
 			}
 		}
-
 	}
 
 	dev->gpiokeys_stat = stat;
