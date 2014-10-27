@@ -169,15 +169,21 @@ pnp.notify = function () end
 
 pnp.start = function ()
 	zpnp.start()
-	upnp.start()
+
+	if pnp.upnp then upnp.start() end
+
 	pnp.notify = function (r)
 		zpnp.notify(r)
-		upnp.notify(r)
+		if pnp.upnp then upnp.notify(r) end
 	end
+
 	zpnp.on_action = handle
-	upnp.on_action = handle
-	upnp.on_subscribe = function (a, done)
-		all_info(done)
+
+	if pnp.upnp then
+		upnp.on_action = handle
+		upnp.on_subscribe = function (a, done)
+			muno.allinfo(done)
+		end
 	end
 end
 
