@@ -7,7 +7,6 @@ require('airplay')
 require('radio')
 require('audio')
 require('muno')
-require('upnp')
 require('zpnp')
 
 handle = function (a, done)
