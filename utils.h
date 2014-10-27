@@ -31,6 +31,16 @@ typedef struct uv_call_s {
 void uv_call(uv_loop_t *loop, uv_call_t *c);
 void uv_call_cancel(uv_call_t *c);
 
+struct uv_callreq_s;
+typedef void (*uv_call_cb)(struct uv_callreq_s *req);
+typedef struct uv_callreq_s {
+	void *data;
+	uv_barrier_t b;
+	uv_async_t a;
+	uv_call_cb cb;
+} uv_callreq_t;
+void uv_call_sync(uv_loop_t *loop, uv_callreq_t *req, uv_call_cb cb);
+
 void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_start, lua_CFunction on_done, void *data);
 
 typedef void (*pcall_uv_cb)(void *pcall, void *p);

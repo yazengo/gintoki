@@ -18,6 +18,7 @@ static inline int16_t clip_int16_c(int a) {
 }
 
 enum {
+	NONE,
 	DIV, SHIFT8,
 };
 static int mode;
@@ -70,7 +71,7 @@ void pcm_do_volume(void *_out, int len, float fvol) {
 			*out = (int16_t)v;
 			out++;
 		}
-	} else {
+	} else if (mode == SHIFT8) {
 		int vol = fvol * 255;
 		if (vol == 255)
 			return;
@@ -98,6 +99,9 @@ void pcm_do_mix(void *_out, void *_in, int len) {
 }
 
 void pcm_init() {
-	mode = DIV;
+	if (getenv("VOL_NONE"))
+		mode = NONE;
+	else
+		mode = DIV;
 }
 

@@ -275,6 +275,25 @@ void uv_call(uv_loop_t *loop, uv_call_t *c) {
 	uv_timer_start(t, uv_call_timeout, 0, 0);
 }
 
+static void uv_call_free(uv_handle_t *h) {
+	uv_callreq_t *req = (uv_callreq_t *)h->data;
+	req->cb(req);
+	uv_barrier_wait(&req->b);
+}
+
+static void uv_call_handler(uv_async_t *h, int stat) {
+	uv_close((uv_handle_t *)h, uv_call_free);
+}
+
+void uv_call_sync(uv_loop_t *loop, uv_callreq_t *req, uv_call_cb cb) {
+	uv_barrier_init(&req->b, 2);
+	req->a.data = req;
+	req->cb = cb;
+	uv_async_init(loop, &req->a, uv_call_handler);
+	uv_async_send(&req->a);
+	uv_barrier_wait(&req->b);
+}
+
 static void on_timeout(uv_timer_t *h, int stat) {
 	lua_State *L = (lua_State *)h->data;
 

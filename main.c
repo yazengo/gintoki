@@ -9,7 +9,7 @@
 #include "utils.h"
 #include "strbuf.h"
 #include "lua_cjson.h"
-#include "luv_curl.h"
+#include "curl.h"
 #include "net.h"
 #include "popen.h"
 #include "zpnp.h"

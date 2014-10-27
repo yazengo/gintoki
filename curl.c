@@ -11,17 +11,23 @@
 
 //
 // c = curl {
-// 	url = 'xx',
-// 	retfile = 'x',
-// 	reqstr = '',
-// 	done = function (content, st) 
-// 	end,
+// 	 url = 'xx',
+// 	 retfile = 'x',
+// 	 reqstr = '',
+// 	 done = function (content, st) 
+// 	 end,
+// 	 connected = function ()
+// 	 end,
 // }
 //
 // c.stat() == {
-// 	stat='downloading/done/cancelled',
-// 	code=200, progress=33.33, rx=12312, time=33.33, speed=1232
-// 	size=1232.33,
+// 	 stat = 'downloading/done/cancelled',
+// 	 code = 200, 
+// 	 progress = 33.33,
+// 	 rx = 12312,
+// 	 time = 33.33,
+// 	 speed = 1232
+// 	 size = 1232.33,
 // }
 // c.cancel()
 //
@@ -53,6 +59,7 @@ typedef struct {
 
 	int retry;
 
+	uv_loop_t *loop;
 	lua_State *L;
 } luv_curl_t;
 
@@ -94,6 +101,8 @@ static size_t write_data(void *ptr, size_t size, size_t nmemb, void *data) {
 	if (lc->retsb)
 		strbuf_append_mem(lc->retsb, ptr, size);
 
+	lc->rx += size;
+
 	debug("write=%d", size);
 
 	return size;
@@ -101,7 +110,6 @@ static size_t write_data(void *ptr, size_t size, size_t nmemb, void *data) {
 
 static size_t read_data(void *ptr, size_t size, size_t nmemb, void *data) {
 	luv_curl_t *lc = (luv_curl_t *)data;
-
 
 	if (lc->stat == CANCELLED)
 		return 0;
@@ -129,12 +137,6 @@ static void push_curl_stat(luv_curl_t *lc) {
 	case CANCELLED: stat = "cancelled"; break;
 	case ERROR: stat = "err"; break;
 	}
-
-	// return {
-	// 	stat='downloading/done/cancelled',
-	// 	code=200, progress=33.33, rx=12312, time=33.33, speed=1232
-	// 	size=1232.33,
-	// }
 
 	lua_newtable(L);
 
@@ -324,29 +326,23 @@ static void curl_addheader(luv_curl_t *lc, char *name, char *val) {
 static int curl(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 
-	luv_curl_t *lc = (luv_curl_t *)lua_newuserdata(L, sizeof(luv_curl_t)); // 2
+	luv_curl_t *lc = (luv_curl_t *)lua_newuserdata(L, sizeof(luv_curl_t));
 	memset(lc, 0, sizeof(luv_curl_t));
+	int lc_idx = 2;
 
+	lc->loop = loop;
 	lc->L = L;
 
-	lua_getfield(L, 1, "url"); // 3
-	lua_getfield(L, 1, "retfile"); // 4
-	lua_getfield(L, 1, "reqstr"); // 5
-	lua_getfield(L, 1, "done"); // 6
-	lua_getfield(L, 1, "proxy"); // 7
-	lua_getfield(L, 1, "content_type"); // 8
-	lua_getfield(L, 1, "user_agent"); // 9
-	lua_getfield(L, 1, "authorization"); // 10
-
-	char *url = (char *)lua_tostring(L, 3);
+	lua_getfield(L, 1, "url");
+	char *url = (char *)lua_tostring(L, -1);
 	if (url == NULL) 
 		panic("url must be set");
 
 	lua_getfield(L, 1, "retry");
 	lc->retry = lua_tonumber(L, -1);
-	lua_pop(L, 1);
 
-	char *retfname = (char *)lua_tostring(L, 4);
+	lua_getfield(L, 1, "retfile");
+	char *retfname = (char *)lua_tostring(L, -1);
 	if (retfname)
 		lc->retfname = strdup(retfname);
 	else
@@ -369,9 +365,11 @@ static int curl(lua_State *L) {
 	curl_easy_setopt(lc->c, CURLOPT_WRITEDATA, lc);
 
 	curl_easy_setopt(lc->c, CURLOPT_SSL_VERIFYPEER, 0);
+
 	//curl_easy_setopt(lc->c, CURLOPT_VERBOSE, 1);
 
-	lc->reqstr = (char *)lua_tostring(L, 5);
+	lua_getfield(L, 1, "reqstr");
+	lc->reqstr = (char *)lua_tostring(L, -1);
 	if (lc->reqstr) {
 		//lc->reqstr_len = strlen(lc->reqstr);
 		//curl_easy_setopt(lc->c, CURLOPT_READFUNCTION, read_data);
@@ -379,32 +377,38 @@ static int curl(lua_State *L) {
 		curl_easy_setopt(lc->c, CURLOPT_POSTFIELDS, lc->reqstr);
 	}
 
-	lua_pushvalue(L, 6); // done
-	lua_pushvalue(L, 2); // userdata: must save it until call done
+	lua_getfield(L, 1, "done");
+	lua_pushvalue(L, lc_idx); // userdata: must save it until call done
 	lua_pushcclosure(L, curl_done, 2);
 	lua_set_global_callback(L, "curl_done", lc->c);
 
-	char *proxy = (char *)lua_tostring(L, 7);
+	lua_getfield(L, 1, "proxy");
+	char *proxy = (char *)lua_tostring(L, -1);
 	curl_setproxy(lc, proxy);
 
-	curl_addheader(lc, "Content-Type", (char *)lua_tostring(L, 8));
-	curl_addheader(lc, "User-Agent", (char *)lua_tostring(L, 9));
-	curl_addheader(lc, "Authorization", (char *)lua_tostring(L, 10));
+	lua_getfield(L, 1, "content_type");
+	curl_addheader(lc, "Content-Type", (char *)lua_tostring(L, -1));
+
+	lua_getfield(L, 1, "user_agent");
+	curl_addheader(lc, "User-Agent", (char *)lua_tostring(L, -1));
+
+	lua_getfield(L, 1, "authorization");
+	curl_addheader(lc, "Authorization", (char *)lua_tostring(L, -1));
 
 	if (lc->headers)
 		curl_easy_setopt(lc->c, CURLOPT_HTTPHEADER, lc->headers);
 
 	// return {
-	// 		cancel = [native function],
-	// 		stat = [native function],
+	//   cancel = [native function],
+	//   stat = [native function],
 	// }
 	lua_newtable(L);
 
-	lua_pushvalue(L, 2);
+	lua_pushvalue(L, lc_idx);
 	lua_pushcclosure(L, curl_cancel, 1);
 	lua_setfield(L, -2, "cancel");
 
-	lua_pushvalue(L, 2);
+	lua_pushvalue(L, lc_idx);
 	lua_pushcclosure(L, curl_stat, 1);
 	lua_setfield(L, -2, "stat");
 

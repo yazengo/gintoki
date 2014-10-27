@@ -4,7 +4,7 @@ setloglevel(0)
 curl {
 	url = 'www.qq.com',
 	done = function (ret, stat)
-		info(ret, stat)
+		info(stat, ret)
 	end,
 }
 

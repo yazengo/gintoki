@@ -10,7 +10,7 @@
 #include "strbuf.h"
 #include "strparser.h"
 #include "ringbuf.h"
-#include "luv_curl.h"
+#include "curl.h"
 #include "blowfish.h"
 
 #include "upnp_device.h"
