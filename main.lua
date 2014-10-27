@@ -1,5 +1,4 @@
 
-arch = require(hostplat())
 require('localmusic')
 require('pandora')
 require('douban')
@@ -10,6 +9,7 @@ require('audio')
 require('muno')
 require('upnp')
 require('zpnp')
+arch = require(hostplat())
 
 handle = function (a, done)
 	done = done or function () end
