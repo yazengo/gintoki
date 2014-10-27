@@ -1,5 +1,4 @@
 
-arch = require(hostplat())
 require('localmusic')
 require('pandora')
 require('douban')
@@ -10,6 +9,7 @@ require('audio')
 require('muno')
 require('upnp')
 require('zpnp')
+arch = require(hostplat())
 
 handle = function (a, done)
 	done = done or function () end
@@ -129,6 +129,8 @@ if input then
 		[[ handle{op='radio.change_type', type='slumber'} ]],
 		[[ handle{op='radio.change_type', type='douban'} ]],
 		[[ handle{op='radio.change_type', type='bbcradio'} ]],
+		[[ handle{op='muno.set_poweroff_timeout', timeout=1024} ]],
+		[[ handle{op='muno.cancel_poweroff_timeout'} ]],
 	}
 end
 

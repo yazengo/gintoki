@@ -31,9 +31,10 @@ static void usage(char *prog) {
 }
 
 int main(int argc, char *argv[]) {
+	uv_loop_t *loop = uv_default_loop();
 
 	setenv("_", argv[0], 1);
-	utils_preinit();
+	utils_preinit(loop);
 
 	int test_c = -1;
 	char **run_lua = NULL;
@@ -65,7 +66,6 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	uv_loop_t *loop = uv_default_loop();
 	uv_async_t as;
 	uv_async_init(loop, &as, NULL); // make loop never exists
 

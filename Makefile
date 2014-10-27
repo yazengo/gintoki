@@ -83,7 +83,7 @@ darwin-install-deps:
 	brew install libao
 	brew install libav
 
-inst-files := tests *.lua testaudios upnpweb bbcradio.json
+inst-files := tests *.lua testaudios upnpweb bbcradio.json server-loop.sh
 
 inst-mips: server-mips
 	tar cf $@.tar server-mips $(inst-files)
