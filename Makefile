@@ -15,9 +15,9 @@ luvmods = utils audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2
 config-mk = config$(if ${arch},-${arch},).mk
 
 exe ?= server${objsuffix}
-all: ${exe}
-
 include ${config-mk}
+
+all: ${exe}
 
 hsrcs += $(wildcard *.h)
 gitver = $(shell git rev-parse HEAD | sed 's/\(.......\).*/\1/')
