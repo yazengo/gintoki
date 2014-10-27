@@ -1,4 +1,6 @@
 
+require('poweroff')
+
 local M = {}
 
 M.setopt = function (a, done)
@@ -24,28 +26,50 @@ M.setopt = function (a, done)
 		end)
 		return true
 	elseif a.op == 'muno.set_poweroff_timeout' then
-		local timeout = tonumber(a.timeout)
-		if not timeout then
-			return
-		end
-		if M.poweroff then
-			clear_timeout(M.poweroff)
-		end
-		info('poweroff in', timeout, 's')
-		M.poweroff = set_timeout(M.on_poweroff, timeout*1000)
-		done{result=0}
-		return true
+		return M.set_poweroff(a, done)
 	elseif a.op == 'muno.cancel_poweroff_timeout' then
-		if M.poweroff then
-			clear_timeout(M.poweroff)
-		end
-		done{result=0}
-		return true
+		return M.cancel_poweroff(a, done)
 	end
+end
+
+M.set_poweroff = function (a, done)
+	local timeout = tonumber(a.timeout)
+	if not timeout then
+		return
+	end
+
+	if M.poweroff then
+		M.poweroff.cancel()
+	end
+
+	info('poweroff in', timeout, 's')
+
+	M.poweroff = poweroff {
+		timeout = timeout,
+		notify = function (r)
+			pnp.notify{['muno.info'] = {poweroff = r}}
+		end,
+		done = M.on_poweroff,
+	}
+
+	done{result=0}
+	return true
+end
+
+M.cancel_poweroff = function (a, done)
+	if M.poweroff then
+		M.poweroff:cancel()
+		M.poweroff = nil
+	end
+
+	done{result=0}
+	return true
 end
 
 M.on_poweroff = function ()
 	info('power off now')
+	if arch.poweroff then arch.poweroff() end
+	M.poweroff = nil
 end
 
 M.audioinfo = function ()
@@ -78,6 +102,7 @@ M.info = function (done)
 			firmware_version = "1.0.1",
 			name = hostname(),
 			local_music_num = table.maxn(localmusic.list),
+			poweroff = M.poweroff and M.poweroff:info()
 		}
 	end
 	if muno.getssid then
