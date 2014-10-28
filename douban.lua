@@ -15,7 +15,12 @@ server_error == fetching
 << {
 	"code": 103, 
 	"msg": "invalid_access_token: =71dfdf224d2f902e559f9d66e78eb06", 
-	"request": "GET /v2/fm/playlist"
+}
+
+>> access_token invalid
+<< {
+	"code":106,
+	"msg":"access_token_has_expired : 949b9d5e96c99e38bdd2d81bc45cdaa8"
 }
 
 >> access_token ok && channel invalid
@@ -119,8 +124,10 @@ D.channels_list = function (c, done)
 		access_token = c.access_token,
 		done = function (r, st)
 			r = cjson.decode(r) or {}
-			if not r.err then
+			if r.groups then
 				done(r, nil)
+			elseif r.msg then
+				doen(nil, 'invalid_token')
 			else
 				done(nil, 'server_error')
 			end
@@ -195,7 +202,7 @@ D.songs_list = function (c, done)
 			s = D.grep_songs(r.song or {})
 			if table.maxn(s) > 0 then
 				done(s, nil)
-			elseif r.msg == 'invalid_token_error' or r.msg == 'token_expired_error' then
+			elseif r.msg then
 				done(nil, 'invalid_token')
 			elseif r.r == 1 then
 				done(nil, 'wrong_channel')
@@ -356,13 +363,21 @@ D.setopt_channel_choose = function (o, done)
 end
 
 D.setopt_channels_list = function (o, done) 
-	D.channels_list(D.cookie, function (r) 
-		if r then
-			r.result = 0
-			done(r)
-		else
+	local c = table.copy(D.cookie)
+
+	D.auto_auth(c, D.channels_list, function (c, r, err) 
+		if err then
 			done{result=1}
+			return
 		end
+
+		if c then
+			D.cookie = c
+			D.savecookie(c)
+		end
+
+		r.result = 0
+		done(r)
 	end)
 end
 
