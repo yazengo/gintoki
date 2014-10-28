@@ -24,6 +24,15 @@ handle = function (a, done)
 		return
 	end
 
+	if a.op == 'local.toggle_repeat_mode' and radio.source == slumbermusic then
+		a.op = 'slumber.toggle_repeat_mode'
+	end
+
+	if a.op == 'audio.play' then
+		if radio.source == slumbermusic then a.op = 'slumber.play' end
+		if radio.source == localmusic then a.op = 'local.play' end
+	end
+
 	if a.op == 'audio.volume' then 
 		local vol = audio.setvol(a.value)
 		muno.notify_vol_change(vol)
@@ -43,7 +52,10 @@ handle = function (a, done)
 	elseif a.op == 'audio.resume' then
 		audio.resume()
 		done{result=0}
-	elseif string.hasprefix(a.op, 'local.') or a.op == 'audio.play' then
+	elseif a.op == 'audio.alert' then
+		audio.alert{url=a.url}
+		done{result=0}
+	elseif string.hasprefix(a.op, 'local.') then
 		if not localmusic.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'pandora.') then
 		if not pandora.setopt(a, done) then fail() end
@@ -51,7 +63,7 @@ handle = function (a, done)
 		if not bbcradio.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'douban.') then
 		if not douban.setopt(a, done) then fail() end
-	elseif string.hasprefix(a.op, 'slumber.') or a.op == 'audio.play' then
+	elseif string.hasprefix(a.op, 'slumber.') then
 		if not slumbermusic.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'muno.') then
 		if not muno.setopt(a, done) then fail() end
@@ -131,6 +143,9 @@ if input then
 		[[ handle{op='radio.change_type', type='bbcradio'} ]],
 		[[ handle{op='muno.set_poweroff_timeout', timeout=1024} ]],
 		[[ handle{op='muno.cancel_poweroff_timeout'} ]],
+		[[ handle({op='audio.play', id='2'}, info)]],
+		[[ handle({op='audio.play', id='1'}, info)]],
+		[[ handle{op='audio.alert', url='testaudios/beep0.5s.mp3'} ]],
 	}
 end
 

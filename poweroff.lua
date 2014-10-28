@@ -22,9 +22,11 @@ poweroff = function (opt)
 		opt.done()
 	end, r.timeout*1000)
 
+	opt.notify(r:info())
+
 	r.interval_h = set_interval(function ()
 		opt.notify(r:info())
-	end, 1000)
+	end, 1000*60)
 
 	return r
 end
