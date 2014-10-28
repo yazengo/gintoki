@@ -70,7 +70,7 @@ typedef struct {
 	char *mimetype;
 
 	int fd;
-	off_t flen;
+	int64_t flen;
 	void *fdata;
 	char *fpath;
 
@@ -469,7 +469,7 @@ static void httpcli_retfile_open(uv_work_t *w) {
 		return;
 	
 	hc->flen = st.st_size;
-	debug("path=%s size=%d", hc->fpath, hc->flen);
+	debug("path=%s size=%lld", hc->fpath, hc->flen);
 
 	hc->fdata = mmap(NULL, hc->flen, PROT_READ, MAP_SHARED, hc->fd, 0);
 	if (hc->fdata == MAP_FAILED) {
