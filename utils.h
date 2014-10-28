@@ -60,7 +60,7 @@ void *memdup(void *buf, int len);
 
 void print_trackback();
 
-void utils_init(lua_State *L, uv_loop_t *loop);
+void luv_utils_init(lua_State *L, uv_loop_t *loop);
 void utils_preinit();
 void utils_onexit(void (*cb)());
 

@@ -7,7 +7,7 @@
 
 void audio_in_avconv_init(uv_loop_t *loop, audio_in_t *ai);
 void audio_in_airplay_init(uv_loop_t *loop, audio_in_t *ai);
-void audio_in_airplay_init_v2(uv_loop_t *loop, audio_in_t *ai);
+void audio_in_airplay_v2_init(uv_loop_t *loop, audio_in_t *ai);
 
 static void error_read(audio_in_t *ai, void *buf, int len, audio_in_read_cb done) {
 	panic("should not call this");
@@ -33,7 +33,7 @@ void audio_in_init(uv_loop_t *loop, audio_in_t *ai) {
 		if (getenv("AIRPLAY_V1"))
 			audio_in_airplay_init(loop, ai);
 		else
-			audio_in_airplay_init_v2(loop, ai);
+			audio_in_airplay_v2_init(loop, ai);
 	} else
 		audio_in_avconv_init(loop, ai);
 }

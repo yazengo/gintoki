@@ -638,7 +638,7 @@ static int lua_now(lua_State *L) {
 	return 1;
 }
 
-void utils_init(lua_State *L, uv_loop_t *loop) {
+void luv_utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, lua_set_timeout, 1);
 	lua_setglobal(L, "set_timeout");

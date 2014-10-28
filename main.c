@@ -8,7 +8,7 @@
 #include "tests.h"
 #include "utils.h"
 #include "strbuf.h"
-#include "lua_cjson.h"
+#include "cjson.h"
 #include "curl.h"
 #include "net.h"
 #include "popen.h"
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
 	luaL_openlibs(L);
 	luaopen_cjson_safe(L);
 
-	utils_init(L, loop);
+	luv_utils_init(L, loop);
 	lua_dofile_or_die(L, "utils.lua");
 
 	pcm_init();
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 	if (getenv("AIRPLAY_V1"))
 		luv_airplay_init(L, loop);
 	else
-		luv_airplay_init_v2(L, loop);
+		luv_airplay_v2_init(L, loop);
 
 	luv_zpnp_init(L, loop);
 

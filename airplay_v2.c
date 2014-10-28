@@ -598,7 +598,7 @@ static void audio_in_close(audio_in_t *ai, audio_in_close_cb done) {
 	}
 }
 
-void audio_in_airplay_init_v2(uv_loop_t *loop, audio_in_t *ai) {
+void audio_in_airplay_v2_init(uv_loop_t *loop, audio_in_t *ai) {
 	if (g_ap == NULL) {
 		warn("please run airplay_start first");
 		audio_in_error_init(loop, ai, "please run airplay_start first");
@@ -671,7 +671,7 @@ static void onexit() {
 	}
 }
 
-void luv_airplay_init_v2(lua_State *L, uv_loop_t *loop) {
+void luv_airplay_v2_init(lua_State *L, uv_loop_t *loop) {
 	// airplay_start = [native function]
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, lua_airplay_start, 1);

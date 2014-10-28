@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <uv.h>
 #include <lua.h>
 #include <lauxlib.h>
@@ -13,10 +14,7 @@
 #include "curl.h"
 #include "blowfish.h"
 
-#include "upnp_device.h"
-#include "upnp_util.h"
-
-#include "lua_cjson.h"
+#include "cjson.h"
 #include "audio_out.h"
 #include "audio_out_test.h"
 
