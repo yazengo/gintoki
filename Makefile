@@ -1,103 +1,43 @@
 
-cflags = -g -I. -Werror
-ldflags = -g -luv -lm
+cflags += -g -I. -Werror
 
-objs = utils.o main.o strbuf.o tests.o
-objs += audio_mixer.o audio_out.o audio_out_test.o
-objs += upnp_device.o upnp_util.o  
-objs += cjson.o cjson_fpconv.o
-objs += ringbuf.o pcm.o
-objs += audio_in_avconv.o 
-objs += blowfish.o 
-objs += base64.o 
-objs += sha1.o 
-objs += audio_in.o
-objs += airplay.o
-objs += airplay_v2.o
-objs += curl.o
-objs += net.o
-objs += http_parser.o
-objs += zpnp.o
-objs += popen.o
-
+ldflags += -g -lm -luv -llua
 ldflags += -lcurl
 
-cflags += -DVERSION=\"$(shell git rev-parse HEAD)\"
+cobjs += main.o utils.o strbuf.o popen.o ringbuf.o tests.o
+cobjs += audio_mixer.o audio_out_test.o audio_in_avconv.o audio_in.o pcm.o
+cobjs += cjson.o cjson_fpconv.o
+cobjs += blowfish.o base64.o sha1.o
+cobjs += airplay.o airplay_v2.o
+cobjs += net.o curl.o http_parser.o zpnp.o
 
-objs-x86 += $(subst .o,-x86.o,$(objs))
-cflags-x86 += $(cflags)
-cflags-x86 += $(shell pkg-config --cflags lua5.2 libupnp libuv) 
-ldflags-x86 += $(ldflags)
-ldflags-x86 += $(shell pkg-config --libs libupnp lua5.2)
-ldflags-x86 += -lao
+luvmods = utils audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2
 
-objs-darwin += $(subst .o,-darwin.o,$(objs))
-cflags-darwin += $(cflags) -I/usr/local/include -I/usr/local/include/upnp
-ldflags-darwin += $(ldflags) -L/usr/local/lib
-ldflags-darwin += -lupnp -llua -lixml -lao
+config-mk = config$(if ${arch},-${arch},).mk
 
-sysroot-mips = ../system/fs_compile/
-cc-mips = mipsel-linux-gcc
-objs-mips += $(subst .o,-mips.o,$(objs))
-objs-mips += inputdev-mips.o
-cflags-mips += $(cflags)
-cflags-mips += -I$(sysroot-mips)/include
-cflags-mips += -I$(sysroot-mips)/include/upnp
-cflags-mips += -I$(sysroot-mips)/include/uv01022
-cflags-mips += -DUSE_JZCODEC
-cflags-mips += -DUSE_INPUTDEV
-ldflags-mips += $(ldflags)
-ldflags-mips += -L$(sysroot-mips)/lib
-ldflags-mips += -L$(sysroot-mips)/lib/uv01022
-ldflags-mips += -llua -pthread -lupnp -lthreadutil -lixml -lrt 
+exe ?= server${objsuffix}
+all: ${exe}
 
-hfiles = $(wildcard *.h)
+include ${config-mk}
 
-all: server-x86
+hsrcs += $(wildcard *.h)
+gitver = $(shell git rev-parse HEAD | sed 's/\(.......\).*/\1/')
 
-%-x86.o: %.c $(hfiles)
-	$(CC) $(cflags-x86) -c -o $@ $<
+cflags-main = -DGITVER=\"${gitver}\"
 
-%-darwin.o: %.c $(hfiles)
-	$(CC) $(cflags-darwin) -c -o $@ $<
+config.h: ${config-mk} Makefile
+	echo > $@
+	echo '#define LUVMOD_INIT $(foreach m,$(luvmods),luv_$(m)_init(L, loop);)' >>$@
+	echo >>$@
+	echo $(foreach m,$(luvmods),'#include "$(m).h"\n') >>$@
+	echo >>$@
 
-%-mips.o: %.c $(hfiles)
-	$(cc-mips) $(cflags-mips) -c -o $@ $<
+%${objsuffix}.o: %.c $(hsrcs) config.h
+	$(CC) $(cflags) $(cflags-$*) -c -o $@ $<
 
-server-x86: $(objs-x86)
-	$(CC) -o $@ $(objs-x86) $(ldflags-x86) 
-
-server-darwin: $(objs-darwin)
-	$(CC) -o $@ $(objs-darwin) $(ldflags-darwin) 
-
-server-mips: $(objs-mips)
-	$(cc-mips) -o $@ $(objs-mips) $(ldflags-mips) 
-
-linux-install-deps:
-	sudo apt-get install liblua52-dev libupnp-dev libuv-dev libao-dev libav-dev
-
-darwin-install-deps:
-	brew install lua52
-	brew install libupnp
-	brew install libuv
-	brew install libao
-	brew install libav
-
-inst-files := tests *.lua testaudios upnpweb bbcradio.json server-loop.sh
-
-inst-mips: server-mips
-	tar cf $@.tar server-mips $(inst-files)
-
-inst-x86: server-x86
-	tar cf $@.tar server-x86 $(inst-files)
-
-cp-minifs-mips: inst-mips
-	tar xvf inst-mips.tar -C ../../../system/minifs/usr/app
-
-sumcode:
-	wc -l audio*.[ch] utils.[ch] luv_curl.[ch] main.c ringbuf.[ch] inputdev.[ch] airplay*.[ch] popen.[ch]
-	wc -l *.lua
+${exe}: ${cobjs}
+	$(CC) -o $@ ${cobjs} ${ldflags}
 
 clean:
-	rm -rf *.o server-mips server-x86 server-darwin
+	rm -rf *.o ${exe}
 

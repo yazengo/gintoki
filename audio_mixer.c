@@ -2,6 +2,7 @@
 // please visit https://www.processon.com/view/link/542c8ebd0cf2e6eabf18d06e
 
 #include <string.h>
+#include <stdlib.h>
 
 #include <uv.h>
 #include <lua.h>

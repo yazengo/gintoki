@@ -1,27 +1,19 @@
 #pragma once
 
-#ifndef USE_JZCODEC
-#include <ao/ao.h>
-#endif
-
 #include <uv.h>
 
 typedef struct audio_out_s {
 	uv_loop_t *loop;
 
 	int is_playing;
-	void *data;
 
 	void *play_buf;
 	int play_len;
 
 	void (*on_play_done)(struct audio_out_s *ao, int len);
 
-#ifndef USE_JZCODEC
-	ao_device *aodev;
-#else
-	int fd_oss;
-#endif
+	void *data;
+	void *out;
 
 	void (*init)(struct audio_out_s *ao);
 	void (*set_rate)(struct audio_out_s *ao, int rate);
