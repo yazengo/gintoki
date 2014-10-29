@@ -102,8 +102,8 @@ M.info = function (done)
 			poweroff = M.poweroff and M.poweroff:info()
 		}
 	end
-	if muno.getssid then
-		muno.getssid(ret)
+	if getssid then
+		getssid(ret)
 	else
 		ret()
 	end
