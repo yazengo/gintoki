@@ -66,7 +66,11 @@ emitter_init = function (t)
 	end
 end
 
+ldebug = debug
+
 _log_at = function (level, caller_at, ...) 
+	local di = ldebug.getinfo(caller_at)
+
 	local s = ''
 	local t = {...}
 	for i = 1,table.maxn(t) do
@@ -84,12 +88,10 @@ _log_at = function (level, caller_at, ...)
 		s = s .. ' '
 	end
 
-	local di = debug.getinfo(caller_at)
-
 	_log(level, di.name, di.short_src, di.currentline, s)
 end
 
-dbp = function (...) _log_at(0, 3, ...) end
+debug = function (...) _log_at(0, 3, ...) end
 info = function (...) _log_at(1, 3, ...) end
 panic = function (...) _log_at(4, 3, ...) end
 
