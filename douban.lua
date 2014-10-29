@@ -438,7 +438,7 @@ D.info_login = function ()
 end
 
 D.is_fetching = function ()
-	return D.running[D.songs_list] > 0
+	return not not D.running[D.songs_list]
 end
 
 D.info = function ()

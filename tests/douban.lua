@@ -14,6 +14,8 @@ end
 
 input.cmds = {
 	[[ info(douban.next()) ]],
+	[[ info('fetching', douban.is_fetching()) ]],
+	[[ douban.setopt({op='douban.channels_list'}, info) ]],
 	[[ douban.setopt({op='douban.login', username='enliest@qq.com', password='enliest1653'}, info) ]],
 	[[ douban.setopt({op='douban.login', username='enliest@qq.com', password='WRONGPASSWORD'}, info) ]],
 }
