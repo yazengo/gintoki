@@ -1,9 +1,9 @@
 
 sysroot = ../system/fs_compile
 
-cobjs += audio_out_jzcodec.o inputdev.o
+cobjs += audio_out_jzcodec.o inputdev.o alarm.o
 
-luvmods += inputdev
+luvmods += inputdev alarm
 
 ldflags += -L$(sysroot)/lib
 ldflags += -L$(sysroot)/lib/uv01022
