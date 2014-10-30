@@ -8,14 +8,23 @@ end
 
 A.setopt = function (a, done)
 	if a.op == 'audio.play_pause_toggle' then
-		if a.source == 'inputdev' then
+		if a.current then
 			audio.pause_resume_toggle{track=2}
 		else
 			A.stop()
 		end
+	elseif a.op == 'audio.pause' then
+		if a.current then 
+			audio.pause{track=2}
+		else
+			A.stop()
+		end
 	elseif a.op == 'audio.resume' then
-		A.stop()
-		return true
+		if a.current then 
+			audio.resume{track=2}
+		else
+			A.stop()
+		end
 	elseif a.op == 'radio.change_type' then
 		A.stop()
 	elseif a.op == 'audio.prev' then
