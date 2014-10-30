@@ -19,7 +19,7 @@ all: ${exe}
 inst-files := tests *.lua testaudios bbcradio.json server-loop.sh
 
 pack: ${exe}
-	tar cf $@.tar ${exe} $(inst-files)
+	tar cf pack.tar ${exe} $(inst-files)
 
 install: pack
 	tar xvf pack.tar -C ../../../system/minifs/usr/app
