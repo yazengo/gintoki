@@ -22,5 +22,5 @@ pack: ${exe}
 	tar cf $@.tar ${exe} $(inst-files)
 
 install: pack
-	tar xvf inst-mips.tar -C ../../../system/minifs/usr/app
+	tar xvf pack.tar -C ../../../system/minifs/usr/app
 
