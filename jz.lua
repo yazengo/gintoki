@@ -83,7 +83,7 @@ local keypress = {
 
 	click = function (p)
 		info('click')
-		handle{op='audio.play_pause_toggle', source='inputdev'}
+		handle{op='audio.play_pause_toggle', current=true}
 	end,
 
 	dblclick = function (p)
