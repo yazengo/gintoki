@@ -1,4 +1,4 @@
 #!/bin/bash
 
-make arch=jz install
+make arch=jz clean install
 
