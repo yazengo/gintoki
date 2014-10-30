@@ -131,6 +131,7 @@ if input then
 		[[ audio.setvol(80); print(audio.getvol()) ]],
 		[[ audio.setvol(0); print(audio.getvol()) ]],
 		[[ handle{op='audio.play_pause_toggle'} ]],
+		[[ handle{op='audio.play_pause_toggle', current=true} ]],
 		[[ handle{op='audio.next'} ]],
 		[[ gsensor_prev() ]],
 		[[ gsensor_next() ]],
