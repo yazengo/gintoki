@@ -1,6 +1,11 @@
 
 require('alarm')
 
+fwupdate_root = '/mnt/sdcard/'
+fwupdate_recovery = function ()
+	system('reboot_recovery')
+end
+
 local say_and_do = function (k)
 	return function ()
 		if not (radio.source and radio.source[k]) and k == 'prev' then

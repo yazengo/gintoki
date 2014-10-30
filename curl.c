@@ -82,7 +82,7 @@ static void getinfo(luv_curl_t *lc) {
 	else if (lc->size > 0)
 		lc->progress = lc->rx / lc->size;
 
-	if (lc->curl_ret) {
+	if (lc->stat != CANCELLED && lc->curl_ret) {
 		lc->stat = ERROR;
 		lc->err = "libcurl error";
 	}

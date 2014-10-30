@@ -42,10 +42,6 @@ string.hasprefix = function (a, pref)
 	return string.sub(a, 1, string.len(pref)) == pref
 end
 
-clear_timeout = function (t)
-	if t then _G[t] = nil end
-end
-
 emitter_init = function (t)
 	t.emit_targets = {}
 	t.on = function (name, func) 
@@ -238,5 +234,14 @@ end
 
 hostuuid = function ()
 	return tonumber(string.sub(sha1_encode(hostname()), -8), 16)
+end
+
+system = function (cmd, done)
+	popen {
+		cmd = cmd,
+		done = function (r, code)
+			done(code)
+		end,
+	}
 end
 

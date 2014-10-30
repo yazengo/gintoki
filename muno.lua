@@ -2,6 +2,10 @@
 require('poweroff')
 require('fwupdate')
 
+fwupdate.notify = function (r)
+	pnp.notify { ['muno.update_stat'] = r }
+end
+
 local M = {}
 
 M.setopt = function (a, done)
@@ -24,6 +28,8 @@ M.setopt = function (a, done)
 		return M.set_poweroff(a, done)
 	elseif a.op == 'muno.cancel_poweroff_timeout' then
 		return M.cancel_poweroff(a, done)
+	elseif fwupdate.setopt(a, done) then
+		return true
 	end
 end
 
@@ -63,9 +69,8 @@ end
 
 M.on_poweroff = function ()
 	info('power off now')
-	if arch.poweroff then arch.poweroff() end
+	if poweroff then poweroff() end
 	M.poweroff = nil
-
 	audio.pause()
 end
 
