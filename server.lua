@@ -201,10 +201,6 @@ end
 pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end
 pnp.notify_sync  = function (r) pnp.notify(table.add(r, {type='sync'})) end
 
-hostuuid = function ()
-	return tonumber(string.sub(sha1_encode(hostname()), -8), 16)
-end
-
 info('hostname', hostname())
 prop.load()
 airplay_start('Muno_' .. hostname())

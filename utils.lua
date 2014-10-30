@@ -277,3 +277,7 @@ function queue()
 	}
 end
 
+hostuuid = function ()
+	return tonumber(string.sub(sha1_encode(hostname()), -8), 16)
+end
+
