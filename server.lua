@@ -8,6 +8,7 @@ require('radio')
 require('audio')
 require('muno')
 require('zpnp')
+require('prop')
 
 handle = function (a, done)
 	done = done or function () end
@@ -65,20 +66,11 @@ handle = function (a, done)
 		if not slumbermusic.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'muno.') then
 		if not muno.setopt(a, done) then fail() end
+	elseif string.hasprefix(a.op, 'alarm.') then
+		if not alarm or not alarm.setopt(a, done) then fail() end
 	elseif a.op == 'radio.change_type' then
 		radio.change(a)
 		done{result=0}
-	elseif a.op == 'alarm.datesync' and a.date then 
-        popen {
-            cmd = "date -s \"" .. a.date .. "\" -D \"%F %T %z\"" .. " && hwclock -w",
-        }
-		done{result=0}
-	elseif a.op == 'alarm.alarmset' then
-        prop.set('alarm', a.alarms)
-        alarm_set()
-		done{result=0}
-	elseif a.op == 'alarm.alarmget' then
-        done{result=0, alarms=prop.get('alarms')}
 	else
 		fail()
 	end
@@ -202,7 +194,6 @@ pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end
 pnp.notify_sync  = function (r) pnp.notify(table.add(r, {type='sync'})) end
 
 info('hostname', hostname())
-prop.load()
 airplay_start('Muno_' .. hostname())
 pnp.start()
 

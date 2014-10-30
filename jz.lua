@@ -1,4 +1,6 @@
 
+require('alarm')
+
 local say_and_do = function (k)
 	return function ()
 		if not (radio.source and radio.source[k]) and k == 'prev' then
@@ -147,38 +149,6 @@ inputdev_on_event = function (e)
 	if e >= 0 and e <= 15 then
 		setvol(e)
 	end
-end
-
-alarm_set = function()
-    local a = prop.get('alarm')
-    local n = 0
-    local min = 0
-    info("Alarm set")
-    for _,k in ipairs(a) do
-        if k.enable == true then
-            n = alarm_next(k.hour, k.minute, k['repeat'])
-            if n <= 0 then
-                k.enable = false
-            end
-
-            if min == 0 then
-                min = n
-            elseif n < min and n > 0 then
-                min = n
-            end
-        end
-    end
-    alarm_start(min)
-    -- refresh enable status
-    prop.set('alarm', a)
-end
-
-alarm_on_trigger = function () 
-	audio.alert {
-		url = 'testaudios/ding.mp3',
-		vol = 80,
-	}
-    alarm_set()
 end
 
 hostname = function ()
