@@ -8,6 +8,9 @@ F.setopt = function (a, done)
 	elseif a.op == 'muno.do_update' then
 		F.do_update(done)
 		return true
+	elseif a.op == 'muno.cancel_update' then
+		F.cancel_update(done)
+		return true
 	end
 end
 
@@ -24,111 +27,129 @@ F.check_update = function (done)
 	}
 end
 
+F.cancel_update = function (done)
+	if F.hcurl then
+		F.hcurl.cancel()
+		done{result=0}
+	else
+		done{result=1}
+	end
+end
+
 F.do_update = function (done)
-	local first = F.firmwares[1]
+	local fw = F.firmwares[1]
+
+	if F.updating then
+		done{result=1, msg='already updating'}
+		return
+	end
+
+	F.updating = true
+	local quit = function ()
+		F.updating = false
+	end
 
 	info('do_update starts')
 
-	if not first then 
-		done {
-			result = 4,
-			msg = 'not found',
-		}	
+	if not fw then 
+		done{result=1, msg='do check_update first'}	
 		return
 	end
 
-	local url = first.url
-	if not url then
-		done {
-			result = 5,
-			msg = 'url invalid',
-		}
-		return
-	end
+	local root = fwupdate_root or ''
+	local path_zip = root .. 'update.zip'
 
-	done {result = 0}
-
-	local url_zip = url .. '.zip'
-	local url_md5 = url .. '.md5'
-
-	local path_zip = '/mnt/sdcard/update.zip'
-	local path_md5 = '/mnt/sdcard/update.md5'
-	--local path_zip = '/tmp/update.zip'
-	--local path_md5 = '/tmp/update.md5'
-
-	local system = function (cmd, done)
-		done = done or function () end
-		popen {
-			cmd = cmd,
-			done = function (r, code) 
-				done(code)
-			end,
+	local downloading = function (p)
+		F.notify  {
+			stat = 'downloading',
+			progress = p,
 		}
 	end
 
 	local curl_zip = function (ok, fail)
-		system('curl "' .. url_zip .. '" > ' .. path_zip, function (r)
-			if r == 0 then ok() else fail() end
-		end)
+		local timer
+
+		F.hcurl = curl {
+			url = fw.url,
+			retfile = path_zip,
+			done = function (r, st)
+				clear_interval(timer)
+				F.hcurl = nil
+				info(st)
+				if st.stat == 'cancelled' then
+					quit()
+					return
+				end
+				if st.stat == 'done' then
+					ok()
+				else
+					fail()
+				end
+			end,
+		}
+
+		downloading(0)
+		timer = set_interval(function ()
+			local st = F.hcurl.stat()
+			downloading(math.ceil(st.progress*100))
+		end, 1000)
 	end
 
-	local curl_md5 = function (ok, fail)
-		system('curl "' .. url_md5 .. '" > ' .. path_md5, function (r)
-			if r == 0 then ok() else fail() end
-		end)
+	local md5sum = function (file, done, fail)
+		popen {
+			cmd = 'md5sum ' .. file, 
+			done = function (r, code)
+				if #r <= 32 then
+					fail()
+					return
+				end
+				done(string.sub(r, 1, 32))
+			end
+		}
 	end
 
 	local check_md5 = function (ok, fail)
-		system('md5sum -c ' .. path_md5, function (r)
-			if r == 0 then ok() else fail() end
-		end)
-	end
-
-	local downloading = function ()
-		pnp.notify { ['muno.update_stat'] = {
-			stat = 'downloading',
-			progress = 0,
-		}}
+		md5sum(path_zip, function (md5)
+			if md5 == fw.md5 then
+				ok()
+			else
+				fail()
+			end
+		end, fail)
 	end
 
 	local download_failed = function ()
-		pnp.notify { ['muno.update_stat'] = {
+		F.notify {
 			stat = 'error',
 			code = 11,
 			msg = 'downloading failed',
-		}}
+		}
+		quit()
+	end
+
+	local md5sum_failed = function ()
+		F.notify {
+			stat = 'error',
+			code = 10,
+			msg = 'md5sum failed',
+		}
+		quit()
 	end
 
 	local installing = function ()
-		pnp.notify { ['muno.update_stat'] = {
+		F.notify {
 			stat = 'installing',
 			progress = 0,
-		}}
+		}
+		quit()
+		fwupdate_recovery()
 	end
-
-	local install_failed = function ()
-		pnp.notify { ['muno.update_stat'] = {
-			stat = 'error',
-			code = 10,
-			msg = 'install failed',
-		}}
-	end
-
-	local complete = function ()
-		pnp.notify { ['muno.update_stat'] = {
-			stat = 'complete',
-		}}
-		system('reboot_recovery')
-	end
-
-	downloading()
 
 	curl_zip(function ()
-		curl_md5(function ()
-			installing()
-			check_md5(complete, install_failed)
-		end, download_failed)
+		check_md5(installing, md5sum_failed)
 	end, download_failed)
+
+	done{result=0}
 end
 
 fwupdate = F
