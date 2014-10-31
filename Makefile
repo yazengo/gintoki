@@ -25,11 +25,8 @@ gitver = $(shell git rev-parse HEAD | sed 's/\(.......\).*/\1/')
 cflags-main = -DGITVER=\"${gitver}\"
 
 config.h: ${config-mk} Makefile
-	echo > $@
-	echo '#define LUVMOD_INIT $(foreach m,$(luvmods),luv_$(m)_init(L, loop);)' >>$@
-	echo >>$@
-	echo $(foreach m,$(luvmods),'#include "$(m).h"\n') >>$@
-	echo >>$@
+	@echo '#define LUVMOD_INIT $(foreach m,$(luvmods),luv_$(m)_init(L, loop);)' >$@
+	@for m in ${luvmods}; do echo "#include \"$$m.h\"" >>$@; done
 
 %${objsuffix}.o: %.c $(hsrcs) config.h
 	$(CC) $(cflags) $(cflags-$*) -c -o $@ $<
