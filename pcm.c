@@ -3,86 +3,35 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
+
+#include <uv.h>
+#include <lua.h>
+
 #include "pcm.h"
 #include "utils.h"
 
-static inline int16_t clip_int16_c(int a) {
-	//
-	// if (a > 0x8000)
-	// 	 a = 0x8000;
-	// else if (a < -0x7fff)
-	// 	 a = -0x7fff;
-	// 
-  if ((a+0x8000) & ~0xFFFF) return (a>>31) ^ 0x7FFF;
-  else                      return a;
-}
-
-enum {
-	NONE,
-	DIV, SHIFT8,
+static int32_t tblvals[101] = {
+	0,4,6,7,9,11,13,16,19,22,26,31,36,42,49,57,65,75,85,97,110,123,139,155,173,192,213,235,259,284,311,340,370,402,436,471,508,546,586,628,671,716,763,811,860,911,963,1016,1071,1126,1183,1241,1299,1359,1420,1481,1543,1605,1668,1732,1796,1860,1924,1989,2054,2119,2184,2248,2313,2378,2442,2506,2570,2633,2696,2759,2821,2883,2944,3004,3064,3123,3181,3239,3296,3352,3407,3462,3516,3569,3621,3672,3723,3772,3821,3869,3916,3962,4007,4052,4096
 };
-static int mode;
-
-/*
-	Apple iOS 7 volume table
-	1, 17.4, 37.2, 72.4,
-	127.8, 226.5, 396, 627,
-	994, 1560, 2475, 3910, 
-	5530, 8760, 12400, 19450,
-*/
-
-// after interpolation
-static float voltbl[100] = {
-	3.715, 6.277, 8.7265, 11.104, 13.45, 15.805, 18.2095, 20.704, 
-	23.329, 26.125, 29.1325, 32.392, 35.944, 39.9478, 44.3688, 49.1632, 
-	54.3474, 59.9374, 65.9496, 72.4, 78.8577, 85.848, 93.4486, 101.738, 
-	110.793, 120.693, 131.478, 143.196, 156.012, 170.019, 185.309, 
-	201.976, 220.112, 240.417, 262.601, 286.325, 311.558, 338.269, 
-	366.427, 396., 424.909, 455.453, 487.883, 522.452, 559.41, 599.009, 
-	641.596, 687.504, 736.755, 789.563, 846.139, 906.696, 971.447, 
-	1039.17, 1110.98, 1188.12, 1271.08, 1360.38, 1456.52, 1560., 1670.82, 
-	1790.07, 1918.33, 2056.18, 2204.18, 2362.92, 2537.18, 2731.12, 
-	2935.25, 3148.44, 3369.56, 3597.48, 3831.07, 4040.16, 4241.99, 4456., 
-	4687., 4939.79, 5219.19, 5530., 5941.19, 6384.55, 6856.04, 7351.6, 
-	7867.19, 8398.75, 8907.33, 9359.2, 9833.8, 10341.3, 10891.7, 11495.2, 
-	12161.9, 12902.1, 13725.6, 14642.8, 15663.7, 16798.4, 18057.2, 19450.
-};
+static int32_t tblbase = 4096;
 
 void pcm_do_volume(void *_out, int len, float fvol) {
 	int16_t *out = (int16_t *)_out;
 	len /= 2;
 
-	if (mode == DIV) {
-		int vi = (int)(fvol*100);
+	if (fvol > 1)
+		fvol = 1;
+	else if (fvol < 0)
+		fvol = 0;
 
-		if (vi > 100)
-			vi = 100;
-		else if (vi <= 0) {
-			memset(out, 0, len*2);
-			return;
-		}
+	int vi = (int)(fvol*100);
+	int32_t a = tblvals[vi];
 
-		int32_t a = voltbl[99];
-		int32_t b = voltbl[vi-1];
-
-		while (len--) {
-			int32_t v = *out;
-			v = v*b / a;
-			*out = (int16_t)v;
-			out++;
-		}
-	} else if (mode == SHIFT8) {
-		int vol = fvol * 255;
-		if (vol == 255)
-			return;
-		else if (vol > 255)
-			vol = 255;
-		else if (vol <= 0)
-			vol = 0;
-		while (len--) {
-			*out = clip_int16_c((*out * vol) >> 8);
-			out++;
-		}
+	while (len--) {
+		int32_t v = *out;
+		v = v * a / tblbase;
+		*out = (int16_t)v;
+		out++;
 	}
 }
 
@@ -98,10 +47,32 @@ void pcm_do_mix(void *_out, void *_in, int len) {
 	}
 }
 
-void pcm_init() {
-	if (getenv("VOL_NONE"))
-		mode = NONE;
-	else
-		mode = DIV;
+static int lua_pcm_setopt(lua_State *L) {
+
+	lua_getfield(L, 1, "tblvals");
+	if (lua_isnil(L, -1))
+		return 0;
+
+	int i;
+	for (i = 1; i <= 101; i++) {
+		lua_pushnumber(L, i);
+		lua_gettable(L, -2);
+		int32_t v = (int32_t)lua_tonumber(L, -1);
+		tblvals[i-1] = v;
+		lua_pop(L, 1);
+	}
+
+	lua_getfield(L, 1, "tblbase");
+	if (lua_isnil(L, -1))
+		return 0;
+	tblbase = lua_tonumber(L, -1);
+
+	info("tblbase=%d", tblbase);
+
+	return 0;
+}
+
+void luv_pcm_init(lua_State *L, uv_loop_t *loop) {
+	lua_register(L, "pcm_setopt", lua_pcm_setopt);
 }
 
