@@ -5,12 +5,17 @@ audio.alert = function (o)
 
 	if not o.vol then o.vol = 0 end
 
+	if o.fadeothers == nil then
+		o.fadeothers = true
+	end
+
 	audio.setfilter { 
 		enabled = true,
 		slot = 0,
 		type = 'highlight',
 		i = 1,
 		vol = o.vol,
+		fadeothers = o.fadeothers,
 	}
 
 	audio.play {

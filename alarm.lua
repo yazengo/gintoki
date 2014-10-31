@@ -31,6 +31,7 @@ alarm_on_trigger = function ()
 	audio.alert {
 		url = 'testaudios/ding.mp3',
 		vol = 80,
+		fadeothers = false,
 	}
     alarm_set()
 end

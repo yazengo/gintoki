@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
+
 #include "pcm.h"
 #include "utils.h"
 
@@ -21,7 +22,7 @@ enum {
 	NONE,
 	DIV, SHIFT8,
 };
-static int mode;
+static int mode = DIV;
 
 /*
 	Apple iOS 7 volume table
@@ -96,12 +97,5 @@ void pcm_do_mix(void *_out, void *_in, int len) {
 		out++;
 		in++;
 	}
-}
-
-void pcm_init() {
-	if (getenv("VOL_NONE"))
-		mode = NONE;
-	else
-		mode = DIV;
 }
 
