@@ -10,14 +10,14 @@ cobjs += blowfish.o base64.o sha1.o
 cobjs += airplay.o airplay_v2.o
 cobjs += net.o curl.o http_parser.o zpnp.o
 
-luvmods = utils audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2
+luvmods = utils audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm
 
 config-mk = config$(if ${arch},-${arch},).mk
 
 exe ?= server${objsuffix}
-all: ${exe}
-
 include ${config-mk}
+
+all: ${exe}
 
 hsrcs += $(wildcard *.h)
 gitver = $(shell git rev-parse HEAD | sed 's/\(.......\).*/\1/')
@@ -25,11 +25,8 @@ gitver = $(shell git rev-parse HEAD | sed 's/\(.......\).*/\1/')
 cflags-main = -DGITVER=\"${gitver}\"
 
 config.h: ${config-mk} Makefile
-	echo > $@
-	echo '#define LUVMOD_INIT $(foreach m,$(luvmods),luv_$(m)_init(L, loop);)' >>$@
-	echo >>$@
-	echo $(foreach m,$(luvmods),'#include "$(m).h"\n') >>$@
-	echo >>$@
+	@echo '#define LUVMOD_INIT $(foreach m,$(luvmods),luv_$(m)_init(L, loop);)' >$@
+	@for m in ${luvmods}; do echo "#include \"$$m.h\"" >>$@; done
 
 %${objsuffix}.o: %.c $(hsrcs) config.h
 	$(CC) $(cflags) $(cflags-$*) -c -o $@ $<
