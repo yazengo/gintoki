@@ -10,7 +10,7 @@ cobjs += blowfish.o base64.o sha1.o
 cobjs += airplay.o airplay_v2.o
 cobjs += net.o curl.o http_parser.o zpnp.o
 
-luvmods = utils audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2
+luvmods = utils audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm
 
 config-mk = config$(if ${arch},-${arch},).mk
 
