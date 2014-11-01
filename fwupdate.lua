@@ -15,6 +15,7 @@ F.setopt = function (a, done)
 		return true
 	elseif a.op == 'muno.set_update_url' then
 		prop.set('fwupdate.url', a.url)
+		done{result=0}
 		return true
 	end
 end
