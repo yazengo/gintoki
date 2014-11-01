@@ -134,13 +134,11 @@ inputdev_on_event = function (e)
 			vol = 20,
 		}
 		info('network up')
-		upnp.start()
 	end
 
 	-- network down
 	if e == 37 then
 		info('network down')
-		upnp.stop()
 	end
 
 	if e == 40 then
