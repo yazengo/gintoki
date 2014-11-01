@@ -1,4 +1,6 @@
 
+require('prop')
+
 local F = {}
 
 F.setopt = function (a, done)
@@ -11,14 +13,18 @@ F.setopt = function (a, done)
 	elseif a.op == 'muno.cancel_update' then
 		F.cancel_update(done)
 		return true
+	elseif a.op == 'muno.set_update_url' then
+		prop.set('fwupdate.url', a.url)
+		return true
 	end
 end
 
 F.firmwares = {}
 
 F.check_update = function (done)
+	local url = prop.get('fwupdate.url', 'firmware.sugrsugr.com/info')
 	curl {
-		url = 'firmware.sugrsugr.com/info',
+		url = url,
 		done = function (ret)
 			local r = cjson.decode(ret) or {}
 			F.firmwares = r.firmwares_list or {}
