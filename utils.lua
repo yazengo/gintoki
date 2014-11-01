@@ -237,6 +237,7 @@ hostuuid = function ()
 end
 
 system = function (cmd, done)
+	done = done or function () end
 	popen {
 		cmd = cmd,
 		done = function (r, code)
