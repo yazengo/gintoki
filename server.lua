@@ -184,11 +184,13 @@ end
 
 pnp = {}
 pnp.notify = function () end
+pnp.online = function () end
 pnp.start = function ()
 	zpnp.start()
 	pnp.notify = function (r)
 		zpnp.notify(r)
 	end
+	pnp.online = zpnp.online
 	zpnp.on_action = handle
 end
 pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end

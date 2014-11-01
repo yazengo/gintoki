@@ -17,17 +17,21 @@ zpnp.notify = function (r)
 	zpnp_notify(cjson.encode(r))
 end
 
-zpnp.start = function ()
-	zpnp_start()
-	zpnp_setopt{uuid=hostuuid(), name=hostname()}
-
+zpnp.online = function ()
 	local times = 8
+	local interval = 300
 	local notify
 	notify = function ()
 		zpnp_notify()
 		times = times - 1
-		if times > 0 then set_timeout(notify, 300) end
+		if times > 0 then set_timeout(notify, interval) end
 	end
 	notify()
+end
+
+zpnp.start = function ()
+	zpnp_start()
+	zpnp_setopt{uuid=hostuuid(), name=hostname()}
+	zpnp.online()
 end
 

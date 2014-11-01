@@ -134,6 +134,7 @@ inputdev_on_event = function (e)
 			vol = 20,
 		}
 		info('network up')
+		pnp.online()
 	end
 
 	-- network down
