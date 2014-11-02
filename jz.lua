@@ -3,6 +3,7 @@ require('alarm')
 
 fwupdate_root = '/mnt/sdcard/'
 fwupdate_recovery = function ()
+	pnp.stop()
 	system('sync && reboot_recovery')
 end
 
