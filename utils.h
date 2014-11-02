@@ -3,6 +3,8 @@
 #include <uv.h>
 #include <lua.h>
 
+#include "queue.h"
+
 enum {
 	LOG_DEBUG = 0,
 	LOG_INFO = 1,
