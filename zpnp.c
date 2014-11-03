@@ -148,8 +148,6 @@ static void parser_parse(parser_t *p, void *buf, int len) {
 
 struct srv_s;
 
-#define MAX_PEERS 64
-
 typedef struct {
 	uv_udp_t s;
 	char buf[1440];
@@ -494,7 +492,7 @@ static void clinotify_singlecast(srv_t *zs, void *buf, int len) {
 		clitrack_t *ct = queue_data(q, clitrack_t, q);
 
 		char ip[32]; uv_ip4_name(&ct->sa, ip, sizeof(ip));
-		debug("> %s len=%d", ip, len);
+		info("> %s len=%d", ip, len);
 
 		uv_udp_send_t *us = (uv_udp_send_t *)zalloc(sizeof(uv_udp_send_t));
 		us->data = cn;
