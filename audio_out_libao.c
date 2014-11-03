@@ -15,6 +15,38 @@ static void libao_init(audio_out_t *ao) {
 	ao_initialize();
 }
 
+static const char *libao_strerror(int e) {
+	switch (e) {
+		case AO_ENODRIVER:
+			return "no driver";
+
+		case AO_ENOTLIVE:
+			return "not alive";
+
+		case AO_EBADOPTION:
+			return "bad option";
+
+		case AO_EOPENDEVICE:
+			return "open device";
+
+		case AO_EFAIL:
+			return "efail";
+
+		default:
+			return "?";
+	}
+}
+
+static void libao_list_drivers() {
+	int n = 0, i;
+	ao_info **d = ao_driver_info_list(&n);
+
+	info("avail drvs:");
+	for (i = 0; i < n; i++) {
+		info("%s: %s", d[i]->short_name, d[i]->name);
+	}
+}
+
 static void libao_set_rate(audio_out_t *ao, int rate) {
 	libao_t *la = (libao_t *)ao->out;
 
@@ -28,12 +60,21 @@ static void libao_set_rate(audio_out_t *ao, int rate) {
 		ao_close(la->dev);
 
 	int drv = ao_default_driver_id();
+	if (drv == -1) {
+		libao_list_drivers();
+		panic("default driver id not found");
+	}
+
 	la->dev = ao_open_live(drv, &fmt, NULL);
+	if (la->dev == NULL)
+		panic("open failed: %s", libao_strerror(errno));
 }
 
 static void libao_play(audio_out_t *ao, void *buf, int len) {
 	libao_t *la = (libao_t *)ao->out;
-	ao_play(la->dev, buf, len);
+	int r = ao_play(la->dev, buf, len);
+	if (r == 0)
+		panic("play failed");
 }
 
 static void play_done(uv_work_t *w, int stat) {
