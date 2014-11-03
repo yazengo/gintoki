@@ -352,13 +352,17 @@ static void srvdata_on_conn(uv_stream_t *st, int stat) {
 }
 
 static void clitrack_del(srv_t *zs, clitrack_t *del) {
-	queue_t *q;
+	queue_t *q, *sel = NULL;
+
 	queue_foreach(q, &zs->conns) {
 		clitrack_t *ct = queue_data(q, clitrack_t, q);
 		if (ct == del)
-			queue_remove(q);
+			sel = q;
 	}
-
+	if (sel == NULL)
+		return;
+	
+	queue_remove(sel);
 	char ip[32]; uv_ip4_name(&del->sa, ip, sizeof(ip));
 	info("quit %s", ip);
 }
