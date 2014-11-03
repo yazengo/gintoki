@@ -56,21 +56,9 @@ typedef struct queue_s {
     (q)->prev
 
 
-#if (NGX_DEBUG)
-
-#define queue_remove(x)                                                   \
-    (x)->next->prev = (x)->prev;                                              \
-    (x)->prev->next = (x)->next;                                              \
-    (x)->prev = NULL;                                                         \
-    (x)->next = NULL
-
-#else
-
 #define queue_remove(x)                                                   \
     (x)->next->prev = (x)->prev;                                              \
     (x)->prev->next = (x)->next
-
-#endif
 
 
 #define queue_split(h, q, n)                                              \
