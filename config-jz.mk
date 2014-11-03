@@ -7,6 +7,7 @@ luvmods += inputdev alarm
 
 ldflags += -L$(sysroot)/lib
 ldflags += -L$(sysroot)/lib/uv01022
+ldflags += -llua
 
 cflags += -I${sysroot}/include
 cflags += -I${sysroot}/include/uv01022
