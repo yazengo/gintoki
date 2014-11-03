@@ -1,7 +1,7 @@
 
 cflags += -g -I. -Werror
 
-ldflags += -g -lm -luv -llua -lcurl
+ldflags += -g -lm -luv -lcurl
 
 cobjs += main.o utils.o strbuf.o popen.o ringbuf.o tests.o
 cobjs += audio_mixer.o audio_out_test.o audio_in_avconv.o audio_in.o pcm.o
