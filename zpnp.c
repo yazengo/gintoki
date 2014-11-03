@@ -463,6 +463,8 @@ static void clinotify_broadcast(srv_t *zs, void *buf, int len) {
 
 static void clinotify_singlecast_on_closed(uv_handle_t *h) {
 	clinotify_t *cn = (clinotify_t *)h->data;
+	
+	debug("closed");
 
 	free(cn->ub.base);
 	free(cn);
@@ -471,6 +473,8 @@ static void clinotify_singlecast_on_closed(uv_handle_t *h) {
 static void clinotify_singlecast_on_write(uv_udp_send_t *us, int stat) {
 	clinotify_t *cn = (clinotify_t *)us->data;
 	free(us);
+	
+	debug("done");
 
 	cn->n--;
 	if (cn->n == 0)
@@ -480,16 +484,25 @@ static void clinotify_singlecast_on_write(uv_udp_send_t *us, int stat) {
 static void clinotify_singlecast(srv_t *zs, void *buf, int len) {
 	clinotify_t *cn = (clinotify_t *)zalloc(sizeof(clinotify_t));
 
-	uv_udp_init(zs->loop, &cn->c);
+	uv_udp_t *u = &cn->c;
+	uv_udp_init(zs->loop, u);
+	u->data = cn;
 	cn->ub = uv_buf_init(buf, len);
 
 	queue_t *q;
 	queue_foreach(q, &zs->conns) {
 		clitrack_t *ct = queue_data(q, clitrack_t, q);
 
+		char ip[32]; uv_ip4_name(&ct->sa, ip, sizeof(ip));
+		debug("> %s len=%d", ip, len);
+
 		uv_udp_send_t *us = (uv_udp_send_t *)zalloc(sizeof(uv_udp_send_t));
 		us->data = cn;
-		uv_udp_send(us, &cn->c, &cn->ub, 1, ct->sa, clinotify_singlecast_on_write);
+
+		struct sockaddr_in sa = ct->sa;
+		sa.sin_port = htons(PORT_NOTIFY);
+
+		uv_udp_send(us, u, &cn->ub, 1, sa, clinotify_singlecast_on_write);
 		cn->n++;
 	}
 }

@@ -7,7 +7,6 @@ zpnp_setopt {
 	name = hostname(),
 }
 zpnp_notify()
-zpnp_notify('hello_first_notify')
 
 zpnp_on_action = function (r, done) 
 	info(r)
@@ -18,5 +17,6 @@ input.cmds = {
 	[[ zpnp_stop() ]],
 	[[ zpnp_start() ]],
 	[[ zpnp_notify() ]],
+	[[ zpnp_notify('hello_notify') ]],
 }
 
