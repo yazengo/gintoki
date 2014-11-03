@@ -178,10 +178,6 @@ http_server {
 	end,
 }
 
-airplay_on_start = function ()
-	airplay.start()
-end
-
 pnp = {}
 pnp.notify = function () end
 pnp.online = function () end
@@ -199,7 +195,7 @@ pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end
 pnp.notify_sync  = function (r) pnp.notify(table.add(r, {type='sync'})) end
 
 info('hostname', hostname())
-airplay_start('Muno_' .. hostname())
+airplay.start()
 pnp.start()
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}

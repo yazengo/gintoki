@@ -51,7 +51,7 @@ A.setopt = function (a, done)
 	end
 end
 
-A.start = function ()
+A.on_start = function ()
 	radio.disabled = true
 	A.enabled = true
 
@@ -61,6 +61,21 @@ A.start = function ()
 		track = 2,
 		done = function ()
 			A.on_stop()
+		end,
+	}
+end
+
+airplay_on_start = function ()
+	A.on_start()
+end
+
+A.start = function ()
+	popen {
+		cmd = 'which shairport',
+		done = function (r, code)
+			if code == 0 then
+				airplay_start('Muno_' .. hostname())
+			end
 		end,
 	}
 end
