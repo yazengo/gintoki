@@ -351,20 +351,28 @@ static void srvdata_on_conn(uv_stream_t *st, int stat) {
 	uv_read_start((uv_stream_t *)t, clidata_allocbuf, clidata_on_read);
 }
 
-static void clitrack_del(srv_t *zs, clitrack_t *del) {
-	queue_t *q, *sel = NULL;
+static void clitrack_showlist(srv_t *zs) {
+	queue_t *q;
 
+	info("conns:");
 	queue_foreach(q, &zs->conns) {
 		clitrack_t *ct = queue_data(q, clitrack_t, q);
-		if (ct == del)
-			sel = q;
+		char ip[32]; uv_ip4_name(&ct->sa, ip, sizeof(ip));
+		info("  %s", ip);
 	}
-	if (sel == NULL)
-		return;
-	
-	queue_remove(sel);
-	char ip[32]; uv_ip4_name(&del->sa, ip, sizeof(ip));
-	info("quit %s", ip);
+}
+
+static void clitrack_del(srv_t *zs, clitrack_t *del) {
+	queue_t *q;
+	queue_foreach(q, &zs->conns) {
+		clitrack_t *ct = queue_data(q, clitrack_t, q);
+		if (ct == del) {
+			char ip[32]; uv_ip4_name(&del->sa, ip, sizeof(ip));
+			info("quit %s", ip);
+			queue_remove(q);
+			clitrack_showlist(zs);
+		}
+	}
 }
 
 static void clitrack_add(srv_t *zs, clitrack_t *add) {
@@ -378,6 +386,7 @@ static void clitrack_add(srv_t *zs, clitrack_t *add) {
 
 	char ip[32]; uv_ip4_name(&add->sa, ip, sizeof(ip));
 	info("join %s", ip);
+	clitrack_showlist(zs);
 }
 
 static void clitrack_on_closed(uv_handle_t *h) {
