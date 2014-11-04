@@ -107,18 +107,16 @@ D.user_login = function (c, done)
 			username = c.username,
 			password = c.password,
 		},
-		done = function (r, st)
-			r = cjson.decode(r) or {}
+		done = function (rs, st)
+			r = cjson.decode(rs) or {}
 			if r.access_token then
 				info('login', c.username, c.password, 'ok')
 				D.user_info({access_token=r.access_token}, done)
 			elseif r.code == 120 then
-				info('login', c.username, c.password, 'fail')
-				D.debug('error', r)
+				info('login', c.username, c.password, 'error', rs)
 				done(nil, 'invalid_userpass')
 			else
-				info('login', c.username, c.password, 'error')
-				D.debug('error', r)
+				info('login', c.username, c.password, 'error', rs)
 				done(nil, 'server_error')
 			end
 		end,
@@ -129,13 +127,15 @@ D.channels_list = function (c, done)
 	local p = {
 		url = 'https://api.douban.com/v2/fm/app_channels?' .. encode_params(D.common_params()),
 		access_token = c.access_token,
-		done = function (r, st)
+		done = function (rs, st)
 			r = cjson.decode(r) or {}
 			if r.groups then
 				done(r, nil)
 			elseif r.msg then
+				info('channels_list', 'error', rs)
 				done(nil, 'invalid_token')
 			else
+				info('channels_list', 'error', rs)
 				done(nil, 'server_error')
 			end
 		end,
@@ -162,6 +162,7 @@ D.grep_songs = function (songs)
 end
 
 D.songs_add = function (r)
+	r = r or {}
 	info('got songs nr', table.maxn(r))
 	local left = table.maxn(D.songs) - D.songs_i
 	table.append(D.songs, r)
