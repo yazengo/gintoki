@@ -23,7 +23,7 @@ end
 F.firmwares = {}
 
 F.check_update = function (done)
-	local url = prop.get('fwupdate.url', 'local-firmware.sugrsugr.com/info')
+	local url = prop.get('fwupdate.url', 'firmware.sugrsugr.com/info')
 	curl {
 		url = url,
 		done = function (ret)
