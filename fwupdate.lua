@@ -104,7 +104,7 @@ F.do_update = function (done)
 
 		downloading(0)
 		timer = set_interval(function ()
-			local st = F.hcurl.stat()
+			local st = F.hcurl:stat()
 			downloading(math.ceil(st.progress*100))
 		end, 1000)
 	end

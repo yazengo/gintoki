@@ -62,7 +62,9 @@ end
 D.curl = function (p)
 	p.retry = 1000
 	if p.access_token then
-		p.authorization = 'Bearer ' .. p.access_token
+		p.headers = {
+			Authorization = 'Bearer ' .. p.access_token,
+		}
 	end
 	return curl(p)
 end
@@ -196,6 +198,9 @@ D.rate = function (c, type, sid, done)
 end
 
 D.songs_list = function (c, done)
+	if c.channel == nil then
+		c.channel = 0
+	end
 	return D.curl {
 		access_token = c.access_token,
 		url = 'https://api.douban.com/v2/fm/playlist?' .. encode_params(D.common_params{
@@ -210,6 +215,7 @@ D.songs_list = function (c, done)
 			elseif r.msg then
 				done(nil, 'invalid_token')
 			elseif r.r == 1 then
+				D.debug(r)
 				done(nil, 'wrong_channel')
 			else
 				done(nil, 'server_error')
@@ -315,12 +321,12 @@ D.setopt_login = function (o, done)
 
 	D.auto_run(c, D.songs_list, function (c, r, err)
 		if err then
-			done{result=1}
+			done{result=1, msg=err}
 			return
 		end
 
 		if not c or not c.username then
-			done{result=1}
+			done{result=1, msg='cookie not saved'}
 			return
 		end
 
