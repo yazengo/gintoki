@@ -17,8 +17,6 @@ zpnp.notify = function (r)
 	zpnp_notify(cjson.encode(r))
 end
 
-zpnp.stop = zpnp_stop
-
 zpnp.online = function ()
 	local times = 8
 	local interval = 300
@@ -33,6 +31,7 @@ end
 
 zpnp.start = function ()
 	zpnp_start()
+	zpnp.stop = zpnp_stop
 	zpnp_setopt{uuid=hostuuid(), name=hostname()}
 	zpnp.online()
 end
