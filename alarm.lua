@@ -4,7 +4,7 @@ require('prop')
 local A = {}
 
 alarm_set = function()
-    local a = prop.get('alarm')
+    local a = prop.get('alarms')
     local n = 0
     local min = 0
     info("Alarm set")
@@ -24,7 +24,7 @@ alarm_set = function()
     end
     alarm_start(min)
     -- refresh enable status
-    prop.set('alarm', a)
+    prop.set('alarms', a)
 end
 
 alarm_on_trigger = function () 
