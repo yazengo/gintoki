@@ -23,7 +23,7 @@ end
 F.firmwares = {}
 
 F.check_update = function (done)
-	local url = prop.get('fwupdate.url', 'firmware.sugrsugr.com/info')
+	local url = prop.get('fwupdate.url', 'local-firmware.sugrsugr.com/info')
 	curl {
 		url = url,
 		done = function (ret)
@@ -57,6 +57,13 @@ F.do_update = function (done)
 	end
 
 	info('do_update starts')
+
+	local recovery = 	function ()
+		set_timeout(function ()
+			pnp.stop()
+			fwupdate_recovery()
+		end, 2000)
+	end
 
 	if not fw then 
 		done{result=1, msg='do check_update first'}	
@@ -149,7 +156,7 @@ F.do_update = function (done)
 			progress = 0,
 		}
 		quit()
-		fwupdate_recovery()
+		recovery()
 	end
 
 	curl_zip(function ()
