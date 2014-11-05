@@ -1,3 +1,6 @@
 *.o
 testdata
 .*.swp
+config.h
+cscope.*
+tags

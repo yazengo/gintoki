@@ -35,5 +35,5 @@ ${exe}: ${cobjs}
 	$(CC) -o $@ ${cobjs} ${ldflags}
 
 clean:
-	rm -rf *.o ${exe}
+	rm -rf *.o ${exe} config.h
 
