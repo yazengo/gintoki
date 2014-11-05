@@ -1,6 +1,4 @@
 
-setloglevel(0)
-
 curl {
 	url = 'www.youtube.com',
 	proxy = 'localhost:8888',

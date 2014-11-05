@@ -62,7 +62,9 @@ end
 D.curl = function (p)
 	p.retry = 1000
 	if p.access_token then
-		p.authorization = 'Bearer ' .. p.access_token
+		p.headers = {
+			Authorization = 'Bearer ' .. p.access_token,
+		}
 	end
 	return curl(p)
 end
@@ -105,18 +107,16 @@ D.user_login = function (c, done)
 			username = c.username,
 			password = c.password,
 		},
-		done = function (r, st)
-			r = cjson.decode(r) or {}
+		done = function (rs, st)
+			r = cjson.decode(rs) or {}
 			if r.access_token then
 				info('login', c.username, c.password, 'ok')
 				D.user_info({access_token=r.access_token}, done)
 			elseif r.code == 120 then
-				info('login', c.username, c.password, 'fail')
-				D.debug('error', r)
+				info('login', c.username, c.password, 'error', rs)
 				done(nil, 'invalid_userpass')
 			else
-				info('login', c.username, c.password, 'error')
-				D.debug('error', r)
+				info('login', c.username, c.password, 'error', rs)
 				done(nil, 'server_error')
 			end
 		end,
@@ -127,13 +127,15 @@ D.channels_list = function (c, done)
 	local p = {
 		url = 'https://api.douban.com/v2/fm/app_channels?' .. encode_params(D.common_params()),
 		access_token = c.access_token,
-		done = function (r, st)
+		done = function (rs, st)
 			r = cjson.decode(r) or {}
 			if r.groups then
 				done(r, nil)
 			elseif r.msg then
+				info('channels_list', 'error', rs)
 				done(nil, 'invalid_token')
 			else
+				info('channels_list', 'error', rs)
 				done(nil, 'server_error')
 			end
 		end,
@@ -160,6 +162,7 @@ D.grep_songs = function (songs)
 end
 
 D.songs_add = function (r)
+	r = r or {}
 	info('got songs nr', table.maxn(r))
 	local left = table.maxn(D.songs) - D.songs_i
 	table.append(D.songs, r)
@@ -196,6 +199,9 @@ D.rate = function (c, type, sid, done)
 end
 
 D.songs_list = function (c, done)
+	if c.channel == nil then
+		c.channel = 0
+	end
 	return D.curl {
 		access_token = c.access_token,
 		url = 'https://api.douban.com/v2/fm/playlist?' .. encode_params(D.common_params{
@@ -210,6 +216,7 @@ D.songs_list = function (c, done)
 			elseif r.msg then
 				done(nil, 'invalid_token')
 			elseif r.r == 1 then
+				D.debug(r)
 				done(nil, 'wrong_channel')
 			else
 				done(nil, 'server_error')
@@ -315,12 +322,12 @@ D.setopt_login = function (o, done)
 
 	D.auto_run(c, D.songs_list, function (c, r, err)
 		if err then
-			done{result=1}
+			done{result=1, msg=err}
 			return
 		end
 
 		if not c or not c.username then
-			done{result=1}
+			done{result=1, msg='cookie not saved'}
 			return
 		end
 

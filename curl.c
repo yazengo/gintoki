@@ -61,7 +61,7 @@ typedef struct {
 
 	uv_loop_t *loop;
 	lua_State *L;
-} luv_curl_t;
+} curl_t;
 
 enum {
 	DOWNLOADING,
@@ -70,7 +70,7 @@ enum {
 	ERROR,
 };
 
-static void getinfo(luv_curl_t *lc) {
+static void getinfo(curl_t *lc) {
 	curl_easy_getinfo(lc->c, CURLINFO_SIZE_DOWNLOAD, &lc->rx);
 	curl_easy_getinfo(lc->c, CURLINFO_SPEED_DOWNLOAD, &lc->speed);
 	curl_easy_getinfo(lc->c, CURLINFO_RESPONSE_CODE, &lc->code);
@@ -89,7 +89,7 @@ static void getinfo(luv_curl_t *lc) {
 }
 
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *data) {
-	luv_curl_t *lc = (luv_curl_t *)data;
+	curl_t *lc = (curl_t *)data;
 
 	if (lc->stat == CANCELLED)
 		return 0;
@@ -109,7 +109,7 @@ static size_t write_data(void *ptr, size_t size, size_t nmemb, void *data) {
 }
 
 static size_t read_data(void *ptr, size_t size, size_t nmemb, void *data) {
-	luv_curl_t *lc = (luv_curl_t *)data;
+	curl_t *lc = (curl_t *)data;
 
 	if (lc->stat == CANCELLED)
 		return 0;
@@ -127,7 +127,33 @@ static size_t read_data(void *ptr, size_t size, size_t nmemb, void *data) {
 	return size;
 }
 
-static void push_curl_stat(luv_curl_t *lc) {
+static size_t on_header(char *p, size_t size, size_t n, void *data) {
+	curl_t *lc = (curl_t *)data;
+	lua_State *L = lc->L;
+
+	size *= n;
+	int i, dot = -1;
+
+	for (i = 0; i < size; i++)  {
+		if (p[i] == ':') {
+			dot = i;
+			break;
+		}
+	}
+
+	if (dot != -1 && dot+2 < size-1) {
+		lua_getglobalptr(L, "curl", lc);
+		lua_getfield(L, -1, "on_header");
+		lua_remove(L, -2);
+		lua_pushlstring(L, p, dot);
+		lua_pushlstring(L, p+dot+2, size-dot-3);
+		lua_call_or_die(L, 2, 0);
+	}
+
+	return size;
+}
+
+static void push_curl_stat(curl_t *lc) {
 	lua_State *L = lc->L;
 
 	char *stat = "?";
@@ -168,8 +194,13 @@ static void push_curl_stat(luv_curl_t *lc) {
 	}
 }
 
+static curl_t *lua_getcurl(lua_State *L) {
+	lua_getfield(L, 1, "ctx");
+	return lua_touserptr(L, -1);
+}
+
 static int curl_stat(lua_State *L) {
-	luv_curl_t *lc = (luv_curl_t *)lua_touserdata(L, lua_upvalueindex(1));
+	curl_t *lc = lua_getcurl(L);
 
 	if (lc->stat == DOWNLOADING)
 		getinfo(lc);
@@ -178,26 +209,26 @@ static int curl_stat(lua_State *L) {
 	return 1;
 }
 
-// arg[1] = done
 static int curl_cancel(lua_State *L) {
-	luv_curl_t *lc = (luv_curl_t *)lua_touserdata(L, lua_upvalueindex(1));
+	curl_t *lc = lua_getcurl(L);
 
 	lc->stat = CANCELLED;
-
-	lua_pushvalue(L, 1);
-	lua_set_global_callback(L, "curl_cancel", lc->c);
 
 	return 0;
 }
 
 static void curl_thread_done(uv_work_t *w, int _) {
-	luv_curl_t *lc = (luv_curl_t *)w->data;
+	curl_t *lc = (curl_t *)w->data;
 	lua_State *L = lc->L;
 
 	free(w);
 
 	if (lc->stat == DOWNLOADING)
 		lc->stat = DONE;
+
+	lua_getglobalptr(L, "curl", lc);
+	lua_getfield(L, -1, "done");
+	lua_remove(L, -2);
 
 	// 1
 	if (lc->curl_ret == 0 && lc->retsb) {
@@ -213,17 +244,21 @@ static void curl_thread_done(uv_work_t *w, int _) {
 	getinfo(lc);
 	push_curl_stat(lc);
 
-	lua_do_global_callback(lc->L, "curl_done", lc->c, 2, 1);
-	lua_do_global_callback(lc->L, "curl_cancel", lc->c, 0, 0);
+	lua_call_or_die(L, 2, 0);
 
 	curl_easy_cleanup(lc->c);
 	if (lc->retsb)
 		strbuf_free(lc->retsb);
 	if (lc->retfname)
 		free(lc->retfname);
+
+	lua_pushnil(L);
+	lua_setglobalptr(L, "curl", lc);
+
+	free(lc);
 }
 
-static void curl_perform(luv_curl_t *lc) {
+static void curl_perform(curl_t *lc) {
 	if (lc->retry) {
 		for (;;) {
 			if (lc->stat == CANCELLED)
@@ -239,7 +274,7 @@ static void curl_perform(luv_curl_t *lc) {
 }
 
 static void curl_thread(uv_work_t *w) {
-	luv_curl_t *lc = (luv_curl_t *)w->data;
+	curl_t *lc = (curl_t *)w->data;
 
 	if (lc->stat != ERROR)
 		curl_perform(lc);
@@ -250,24 +285,10 @@ static void curl_thread(uv_work_t *w) {
 	if (lc->proxy)
 		free(lc->proxy);
 
-	debug("thread ends r=%d", lc->curl_ret);
+	debug("ends r=%d", lc->curl_ret);
 }
 
-// upvalue[1] = done
-// upvalue[2] = luv_curl_t
-static int curl_done(lua_State *L) {
-	int n = lua_gettop(L);
-
-	lua_pushvalue(L, lua_upvalueindex(1));
-	if (lua_isnil(L, -1))
-		return 0;
-
-	lua_insert(L, 1);
-	lua_call_or_die(L, n, 0);
-	return 0;
-}
-
-static void curl_setproxy(luv_curl_t *lc, char *proxy) {
+static void curl_setproxy(curl_t *lc, char *proxy) {
 	if (proxy == NULL)
 		return;
 
@@ -307,7 +328,7 @@ static void curl_setproxy(luv_curl_t *lc, char *proxy) {
 	debug("proxy.port=%d", port);
 }
 
-static void curl_addheader(luv_curl_t *lc, char *name, char *val) {
+static void curl_addheader(curl_t *lc, char *name, char *val) {
 	if (val == NULL)
 		return;
 
@@ -326,8 +347,8 @@ static void curl_addheader(luv_curl_t *lc, char *name, char *val) {
 static int curl(lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
 
-	luv_curl_t *lc = (luv_curl_t *)lua_newuserdata(L, sizeof(luv_curl_t));
-	memset(lc, 0, sizeof(luv_curl_t));
+	curl_t *lc = (curl_t *)zalloc(sizeof(curl_t));
+	memset(lc, 0, sizeof(curl_t));
 	int lc_idx = 2;
 
 	lc->loop = loop;
@@ -377,10 +398,11 @@ static int curl(lua_State *L) {
 		curl_easy_setopt(lc->c, CURLOPT_POSTFIELDS, lc->reqstr);
 	}
 
-	lua_getfield(L, 1, "done");
-	lua_pushvalue(L, lc_idx); // userdata: must save it until call done
-	lua_pushcclosure(L, curl_done, 2);
-	lua_set_global_callback(L, "curl_done", lc->c);
+	lua_getfield(L, 1, "on_header");
+	if (!lua_isnil(L, -1)) {
+		curl_easy_setopt(lc->c, CURLOPT_HEADERFUNCTION, on_header);
+		curl_easy_setopt(lc->c, CURLOPT_HEADERDATA, lc);
+	}
 
 	lua_getfield(L, 1, "proxy");
 	char *proxy = (char *)lua_tostring(L, -1);
@@ -392,31 +414,53 @@ static int curl(lua_State *L) {
 	lua_getfield(L, 1, "user_agent");
 	curl_addheader(lc, "User-Agent", (char *)lua_tostring(L, -1));
 
-	lua_getfield(L, 1, "authorization");
-	curl_addheader(lc, "Authorization", (char *)lua_tostring(L, -1));
+	lua_getfield(L, 1, "headers");
+	int t = lua_gettop(L);
+	if (!lua_isnil(L, t)) {
+		lua_pushnil(L);
+		while (lua_next(L, t)) {
+			char *key = (char *)lua_tostring(L, -2);
+			char *val = (char *)lua_tostring(L, -1);
+			if (key && val)
+				curl_addheader(lc, key, val);
+			lua_pop(L, 1);
+		}
+	}
 
 	if (lc->headers)
 		curl_easy_setopt(lc->c, CURLOPT_HTTPHEADER, lc->headers);
 
 	// return {
+	//   ctx = [userptr lc],
 	//   cancel = [native function],
+	//   done = done,
 	//   stat = [native function],
 	// }
 	lua_newtable(L);
 
-	lua_pushvalue(L, lc_idx);
-	lua_pushcclosure(L, curl_cancel, 1);
+	lua_pushuserptr(L, lc);
+	lua_setfield(L, -2, "ctx");
+
+	lua_pushcfunction(L, curl_cancel);
 	lua_setfield(L, -2, "cancel");
 
-	lua_pushvalue(L, lc_idx);
-	lua_pushcclosure(L, curl_stat, 1);
+	lua_pushcfunction(L, curl_stat);
 	lua_setfield(L, -2, "stat");
 
-	debug("thread starts");
+	lua_getfield(L, 1, "on_header");
+	lua_setfield(L, -2, "on_header");
+
+	lua_getfield(L, 1, "done");
+	lua_setfield(L, -2, "done");
+
+	debug("starts");
 
 	uv_work_t *w = (uv_work_t *)zalloc(sizeof(uv_work_t));
 	w->data = lc;
 	uv_queue_work(loop, w, curl_thread, curl_thread_done);
+
+	lua_pushvalue(L, -1);
+	lua_setglobalptr(L, "curl", lc);
 
 	return 1;
 }
