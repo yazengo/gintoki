@@ -178,6 +178,36 @@ http_server {
 	end,
 }
 
+http_server {
+	port = 8883,
+	handler = function (r)
+		info('url', r:url())
+		info('method', r:method())
+        if r:url() == "/upload" then
+            if r:method() == 1 then
+                r:retfile('www/upload.html')
+            elseif r:method() == 3 then
+                local _, _, filename = string.find(r:body(), 'filename="(.+)"')
+                local list = prop.get('musics')
+                if list == nil then list = {} end
+                if not table.contains(list, filename) then
+                    table.insert(list, filename)
+                end
+                r:savebody('/mnt/sdcard/musics/' .. filename)
+                r:retjson(cjson.encode{result = 0})
+                prop.set('musics', list)
+            end
+
+        elseif r:url() == "/list" then
+            if r:method() == 1 then
+                local list = prop.get('musics')
+                info(list)
+                r:retjson(cjson.encode(list))
+            end
+        end
+	end,
+}
+
 pnp = {}
 pnp.init = function ()
 	pnp.notify = function () end

@@ -9,6 +9,7 @@
 
 #include "strbuf.h"
 #include "utils.h"
+#include "itunes.h"
 #include "http_parser.h"
 
 #define IPLEN 24
@@ -151,7 +152,6 @@ static void tcpcli_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 
 	strbuf_t *sb = tc->reqsb;
 	strbuf_append_fmt(sb, 1, "\x00");
-	debug("reqsb: %s", sb->buf);
 
 	tcpsrv_t *ts = tc->ts;
 	lua_State *L = ts->L;
@@ -371,6 +371,14 @@ static int httpcli_req_url(lua_State *L) {
 	return 1;
 }
 
+static int httpcli_req_method(lua_State *L) {
+    tcpcli_t *tc = lua_totcpcli(L, 1);
+    httpcli_t *hc = (httpcli_t *)tc->data;
+
+    lua_pushinteger(L, hc->hp->method);
+    return 1;
+}
+
 static int httpcli_req_body(lua_State *L) {
 	tcpcli_t *tc = lua_totcpcli(L, 1);
 	httpcli_t *hc = (httpcli_t *)tc->data;
@@ -500,6 +508,17 @@ static int httpcli_resp_retfile(lua_State *L) {
 	return 0;
 }
 
+static int httpcli_save_body(lua_State *L) {
+    tcpcli_t *tc = lua_totcpcli(L, 1);
+    httpcli_t *hc = (httpcli_t *)tc->data;
+
+    char* filename = (char *)lua_tostring(L, 2);
+    if (filename == NULL)
+        panic("iTunes filename must be set");
+    itunes_save_body(tc->ts->loop, tc->reqsb, filename);
+    return 0;
+}
+
 static int httpcli_resp_retjson(lua_State *L) {
 	tcpcli_t *tc = lua_totcpcli(L, 1);
 	httpcli_t *hc = (httpcli_t *)tc->data;
@@ -513,7 +532,7 @@ static int httpcli_resp_retjson(lua_State *L) {
 	hc->rethdr = strbuf_new(128);
 	strbuf_append_fmt_retry(hc->rethdr, 
 		"HTTP/1.1 200 OK\r\n" SERVER
-		"Content-Type: text/json\r\n"
+		"Content-Type: text/json; charset=utf-8\r\n"
 		"Content-Length: %d\r\n"
 		"\r\n", bodylen
 	);
@@ -529,7 +548,6 @@ static void httpcli_read_done(tcpcli_t *tc) {
 	httpcli_t *hc = (httpcli_t *)tc->data;
 
 	strbuf_append_mem(tc->reqsb, "", 1);
-	debug("body=%s", tc->reqsb->buf);
 
 	tcpsrv_t *ts = tc->ts;
 	lua_State *L = ts->L;
@@ -553,8 +571,12 @@ static void httpcli_read_done(tcpcli_t *tc) {
 	lua_setfield(L, -2, "ctx");
 	lua_pushcfunction(L, httpcli_req_url);
 	lua_setfield(L, -2, "url");
+	lua_pushcfunction(L, httpcli_req_method);
+	lua_setfield(L, -2, "method");
 	lua_pushcfunction(L, httpcli_req_body);
 	lua_setfield(L, -2, "body");
+	lua_pushcfunction(L, httpcli_save_body);
+	lua_setfield(L, -2, "savebody");
 	lua_pushcfunction(L, httpcli_resp_retjson);
 	lua_setfield(L, -2, "retjson");
 	lua_pushcfunction(L, httpcli_resp_retfile);
@@ -589,6 +611,7 @@ static int httpcli_on_body(http_parser *hp, const char *at, size_t length) {
 	tcpcli_t *tc = (tcpcli_t *)hp->data;
 	httpcli_t *hc = (httpcli_t *)tc->data;
 
+    debug("receive length: %d", length);
 	strbuf_append_mem(tc->reqsb, at, length);
 
 	return 0;
@@ -654,7 +677,6 @@ static void httpcli_free(tcpcli_t *tc) {
 	if (hc->retbody)
 		free(hc->retbody);
 
-	strbuf_free(tc->reqsb);
 	free(hc->hp);
 	free(hc);
 }
