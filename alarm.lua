@@ -5,7 +5,7 @@ local A = {}
 
 alarm_set = function()
     local a = prop.get('alarms')
-    if a == nil then return end
+    if not a then return end
     local n = 0
     local min = 0
     info("Alarm set")

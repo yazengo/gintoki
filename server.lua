@@ -188,21 +188,12 @@ http_server {
                 r:retfile('www/upload.html')
             elseif r:method() == 3 then
                 local _, _, filename = string.find(r:body(), 'filename="(.+)"')
-                local list = prop.get('musics')
-                if list == nil then list = {} end
-                if not table.contains(list, filename) then
-                    table.insert(list, filename)
+                if not filename then
+                    r:retjson(cjson.encode{result = 1})
+                    return
                 end
                 r:savebody('/mnt/sdcard/musics/' .. filename)
                 r:retjson(cjson.encode{result = 0})
-                prop.set('musics', list)
-            end
-
-        elseif r:url() == "/list" then
-            if r:method() == 1 then
-                local list = prop.get('musics')
-                info(list)
-                r:retjson(cjson.encode(list))
             end
         end
 	end,
