@@ -128,7 +128,7 @@ D.channels_list = function (c, done)
 		url = 'https://api.douban.com/v2/fm/app_channels?' .. encode_params(D.common_params()),
 		access_token = c.access_token,
 		done = function (rs, st)
-			r = cjson.decode(r) or {}
+			r = cjson.decode(rs) or {}
 			if r.groups then
 				done(r, nil)
 			elseif r.msg then
