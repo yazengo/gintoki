@@ -125,7 +125,6 @@ end
 
 if input then
 	input.cmds = {
-		[[ zpnp_notify('test') ]],
 		[[ audio.setvol(audio.getvol() - 10); print(audio.getvol()) ]],
 		[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
 		[[ audio.setvol(80); print(audio.getvol()) ]],
@@ -133,11 +132,6 @@ if input then
 		[[ handle{op='audio.play_pause_toggle'} ]],
 		[[ handle{op='audio.play_pause_toggle', current=true} ]],
 		[[ handle{op='audio.next'} ]],
-		[[ gsensor_prev() ]],
-		[[ gsensor_next() ]],
-		[[ inputdev_on_event(33); -- keypress ]],
-		[[ inputdev_on_event(1); -- vol 1 ]],
-		[[ inputdev_on_event(4); -- vol 4 ]],
 		[[ handle{op='radio.change_type', type='pandora'} ]],
 		[[ handle{op='radio.change_type', type='local'} ]],
 		[[ handle{op='radio.change_type', type='slumber'} ]],
@@ -148,6 +142,7 @@ if input then
 		[[ handle({op='audio.play', id='2'}, info)]],
 		[[ handle({op='audio.play', id='1'}, info)]],
 		[[ handle{op='audio.alert', url='testaudios/beep0.5s.mp3'} ]],
+		[[ handle{op='audio.insert', url='testaudios/10s-1.mp3', type='douban'} ]],
 	}
 end
 
