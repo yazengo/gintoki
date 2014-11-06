@@ -13,6 +13,7 @@ cobjs += net.o curl.o http_parser.o zpnp.o itunes.o
 luvmods = utils audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm
 
 config-mk = config$(if ${arch},-${arch},).mk
+config-h  = config$(if ${arch},-${arch},).h
 
 exe ?= server${objsuffix}
 include ${config-mk}
@@ -25,13 +26,13 @@ FORCE: ;
 hsrcs += $(wildcard *.h)
 gitver = $(shell git rev-parse HEAD | sed 's/\(.......\).*/\1/')
 
-cflags-main = -DGITVER=\"${gitver}\"
+cflags-main = -DGITVER=\"${gitver}\" -DCONFIG_H=\"${config-h}\"
 
-config.h: ${config-mk} Makefile FORCE
+${config-h}: ${config-mk} Makefile
 	@echo '#define LUVMOD_INIT $(foreach m,$(luvmods),luv_$(m)_init(L, loop);)' >$@
 	@for m in ${luvmods}; do echo "#include \"$$m.h\"" >>$@; done
 
-%${objsuffix}.o: %.c $(hsrcs) config.h
+%${objsuffix}.o: %.c $(hsrcs) ${config-h}
 	$(CC) $(cflags) $(cflags-$*) -c -o $@ $<
 
 ${exe}: ${cobjs}
