@@ -7,7 +7,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
-#include "config.h"
+#include CONFIG_H
 #include "cjson.h"
 #include "tests.h"
 
