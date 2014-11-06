@@ -19,12 +19,15 @@ include ${config-mk}
 
 all: ${exe}
 
+FORCE: ;
+.PHONY: FORCE
+
 hsrcs += $(wildcard *.h)
 gitver = $(shell git rev-parse HEAD | sed 's/\(.......\).*/\1/')
 
 cflags-main = -DGITVER=\"${gitver}\"
 
-config.h: ${config-mk} Makefile
+config.h: ${config-mk} Makefile FORCE
 	@echo '#define LUVMOD_INIT $(foreach m,$(luvmods),luv_$(m)_init(L, loop);)' >$@
 	@for m in ${luvmods}; do echo "#include \"$$m.h\"" >>$@; done
 
