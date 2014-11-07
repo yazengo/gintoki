@@ -45,5 +45,5 @@ end
 
 input = I
 
-stdin_open(input.handle)
+readline(input.handle)
 

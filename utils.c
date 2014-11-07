@@ -349,74 +349,6 @@ void lua_call_or_die_at(const char *at_func, const char *at_file, int at_lineno,
 	}
 }
 
-static char tty_readbuf[1024];
-
-static uv_buf_t ttyread_alloc(uv_handle_t *h, size_t len) {
-	return uv_buf_init(tty_readbuf, sizeof(tty_readbuf));
-}
-
-static void ttyraw_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
-	if (n <= 0)
-		return;
-
-	char key[2] = {};
-	*key = *(char *)buf.base;
-	if (*key == 'q') {
-		info("quits");
-		uv_tty_reset_mode();
-		exit(0);
-	}
-
-	lua_State *L = (lua_State *)st->data;
-	lua_pushstring(L, key);
-	lua_do_global_callback(L, "ttyraw", st, 1, 0);
-}
-
-// ttyraw_open(function (key) 
-// end)
-static int ttyraw_open(lua_State *L) {
-	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
-
-	uv_tty_t *tty = (uv_tty_t *)zalloc(sizeof(uv_tty_t));
-	tty->data = L;
-
-	uv_tty_init(loop, tty, 0, 1);
-	uv_tty_set_mode(tty, 1);
-
-	uv_read_start((uv_stream_t *)tty, ttyread_alloc, ttyraw_read);
-
-	lua_set_global_callback(L, "ttyraw", tty);
-
-	return 0;
-}
-
-static void stdin_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
-	lua_State *L = (lua_State *)st->data;
-
-	if (n <= 0)
-		return;
-
-	debug("n=%d", n);
-	buf.base[n-1] = 0;
-	lua_pushstring(L, buf.base);
-	lua_do_global_callback(L, "stdin_read", st, 1, 0);
-}
-
-static int stdin_open(lua_State *L) {
-	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
-
-	uv_tty_t *tty = (uv_tty_t *)zalloc(sizeof(uv_tty_t));
-	tty->data = L;
-
-	uv_tty_init(loop, tty, 0, 1);
-
-	uv_read_start((uv_stream_t *)tty, ttyread_alloc, stdin_read);
-
-	lua_set_global_callback(L, "stdin_read", tty);
-
-	return 0;
-}
-
 // os.readdir('path', done)
 static int os_readdir(lua_State *L) {
 	const char *path = lua_tostring(L, 1);
@@ -443,59 +375,6 @@ static int os_readdir(lua_State *L) {
 	}
 
 	return 1;
-}
-
-static void readdir_done(uv_work_t *w, int stat) {
-	lua_State *L = luv_state(w);
-	int i = lua_gettop(L);
-
-	lua_xmove(luv_threadstate(w), L, 1);
-	lua_getfield(L, i+1, "done");
-	lua_getfield(L, i+1, "_r");
-	lua_call_or_die(L, 1, 0);
-
-	lua_settop(L, i);
-	luv_free(w);
-}
-
-static void readdir_thread(uv_work_t *w) {
-	lua_State *L = luv_threadstate(w);
-
-	lua_getfield(L, 1, "path");
-	const char *path = lua_tostring(L, -1);
-	
-	lua_newtable(L);
-	int t = lua_gettop(L);
-
-	DIR *dir = opendir(path);
-	if (dir) {
-		struct dirent *e;
-		int i;
-		for (i = 1; ; i++) {
-			e = readdir(dir);
-			if (e == NULL)
-				break;
-			if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) {
-				i--;
-				continue;
-			}
-			lua_pushnumber(L, i);
-			lua_pushstring(L, e->d_name);
-			lua_settable(L, t);
-		}
-		closedir(dir);
-	}
-	lua_setfield(L, 1, "_r");
-
-	lua_pushvalue(L, 1);
-}
-
-static int luv_readdir(lua_State *L, uv_loop_t *loop) {
-	uv_work_t *w = (uv_work_t *)luv_newthread(L, loop, sizeof(uv_work_t));
-	lua_pushvalue(L, 1);
-	lua_xmove(L, luv_threadstate(w), 1);
-	uv_queue_work(loop, w, readdir_thread, readdir_done);
-	return 0;
 }
 
 void lua_pushuserptr(lua_State *L, void *p) {
@@ -575,77 +454,7 @@ void utils_preinit(uv_loop_t *loop) {
 	}
 }
 
-static void lua_system_handle_free(uv_handle_t *h) {
-	free(h);
-}
-
-static void lua_system_on_exit(uv_process_t *proc, int stat, int sig) {
-	lua_State *L = (lua_State *)proc->data;
-
-	lua_pushnumber(L, stat);
-	lua_do_global_callback(L, "system_done", proc, 1, 1);
-
-	uv_close((uv_handle_t *)proc, lua_system_handle_free);
-}
-
-// arg[1] = cmd
-// arg[2] = done(code)
-static int lua_system(lua_State *L) {
-	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
-
-	char *cmd = (char *)lua_tostring(L, 1);
-	if (cmd == NULL)
-		return 0;
-
-	uv_process_t *proc = (uv_process_t *)zalloc(sizeof(uv_process_t));
-	proc->data = L;
-
-	uv_process_options_t opts = {};
-
-	char *args[] = {"sh", "-c", cmd, NULL};
-	opts.file = args[0];
-	opts.args = args;
-	opts.exit_cb = lua_system_on_exit;
-
-	lua_pushvalue(L, 2);
-	lua_set_global_callback(L, "system_done", proc);
-
-	int r = uv_spawn(loop, proc, opts);
-	info("cmd=%s spawn=%d pid=%d", cmd, r, proc->pid);
-
-	return 0;
-}
-
-static int lua_hostname(lua_State *L) {
-	char name[512] = {};
-	gethostname(name, sizeof(name)-1);
-	lua_pushstring(L, name);
-	return 1;
-}
-
-static int lua_hostplat(lua_State *L) {
-#if defined(__mips__)
-	lua_pushstring(L, "mips");
-#else
-	lua_pushstring(L, "x86");
-#endif
-	return 1;
-}
-
-static int lua_now(lua_State *L) {
-	lua_pushnumber(L, now());
-	return 1;
-}
-
 void luv_utils_init(lua_State *L, uv_loop_t *loop) {
-	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, ttyraw_open, 1);
-	lua_setglobal(L, "ttyraw_open");
-
-	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, stdin_open, 1);
-	lua_setglobal(L, "stdin_open");
-
 	// os.readdir = [native function]
 	lua_getglobal(L, "os");
 	lua_pushuserptr(L, loop);
@@ -653,29 +462,10 @@ void luv_utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_setfield(L, -2, "readdir");
 	lua_pop(L, 1);
 
-	luv_register(L, loop, "readdir", luv_readdir);
-
 	lua_pushcfunction(L, lua_log);
 	lua_setglobal(L, "_log");
 
 	lua_pushcfunction(L, lua_setloglevel);
 	lua_setglobal(L, "setloglevel");
-
-	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, lua_system, 1);
-	lua_setglobal(L, "system");
-
-	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, stdin_open, 1);
-	lua_setglobal(L, "stdin_open");
-
-	lua_pushcfunction(L, lua_hostname);
-	lua_setglobal(L, "hostname");
-
-	lua_pushcfunction(L, lua_hostplat);
-	lua_setglobal(L, "hostplat");
-
-	lua_pushcfunction(L, lua_now);
-	lua_setglobal(L, "now");
 }
 
