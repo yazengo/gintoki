@@ -1,5 +1,7 @@
 
-local mtime 
+require('prop')
+
+local mtime = prop.get('comet.mtime')
 local get
 
 get = function (done) 
@@ -9,16 +11,26 @@ get = function (done)
 			['If-Modified-Since'] = mtime,
 		},
 		done = function (r, st)
-			info(r)
-			get(done)
+			done(r)
+			if not r then
+				info('retry')
+				set_timeout(function ()
+					get(done)
+				end, 1000)
+			else
+				get(done)
+			end
 		end,
 		on_header = function (k, v)
 			if k == 'Last-Modified' then
 				mtime = v
+				prop.set('comet.mtime', mtime)
 			end
 		end,
 	}
 end
 
-get()
+get(function (r)
+	info(r)
+end)
 
