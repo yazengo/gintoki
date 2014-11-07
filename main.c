@@ -7,7 +7,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
-#include CONFIG_H
+#include "utils.h"
 #include "cjson.h"
 #include "tests.h"
 
@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
 	luaL_openlibs(L);
 	luaopen_cjson_safe(L);
 
-	LUVMOD_INIT;
+	LUVINIT;
 
 	if (test_c >= 200 && test_c < 300) {
 		run_test_c_post(test_c-200, L, loop, argv);
