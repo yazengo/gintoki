@@ -1,3 +1,8 @@
 
-info(os.readdir('upnpweb'))
+readdir {
+	path = '.',
+	done = function (r)
+		info(r)
+	end,
+}
 

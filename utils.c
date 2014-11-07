@@ -499,6 +499,59 @@ static int os_readdir(lua_State *L) {
 	return 1;
 }
 
+static void readdir_done(uv_work_t *w, int stat) {
+	lua_State *L = luv_state(w);
+	int i = lua_gettop(L);
+
+	lua_xmove(luv_threadstate(w), L, 1);
+	lua_getfield(L, i+1, "done");
+	lua_getfield(L, i+1, "_r");
+	lua_call_or_die(L, 1, 0);
+
+	lua_settop(L, i);
+	luv_free(w);
+}
+
+static void readdir_thread(uv_work_t *w) {
+	lua_State *L = luv_threadstate(w);
+
+	lua_getfield(L, 1, "path");
+	const char *path = lua_tostring(L, -1);
+	
+	lua_newtable(L);
+	int t = lua_gettop(L);
+
+	DIR *dir = opendir(path);
+	if (dir) {
+		struct dirent *e;
+		int i;
+		for (i = 1; ; i++) {
+			e = readdir(dir);
+			if (e == NULL)
+				break;
+			if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) {
+				i--;
+				continue;
+			}
+			lua_pushnumber(L, i);
+			lua_pushstring(L, e->d_name);
+			lua_settable(L, t);
+		}
+		closedir(dir);
+	}
+	lua_setfield(L, 1, "_r");
+
+	lua_pushvalue(L, 1);
+}
+
+static int luv_readdir(lua_State *L, uv_loop_t *loop) {
+	uv_work_t *w = (uv_work_t *)luv_newthread(L, loop, sizeof(uv_work_t));
+	lua_pushvalue(L, 1);
+	lua_xmove(L, luv_threadstate(w), 1);
+	uv_queue_work(loop, w, readdir_thread, readdir_done);
+	return 0;
+}
+
 void lua_pushuserptr(lua_State *L, void *p) {
 	void *ud = lua_newuserdata(L, sizeof(p));
 	memcpy(ud, &p, sizeof(p));
@@ -667,6 +720,8 @@ void luv_utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushcclosure(L, os_readdir, 1);
 	lua_setfield(L, -2, "readdir");
 	lua_pop(L, 1);
+
+	luv_register(L, loop, "readdir", luv_readdir);
 
 	lua_pushcfunction(L, lua_log);
 	lua_setglobal(L, "_log");

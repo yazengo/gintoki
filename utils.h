@@ -4,6 +4,7 @@
 #include <lua.h>
 
 #include "queue.h"
+#include "luv.h"
 
 enum {
 	LOG_DEBUG = 0,
