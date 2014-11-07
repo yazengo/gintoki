@@ -12,7 +12,6 @@
 #include "pcm.h"
 #include "audio_in.h"
 #include "audio_out.h"
-#include "audio_mixer.h"
 
 #define MAX_MIXLEN (1024*2)
 #define MAX_TRACKBUF (1024*8)
@@ -27,14 +26,18 @@ typedef struct {
 	audio_in_t *ai;
 
 	int stat;
-	unsigned paused:1;
 
+	unsigned paused:1;
 	unsigned firstplay:1;
 
 	ringbuf_t buf;
-	float vol;
 	float dur;
 } track_t;
+
+typedef struct {
+	unsigned indievol:1;
+	float vol;
+} trackattr_t;
 
 enum {
 	READING_BUF_EMPTY,
@@ -71,6 +74,7 @@ enum {
 
 typedef struct mixer_s {
 	track_t *tracks[TRACKS_NR];
+	trackattr_t trackattrs[TRACKS_NR];
 
 	int stat;
 
@@ -453,6 +457,7 @@ static void mixer_do_mix(mixer_t *am, do_mix_t *dm) {
 
 	for (i = 0; i < dm->n; i++) {
 		track_t *tr = dm->tr[i];
+		trackattr_t *ta = &am->trackattrs[tr->ti];
 
 		void *buf; int len;
 		ringbuf_data_ahead_get(&tr->buf, &buf, &len);
@@ -472,7 +477,10 @@ static void mixer_do_mix(mixer_t *am, do_mix_t *dm) {
 				}
 			}
 		} else {
-			pcm_do_volume(buf, dm->len, am->vol);
+			if (ta->indievol)
+				pcm_do_volume(buf, dm->len, ta->vol);
+			else
+				pcm_do_volume(buf, dm->len, am->vol);
 		}
 
 		if (i == 0)
@@ -672,6 +680,22 @@ static int lua_audio_info(lua_State *L) {
 	return 1;
 }
 
+// audio.setopt {track = 2, vol = 10, indievol = true}
+static int lua_audio_setopt(lua_State *L) {
+	mixer_t *am = lua_getam(L);
+	trackattr_t *ta = &am->trackattrs[lua_parse_track_i(L)];
+
+	lua_getfield(L, 1, "indievol");
+	if (lua_toboolean(L, -1))
+		ta->indievol = 1;
+
+	lua_getfield(L, 1, "vol");
+	if (!lua_isnil(L, -1))
+		ta->vol = vol2fvol(lua_tonumber(L, -1));
+
+	return 0;
+}
+
 // audio.setvol(vol) = 11
 static int lua_audio_setvol(lua_State *L) {
 	mixer_t *am = lua_getam(L);
@@ -786,6 +810,7 @@ static struct {
 	{"info", lua_audio_info},
 	{"getvol", lua_audio_getvol},
 	{"setvol", lua_audio_setvol},
+	{"setopt", lua_audio_setopt},
 	{"pause", lua_audio_pause},
 	{"resume", lua_audio_resume},
 	{"pause_resume_toggle", lua_audio_pause_resume_toggle},

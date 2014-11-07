@@ -287,60 +287,6 @@ void uv_call_sync(uv_loop_t *loop, uv_callreq_t *req, uv_call_cb cb) {
 	uv_barrier_wait(&req->b);
 }
 
-static void on_timeout(uv_timer_t *h, int stat) {
-	lua_State *L = (lua_State *)h->data;
-
-	lua_getglobalptr(L, "timer", h);
-	if (lua_isnil(L, -1)) {
-		uv_close((uv_handle_t *)h, timer_free);
-		return;
-	}
-
-	lua_call_or_die(L, 0, 0);
-
-	if (uv_timer_get_repeat(h) == 0) {
-		uv_close((uv_handle_t *)h, timer_free);
-		return;
-	}
-}
-
-// arg[1] = callback
-// arg[2] = timeout
-static int _lua_set_timeout(lua_State *L, int repeat) {
-	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
-	int timeout = lua_tonumber(L, 2);
-
-	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
-	t->data = L;
-	uv_timer_init(loop, t);
-	uv_timer_start(t, on_timeout, timeout, repeat ? timeout : 0);
-
-	lua_pushvalue(L, 1);
-	char name[128];
-	globalptr_name(name, "timer", t);
-	lua_setglobal(L, name);
-
-	lua_pushstring(L, name);
-	return 1;
-}
-
-static int lua_clear_timeout(lua_State *L) {
-	const char *name = lua_tostring(L, 1);
-	if (name == NULL)
-		panic("handle must be set");
-	lua_pushnil(L);
-	lua_setglobal(L, name);
-	return 0;
-}
-
-static int lua_set_timeout(lua_State *L) {
-	return _lua_set_timeout(L, 0);
-}
-
-static int lua_set_interval(lua_State *L) {
-	return _lua_set_timeout(L, 1);
-}
-
 static int lua_log(lua_State *L) {
 	int level = lua_tonumber(L, 1);
 	const char *func = lua_tostring(L, 2);
@@ -692,20 +638,6 @@ static int lua_now(lua_State *L) {
 }
 
 void luv_utils_init(lua_State *L, uv_loop_t *loop) {
-	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, lua_set_timeout, 1);
-	lua_setglobal(L, "set_timeout");
-
-	lua_pushcfunction(L, lua_clear_timeout);
-	lua_setglobal(L, "clear_timeout");
-
-	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, lua_set_interval, 1);
-	lua_setglobal(L, "set_interval");
-
-	lua_pushcfunction(L, lua_clear_timeout);
-	lua_setglobal(L, "clear_interval");
-
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, ttyraw_open, 1);
 	lua_setglobal(L, "ttyraw_open");
