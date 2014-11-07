@@ -575,7 +575,7 @@ static int luv_decode_hex(lua_State *L) {
 }
 
 // arg[1] = 'key'
-static int luv_new(lua_State *L) {
+static int lua_new(lua_State *L) {
 	char *key = (char *)lua_tostring(L, 1);
 	if (key == NULL)
 		panic("key is nil");
@@ -606,7 +606,7 @@ static int luv_new(lua_State *L) {
 // b:decode_hex('0abdefc12')
 
 void luv_blowfish_init(lua_State *L, uv_loop_t *loop) {
-	lua_pushcfunction(L, luv_new);
+	lua_pushcfunction(L, lua_new);
 	lua_setglobal(L, "blowfish");
 }
 

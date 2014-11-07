@@ -3,7 +3,7 @@ cflags += -g -I. -Werror
 
 ldflags += -g -lm -luv -lcurl
 
-cobjs += main.o utils.o strbuf.o popen.o ringbuf.o tests.o
+cobjs += main.o utils.o luv.o strbuf.o popen.o ringbuf.o tests.o
 cobjs += audio_mixer.o audio_out_test.o audio_in_avconv.o audio_in.o pcm.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
