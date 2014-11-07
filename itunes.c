@@ -1,3 +1,6 @@
+
+#include <unistd.h>
+
 #include <lua.h>
 #include <uv.h>
 
