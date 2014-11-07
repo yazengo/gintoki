@@ -143,6 +143,54 @@ inputdev_on_event = function (e)
 		info('network down')
 	end
 
+	if e == 50 then
+		audio.alert {
+			url = 'testaudios/received.mp3',
+			vol = 20,
+		}
+		info('wifi config receive')
+	end
+
+	if e == 51 then
+		audio.alert {
+			url = 'testaudios/association.mp3',
+			vol = 20,
+		}
+		info('wifi association')
+	end
+
+	if e == 52 then
+		audio.alert {
+			url = 'testaudios/disassociation.mp3',
+			vol = 20,
+		}
+		info('wifi disassociation')
+	end
+
+	if e == 53 then
+		audio.alert {
+			url = 'testaudios/connected_fail.mp3',
+			vol = 20,
+		}
+		info('wifi connected fail')
+	end
+
+	if e == 54 then
+		audio.alert {
+			url = 'testaudios/wifi_unknown_err.mp3',
+			vol = 20,
+		}
+		info('wifi unknown error')
+	end
+
+	if e == 55 then
+		audio.alert {
+			url = 'testaudios/association_but_dns_fail.mp3',
+			vol = 20,
+		}
+		info('wifi association, but DNS fail')
+	end
+
 	if e == 40 then
 		gsensor_next()
 	end

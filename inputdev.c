@@ -82,6 +82,13 @@ enum {
 
 	PREV = 40,
 	NEXT = 41,
+
+	WIFI_CONFIG_RECV = 50,
+	WIFI_ASSOC = 51,
+	WIFI_DISASSOC = 52,
+	WIFI_CONN_FAIL = 53,
+	WIFI_UNKNOWN_ERR = 54,
+	DNS_FAIL = 55,
 };
 
 enum {
@@ -189,6 +196,18 @@ static void netnotify_read(struct input_event e) {
 	if (e.type == EV_SYN && last_e.type != EV_SYN) {
 		if (last_e.code == 150)
 			inputdev_emit_event(last_e.value ? NETWORK_UP : NETWORK_DOWN);
+		if (last_e.code == 171 && last_e.value == 1)
+			inputdev_emit_event(WIFI_CONFIG_RECV);
+		if (last_e.code == 218 && last_e.value == 1)
+			inputdev_emit_event(WIFI_ASSOC);
+		if (last_e.code == 206 && last_e.value == 1)
+			inputdev_emit_event(WIFI_DISASSOC);
+		if (last_e.code == 223 && last_e.value == 1)
+			inputdev_emit_event(WIFI_CONN_FAIL);
+		if (last_e.code == 240 && last_e.value == 1)
+			inputdev_emit_event(WIFI_UNKNOWN_ERR);
+		if (last_e.code == 205 && last_e.value == 1)
+			inputdev_emit_event(DNS_FAIL);
 	}
 
 	dev->last_ev[NETNOTIFY] = e;
