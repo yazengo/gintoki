@@ -8,7 +8,7 @@ set_timeout(function ()
 end, 1000)
 
 set_timeout(function ()
-	clear_timeout(h1)
+	clear_interval(h1)
 end, 3000)
 
 h2 = set_timeout(function ()
