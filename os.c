@@ -37,7 +37,7 @@ static void readline_on_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 	lua_State *L = luv_state(rl);
 	int t = lua_gettop(L);
 
-	luv_push(L, rl);
+	luv_pushctx(L, rl);
 	lua_getfield(L, t+1, "_read");
 	lua_pushstring(L, buf.base);
 	lua_call_or_die(L, 1, 0);
@@ -47,7 +47,7 @@ static void readline_on_read(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
 
 // readline(func)
 static int luv_readline(lua_State *L, uv_loop_t *loop) {
-	readline_t *rl = (readline_t *)luv_new(L, loop, sizeof(readline_t));
+	readline_t *rl = (readline_t *)luv_newctx(L, loop, sizeof(readline_t));
 
 	rl->tty.data = rl;
 	uv_tty_init(loop, &rl->tty, 0, 1);
@@ -73,7 +73,7 @@ static void readdir_done(uv_work_t *w, int stat) {
 	lua_call_or_die(L, 1, 0);
 
 	lua_settop(L, i);
-	luv_free(w);
+	luv_unref(w);
 }
 
 static void readdir_thread(uv_work_t *w) {
@@ -109,7 +109,7 @@ static void readdir_thread(uv_work_t *w) {
 }
 
 static int luv_readdir(lua_State *L, uv_loop_t *loop) {
-	uv_work_t *w = (uv_work_t *)luv_newthread(L, loop, sizeof(uv_work_t));
+	uv_work_t *w = (uv_work_t *)luv_newthreadctx(L, loop, sizeof(uv_work_t));
 	lua_pushvalue(L, 1);
 	lua_xmove(L, luv_threadstate(w), 1);
 	uv_queue_work(loop, w, readdir_thread, readdir_done);
