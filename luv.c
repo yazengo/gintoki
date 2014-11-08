@@ -1,55 +1,39 @@
 
 #include <uv.h>
 #include <lua.h>
+#include <lauxlib.h>
 #include <stdlib.h>
 
 #include "utils.h"
 
-/*
- * Usage:
- *
-static void on_conn(srv_t *s) {
-	lua_State *L = luv_state(s);
-	cli_t *c = ..
+typedef struct {
+	lua_State *L, *Lt;
+	uv_loop_t *loop;
+	luv_gc_cb gc;
+	char data[0];
+} luv_t;
 
-	luv_new(L, loop, c);
-	luv_setfunc(L, -1, "retjson", retjson);
-}
+static int __gc(lua_State *L) {
+	lua_getfield(L, 1, "_ctx");
+	luv_t *l = (luv_t *)lua_touserptr(L, -1);
 
-static int srv_cancel(lua_State *L, uv_loop_t *loop) {
-	srv_t *s = (srv_t *)lua_tohandle(L, 1);
+	if (l->gc)
+		l->gc(l->loop, l->data);
+	free(l);
 
 	return 0;
 }
 
-static int http_server(lua_State *L, uv_loop_t *loop) {
-	
-	srv_t *s = ...
-
-	luv_new(L, loop, s);
-	luv_setfunc(L, -1, "cancel", srv_cancel);
-
-	luv_free(L, s);
-
-	uv_read(loop);
-	
-	return 1;
+static void lua_newmetatbl(lua_State *L) {
+	lua_newtable(L);
+	lua_pushliteral(L, "__gc");
+	lua_pushcfunction(L, __gc);
+	lua_rawset(L, -3);
 }
 
-lua_State *L = luv_threadstate(s);
-lua_pushstring(L, "xx");
-
-luv_newthread(L, loop, s);
-lua_xmove(L, luv_threadstate(s), 1);
-
-luv_register(L, loop, "http_server", http_server);
-*/
-
-typedef struct {
-	lua_State *L, *Lt;
-	uv_loop_t *loop;
-	char data[0];
-} luv_t;
+static void lua_pushmaptbl(lua_State *L) {
+	lua_pushvalue(L, LUA_REGISTRYINDEX);
+}
 
 static void *_new(lua_State *L, uv_loop_t *loop, int size, int usethread) {
 	luv_t *l = (luv_t *)zalloc(sizeof(luv_t) + size);
@@ -57,56 +41,69 @@ static void *_new(lua_State *L, uv_loop_t *loop, int size, int usethread) {
 	l->loop = loop;
 
 	lua_newtable(L);
+	int t = lua_gettop(L);
+
+	lua_newmetatbl(L);
+	lua_setmetatable(L, t);
 
 	lua_pushuserptr(L, l);
-	lua_setfield(L, -2, "_luv");
+	lua_setfield(L, t, "_ctx");
 
-	lua_pushuserptr(L, loop);
-	lua_setfield(L, -2, "_loop");
+	lua_pushmaptbl(L);
+	lua_pushlightuserdata(L, l);
+	lua_pushvalue(L, t);
+	lua_settable(L, -3);
+	lua_pop(L, 1);
 
 	if (usethread) {
 		l->Lt = lua_newthread(L);
-		lua_setfield(L, -2, "_thread");
+		lua_setfield(L, t, "_thread");
 	}
-
-	lua_pushvalue(L, -1);
-	lua_setglobalptr(L, "luv", l);
 
 	return l->data;
 }
 
-void *luv_newthread(lua_State *L, uv_loop_t *loop, int size) {
+void *luv_newthreadctx(lua_State *L, uv_loop_t *loop, int size) {
 	return _new(L, loop, size, 1);
 }
 
-void *luv_new(lua_State *L, uv_loop_t *loop, int size) {
+void *luv_newctx(lua_State *L, uv_loop_t *loop, int size) {
 	return _new(L, loop, size, 0);
 }
 
-static luv_t *_luv_handle(lua_State *L, int i) {
-	luv_t *l;
-	lua_getfield(L, i, "_luv");
-	l = (luv_t *)lua_touserptr(L, -1);
+void luv_setgc(void *_l, luv_gc_cb cb) {
+	luv_t *l = (luv_t *)(_l - sizeof(luv_t));
+	l->gc = cb;
+}
+
+void luv_pushctx(lua_State *L, void *_l) {
+	luv_t *l = (luv_t *)(_l - sizeof(luv_t));
+
+	lua_pushmaptbl(L);
+	lua_pushlightuserdata(L, l);
+	lua_gettable(L, -2);
+	lua_remove(L, -2);
+}
+
+void *luv_toctx(lua_State *L, int i) {
+	lua_getfield(L, i, "_ctx");
+	luv_t *l = (luv_t *)lua_touserptr(L, -1);
 	lua_pop(L, 1);
-	return l;
+
+	return l->data;
 }
 
-void luv_push(lua_State *L, void *_l) {
+void luv_unref(void *_l) {
 	luv_t *l = (luv_t *)(_l - sizeof(luv_t));
-	lua_getglobalptr(L, "luv", l);
-}
+	lua_State *L = l->L;
+	
+	lua_pushmaptbl(L);
+	lua_pushlightuserdata(L, l);
+	lua_pushnil(L);
+	lua_settable(L, -3);
+	lua_pop(L, 1);
 
-void *luv_handle(lua_State *L, int i) {
-	return _luv_handle(L, i)->data;
-}
-
-void luv_free(void *_l) {
-	luv_t *l = (luv_t *)(_l - sizeof(luv_t));
-	lua_pushnil(l->L);
-	lua_setglobalptr(l->L, "luv", l);
-	if (l->Lt)
-		lua_close(l->Lt);
-	free(l);
+	lua_gc(L, LUA_GCCOLLECT, 0);
 }
 
 lua_State *luv_state(void *_l) {
@@ -133,7 +130,7 @@ void luv_register(lua_State *L, uv_loop_t *loop, const char *name, luv_cb cb) {
 }
 
 void luv_setfunc(lua_State *L, int i, const char *name, luv_cb cb) {
-	luv_t *l = _luv_handle(L, i);
+	luv_t *l = (luv_t *)lua_touserptr(L, i);
 	lua_pushuserptr(L, l->loop);
 	lua_pushuserptr(L, cb);
 	lua_pushcclosure(L, lua_cb, 2);
