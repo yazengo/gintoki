@@ -46,6 +46,10 @@ int main(int argc, char *argv[]) {
 			break;
 		}
 	}
+	if (test_c == -1 && run_lua == NULL) {
+		usage(argv[0]);
+		return -1;
+	}
 
 	info("starts");
 
@@ -53,9 +57,6 @@ int main(int argc, char *argv[]) {
 		run_test_c_pre(test_c-100);
 		return 0;
 	}
-
-	uv_async_t as;
-	uv_async_init(loop, &as, NULL); // make loop never exists
 
 	lua_State *L = luaL_newstate();
 
@@ -82,7 +83,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	info("scripts loaded in %.f ms", (now()-tm_start)*1e3);
-
+	
 	return uv_run(loop, UV_RUN_DEFAULT);
 }
 
