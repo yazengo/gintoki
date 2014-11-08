@@ -79,5 +79,8 @@ void lua_pushuserdata(lua_State *L, void *p, int len);
 void *lua_touserptr(lua_State *L, int index);
 void lua_setuserptr(lua_State *L, int index, void *p);
 
+#define lua_dumpstack(L) _lua_dumpstack_at(__func__, __FILE__, __LINE__, L)
+void _lua_dumpstack_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L);
+
 char *strndup(const char *s, size_t n);
 

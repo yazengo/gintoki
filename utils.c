@@ -117,6 +117,16 @@ int lua_do_global_callback(lua_State *L, const char *pref, void *p, int nargs, i
 	return 0;
 }
 
+void _lua_dumpstack_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L) {
+	int i;
+	_log(LOG_INFO, at_func, at_file, at_lineno, "==== top=%d", lua_gettop(L));
+	for (i = -lua_gettop(L); i <= -1; i++) {
+		_log(LOG_INFO, at_func, at_file, at_lineno, 
+				"%d %s: %p", i, lua_typename(L, lua_type(L, i)), lua_topointer(L, i)
+				);
+	}
+}
+
 typedef struct {
 	lua_State *L;
 
