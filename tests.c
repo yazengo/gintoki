@@ -7,6 +7,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
+#include "luv.h"
 #include "utils.h"
 #include "strbuf.h"
 #include "strparser.h"
@@ -771,6 +772,53 @@ static void test_panic() {
 	panic("BOOM");
 }
 
+static int test_metatable_gc(lua_State *L) {
+	info("called");
+	return 0;
+}
+
+static int test_metatable_create(lua_State *L) {
+	lua_newtable(L);
+
+	lua_pushstring(L, "test");
+	lua_setfield(L, -2, "test");
+
+	lua_pushuserptr(L, (void *)0x1234);
+	lua_setfield(L, -2, "test_aa");
+
+	lua_newtable(L); /* create metatable. */
+	lua_pushliteral(L, "__gc"); /* push key '__gc' */
+	lua_pushcfunction(L, test_metatable_gc); /* push gc method. */
+	lua_rawset(L, -3);    /* metatable['__gc'] = userdata_gc_method */
+	lua_setmetatable(L, -2); /* set the userdata's metatable. */
+
+	return 1; /* returning only the userdata object. */
+}
+
+static void test_metatable(lua_State *L) {
+	info("test metatable");
+	lua_register(L, "gintoki", test_metatable_create);
+	lua_dostring_or_die(L, "gintoki()");
+	lua_dostring_or_die(L, "a = gintoki()");
+}
+
+static void luv_lobj_gc(uv_loop_t *loop, void *_p) {
+	info("called");
+}
+
+static int luv_lobj(lua_State *L, uv_loop_t *loop) {
+	int *p = (int *)luv_newctx(L, loop, sizeof(int));
+	luv_setgc(p, luv_lobj_gc);
+	luv_unref(p);
+	return 1;
+}
+
+static void test_luv(lua_State *L, uv_loop_t *loop) {
+	luv_register(L, loop, "lobj", luv_lobj);
+	lua_dostring_or_die(L, "lobj()");
+	lua_gc(L, LUA_GCCOLLECT, 0);
+}
+
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 	info("i=%d", i);
 	if (i == 3)
@@ -787,5 +835,9 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 		test_poll1(loop);
 	if (i == 12)
 		test_panic();
+	if (i == 13)
+		test_metatable(L);
+	if (i == 14)
+		test_luv(L, loop);
 }
 
