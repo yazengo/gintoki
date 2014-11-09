@@ -5,6 +5,7 @@
 #include <uv.h>
 
 typedef int (*luv_cb)(lua_State *L, uv_loop_t *loop);
+typedef int (*luv_closure_cb)(lua_State *L, uv_loop_t *loop, void *_l);
 typedef void (*luv_gc_cb)(uv_loop_t *loop, void *_l);
 
 void *luv_newthreadctx(lua_State *L, uv_loop_t *loop, int size);
@@ -24,5 +25,5 @@ lua_State *luv_threadstate(void *_l);
 void luv_unref(void *_l);
 
 void luv_register(lua_State *L, uv_loop_t *loop, const char *name, luv_cb cb);
-void luv_setfunc(lua_State *L, int i, const char *name, luv_cb cb);
+void luv_pushcclosure(lua_State *L, luv_closure_cb cb, void *_l);
 

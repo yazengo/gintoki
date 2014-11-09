@@ -19,8 +19,10 @@ static int __gc(lua_State *L) {
 
 	if (l->gc)
 		l->gc(l->loop, l->data);
-	free(l);
+	if (l->Lt)
+		lua_close(l->Lt);
 
+	free(l);
 	return 0;
 }
 
@@ -129,11 +131,15 @@ void luv_register(lua_State *L, uv_loop_t *loop, const char *name, luv_cb cb) {
 	lua_setglobal(L, name);
 }
 
-void luv_setfunc(lua_State *L, int i, const char *name, luv_cb cb) {
-	luv_t *l = (luv_t *)lua_touserptr(L, i);
-	lua_pushuserptr(L, l->loop);
+static int lua_closure_cb(lua_State *L) {
+	luv_t *l = (luv_t *)lua_touserptr(L, lua_upvalueindex(1));
+	luv_closure_cb cb = (luv_closure_cb)lua_touserptr(L, lua_upvalueindex(2));
+	return cb(L, l->loop, l->data);
+}
+
+void luv_pushcclosure(lua_State *L, luv_closure_cb cb, void *_l) {
+	lua_pushuserptr(L, _l - sizeof(luv_t));
 	lua_pushuserptr(L, cb);
-	lua_pushcclosure(L, lua_cb, 2);
-	lua_setfield(L, i, name);
+	lua_pushcclosure(L, lua_closure_cb, 2);
 }
 
