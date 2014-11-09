@@ -31,6 +31,12 @@ table.append = function (a, ...)
 	return a
 end
 
+table.count = function (t)
+	local n = 0
+	for _ in pairs(t) do n = n + 1 end
+	return n
+end
+
 table.contains = function (table, element)
     for _, value in pairs(table) do
         if value == element then
