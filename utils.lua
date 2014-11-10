@@ -114,7 +114,7 @@ end
 math.randomseed(os.time())
 
 urlencode = function (s)
-	return string.gsub(s, "([!*'%(%);:@&=+$,/?%%#%[%]])", function (ch) 
+	return string.gsub(s, "([ !*'%(%);:@&=+$,/?%%#%[%]])", function (ch) 
 		return string.format('%%%.2X', string.byte(ch))
 	end)
 end
