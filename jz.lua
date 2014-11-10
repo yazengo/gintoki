@@ -32,7 +32,10 @@ getssid = function (done)
 			for k,v in string.gmatch(r, 'ssid=([^\n]+)') do
 				ssid = k
 			end
-			done(ssid)
+			for k,v in string.gmatch(r, 'ip_address=([^\n]+)') do
+				ipaddr = k
+			end
+			done(ssid, ipaddr)
 		end,
 	}
 end
