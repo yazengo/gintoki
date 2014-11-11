@@ -96,11 +96,12 @@ M.allinfo = function (done)
 end
 
 M.info = function (done) 
-	local ret = function (ssid)
+	local ret = function (ssid, ipaddr)
 		done {
 			battery = 90,
 			volume = audio.getvol(),
 			wifi = {ssid = ssid or 'Unknown'},
+            itunes_server = {ipaddr = ipaddr or "Unknown", port = '8883'},
 			firmware_version = "1.0.1",
 			name = hostname(),
 			local_music_num = table.maxn(localmusic.list),
