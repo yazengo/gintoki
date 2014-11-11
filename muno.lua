@@ -69,7 +69,7 @@ end
 
 M.on_poweroff = function ()
 	info('power off now')
-	if poweroff then poweroff() end
+	if arch_poweroff then arch_poweroff() end
 	M.poweroff = nil
 	audio.pause()
 end
