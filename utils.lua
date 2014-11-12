@@ -108,6 +108,7 @@ panic = function (...) _log_at(4, 3, ...) end
 
 os.basename = function (s)
 	local x = string.gsub(s, '%.[^%.]*$', '')
+    x = string.gsub(x, '^.*%/', '')
 	return x
 end
 

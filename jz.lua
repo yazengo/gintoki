@@ -11,6 +11,7 @@ arch_poweroff = function ()
 end
 
 prop_filepath = '/mnt/sdcard/prop.json'
+jz_itunes_dir = '/mnt/sdcard/musics/'
 
 arch_version = loadconfig('/usr/app/version')
 

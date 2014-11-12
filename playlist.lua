@@ -39,6 +39,19 @@ P.log_i = 1
 P.list = P.loadlist_fromdirs(popt.dirs)
 P.i = 1
 
+P.addlist = function (newfile)
+    for _, file in ipairs(P.list) do
+        if file.url == newfile then return end
+    end
+    index = table.maxn(P.list)
+    table.insert(P.list, {
+        url = newfile,
+        title = os.basename(newfile),
+        id = index + 1,
+        cover_url = '',
+    })
+end
+
 P.setopt = function (opt, done)
 	done = done or function () end
 
