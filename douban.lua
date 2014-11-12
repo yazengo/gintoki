@@ -108,7 +108,7 @@ D.user_login = function (c, done)
 			password = c.password,
 		},
 		done = function (rs, st)
-			r = cjson.decode(rs) or {}
+			local r = cjson.decode(rs) or {}
 			if r.access_token then
 				info('login', c.username, c.password, 'ok')
 				D.user_info({access_token=r.access_token}, done)
@@ -128,7 +128,7 @@ D.channels_list = function (c, done)
 		url = 'https://api.douban.com/v2/fm/app_channels?' .. encode_params(D.common_params()),
 		access_token = c.access_token,
 		done = function (rs, st)
-			r = cjson.decode(rs) or {}
+			local r = cjson.decode(rs) or {}
 			if r.groups then
 				done(r, nil)
 			elseif r.msg then
