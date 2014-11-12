@@ -65,11 +65,11 @@ int main(int argc, char *argv[]) {
 
 	LUVINIT;
 
+	lua_dofile_or_die(L, "utils.lua");
+
 	if (test_c >= 200 && test_c < 300) {
 		run_test_c_post(test_c-200, L, loop, argv);
 	}
-
-	lua_dofile_or_die(L, "utils.lua");
 
 	float tm_start = now();
 	if (run_lua) {
@@ -84,6 +84,8 @@ int main(int argc, char *argv[]) {
 	}
 	info("scripts loaded in %.f ms", (now()-tm_start)*1e3);
 	
-	return uv_run(loop, UV_RUN_DEFAULT);
+	uv_run(loop, UV_RUN_DEFAULT);
+	lua_close(L);
+	return 0;
 }
 
