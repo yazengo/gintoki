@@ -813,10 +813,40 @@ static int luv_lobj(lua_State *L, uv_loop_t *loop) {
 	return 1;
 }
 
+static void threadtest_done(uv_work_t *w, int stat) {
+	lua_State *L = luv_state(w);
+
+	luv_pushctx(L, w);
+	lua_getfield(L, -1, "done");
+	luv_xmove(luv_threadstate(w), L, 1);
+	lua_call_or_die(L, 1, 0);
+}
+
+static void threadtest_run(uv_work_t *w) {
+	lua_State *L = luv_threadstate(w);
+
+	lua_dostring_or_die(L, "r = {"
+		"1,2,3.14159,c={'c','d'},d={e={f=1,g=2}, k={c=3}},"
+		"function () end"
+	"}");
+	lua_getglobal(L, "r");
+	//lua_pushstring(L, "hello");
+}
+
+static int luv_threadtest(lua_State *L, uv_loop_t *loop) {
+	uv_work_t *w = (uv_work_t *)luv_newthreadctx(L, loop, sizeof(uv_work_t));
+	lua_pushvalue(L, 1);
+	lua_setfield(L, -2, "done");
+	uv_queue_work(loop, w, threadtest_run, threadtest_done);
+	return 1;
+}
+
 static void test_luv(lua_State *L, uv_loop_t *loop) {
 	luv_register(L, loop, "lobj", luv_lobj);
 	lua_dostring_or_die(L, "lobj()");
-	lua_gc(L, LUA_GCCOLLECT, 0);
+
+	luv_register(L, loop, "threadtest", luv_threadtest);
+	lua_dostring_or_die(L, "threadtest(function (r) info(r) end)");
 }
 
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
