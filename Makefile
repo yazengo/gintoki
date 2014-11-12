@@ -12,7 +12,7 @@ cobjs += airplay.o airplay_v2.o
 cobjs += noise.o
 cobjs += net.o curl.o http_parser.o zpnp.o itunes.o
 
-luvmods += utils os audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm timer
+luvmods += utils os audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm timer noise
 
 exe ?= server${objsuffix}
 now = $(shell date +'%Y%m%d-%h%M')
