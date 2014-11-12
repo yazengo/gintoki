@@ -8,7 +8,7 @@ fwupdate_recovery = function ()
 end
 arch_poweroff = function ()
 end
-config_root = '/mnt/sdcard/'
+prop_filepath = '/mnt/sdcard/prop.json'
 
 local say_and_do = function (k)
 	return function ()

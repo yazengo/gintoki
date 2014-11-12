@@ -1,7 +1,7 @@
 
 prop = {}
 
-prop.fname = 'cfg.json'
+prop.fname = prop_filepath or 'prop.json'
 
 -- prop.get('upnp.name', '')
 prop.get = function (pk, default)
