@@ -111,6 +111,11 @@ os.basename = function (s)
 	return x
 end
 
+randomhexstring = function (n)
+	local i = 16^n - (16^n)*math.random()
+	return string.format('%.' .. n .. 'x', i)
+end
+
 math.randomseed(os.time())
 
 urlencode = function (s)
@@ -169,12 +174,16 @@ isstr = function (s)
 	return true
 end
 
-readint = function (path)
+io.readstring = function (path)
 	local f = io.open(path, 'r')
-	if not f then return 0 end
+	if not f then return end
 	local s = f:read('*a')
 	f:close()
-	return tonumber(s)
+	return s
+end
+
+io.readnumber = function (path)
+	return tonumber(io.readstring(path))
 end
 
 oncer = function () 
@@ -248,7 +257,7 @@ function queue()
 end
 
 hostuuid = function ()
-	return tonumber(string.sub(sha1_encode(hostname()), -8), 16)
+	return tonumber(string.sub(sha1_encode(hostname()), -8), 15)
 end
 
 system = function (cmd, done)
@@ -259,5 +268,15 @@ system = function (cmd, done)
 			done(code)
 		end,
 	}
+end
+
+loadconfig = function (path)
+	local t = {}
+	local mt = { __newindex = function (_,k,v) t[k] = v end }
+	local oldmt = getmetatable(_ENV, mt)
+	setmetatable(_ENV, mt)
+	pcall(loadfile(path))
+	setmetatable(_ENV, oldmt)
+	return t
 end
 

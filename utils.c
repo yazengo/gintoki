@@ -121,9 +121,27 @@ void _lua_dumpstack_at(const char *at_func, const char *at_file, int at_lineno, 
 	int i;
 	_log(LOG_INFO, at_func, at_file, at_lineno, "==== top=%d", lua_gettop(L));
 	for (i = -lua_gettop(L); i <= -1; i++) {
+		int type = lua_type(L, i);
+		const char *typename = lua_typename(L, type);
+		char str[128] = {};
+
+		switch (type) {
+		case LUA_TNUMBER:
+			sprintf(str, ": %lf", lua_tonumber(L, i));
+			break;
+		case LUA_TBOOLEAN:
+			sprintf(str, ": %s", lua_toboolean(L, i) ? "true": "false");
+			break;
+		case LUA_TSTRING:
+			sprintf(str, ": '%s'", lua_tostring(L, i));
+			break;
+		default:
+			sprintf(str, ": %p", lua_topointer(L, i));
+			break;
+		}
 		_log(LOG_INFO, at_func, at_file, at_lineno, 
-				"%d %s: %p", i, lua_typename(L, lua_type(L, i)), lua_topointer(L, i)
-				);
+			"%d %s%s", i, typename, str
+		);
 	}
 }
 
