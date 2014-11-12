@@ -95,6 +95,8 @@ static void play_thread(uv_work_t *w) {
 }
 
 void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_t *, int)) {
+	debug("enter n=%d", len);
+
 	if (ao->is_playing)
 		panic("playing not end");
 
@@ -107,6 +109,8 @@ void audio_out_play(audio_out_t *ao, void *buf, int len, void (*done)(audio_out_
 	static uv_work_t w;
 	w.data = ao;
 	uv_queue_work(ao->loop, &w, play_thread, play_done);
+	
+	debug("leave n=%d", len);
 }
 
 void audio_out_init(uv_loop_t *loop, audio_out_t *ao, int rate) {

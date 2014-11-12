@@ -352,8 +352,6 @@ static void curl_addheaders(lua_State *L, curl_t *lc) {
 static void curl_gc(uv_loop_t *loop, void *_lc) {
 	curl_t *lc = (curl_t *)_lc;
 
-	info("closed");
-
 	curl_easy_cleanup(lc->c);
 	if (lc->retsb)
 		strbuf_free(lc->retsb);
