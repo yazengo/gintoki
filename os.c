@@ -65,26 +65,20 @@ static int luv_readline(lua_State *L, uv_loop_t *loop) {
 
 static void readdir_done(uv_work_t *w, int stat) {
 	lua_State *L = luv_state(w);
-	int i = lua_gettop(L);
 
-	lua_xmove(luv_threadstate(w), L, 1);
-	lua_getfield(L, i+1, "done");
-	lua_getfield(L, i+1, "_r");
+	luv_pushctx(L, w);
+	lua_getfield(L, -1, "done");
+	luv_xmove(luv_threadstate(w), L, 1);
 	lua_call_or_die(L, 1, 0);
 
-	lua_settop(L, i);
 	luv_unref(w);
 }
 
 static void readdir_thread(uv_work_t *w) {
 	lua_State *L = luv_threadstate(w);
+	const char *path = lua_tostring(L, 1);
 
-	lua_getfield(L, 1, "path");
-	const char *path = lua_tostring(L, -1);
-	
 	lua_newtable(L);
-	int t = lua_gettop(L);
-
 	DIR *dir = opendir(path);
 	if (dir) {
 		struct dirent *e;
@@ -99,20 +93,25 @@ static void readdir_thread(uv_work_t *w) {
 			}
 			lua_pushnumber(L, i);
 			lua_pushstring(L, e->d_name);
-			lua_settable(L, t);
+			lua_settable(L, -3);
 		}
 		closedir(dir);
 	}
-	lua_setfield(L, 1, "_r");
-
-	lua_pushvalue(L, 1);
 }
 
 static int luv_readdir(lua_State *L, uv_loop_t *loop) {
 	uv_work_t *w = (uv_work_t *)luv_newthreadctx(L, loop, sizeof(uv_work_t));
-	lua_pushvalue(L, 1);
-	lua_xmove(L, luv_threadstate(w), 1);
+
+	lua_pushnumber(L, 1);
+	lua_gettable(L, 1);
+	luv_xmove(L, luv_threadstate(w), 1);
+
+	lua_pushnumber(L, 2);
+	lua_gettable(L, 1);
+	lua_setfield(L, -2, "done");
+
 	uv_queue_work(loop, w, readdir_thread, readdir_done);
+
 	return 0;
 }
 

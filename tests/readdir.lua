@@ -1,8 +1,5 @@
 
-readdir {
-	path = '.',
-	done = function (r)
-		info(r)
-	end,
-}
+readdir{'.', function (r)
+	info(r)
+end}
 
