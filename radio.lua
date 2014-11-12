@@ -34,7 +34,7 @@ R.prev = function (o)
 	if R.play then R.play(R.song) end
 end
 
-R.start = function (source)
+R.start = function (source, o)
 	info("start")
 	R.source = source
 
@@ -52,7 +52,9 @@ R.start = function (source)
 		R.source.start()
 	end
 
-	R.next()
+	if o.autostart ~= false then
+		R.next()
+	end
 end
 
 R.inserting_hook = function (o, done)
@@ -193,7 +195,7 @@ R.change = function (o)
 
 	if to and R.source ~= to then
 		R.stop()
-		R.start(to)
+		R.start(to, o)
 		prop.set('radio.default', o.type)
 	end
 end

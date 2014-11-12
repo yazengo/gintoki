@@ -1,4 +1,6 @@
 
+require('prop')
+
 local P = {}
 
 P.url = '://tuner.pandora.com/services/json/?'
@@ -7,12 +9,12 @@ P.bf_encode = blowfish('6#26FRL$ZWD')
 P.bf_decode = blowfish('R=U!LH$O2B#')
 
 P.loadcookie = function ()
-	return loadjson('pandora.json')
+	return prop.get('pandora.cookie', {})
 end
 
 P.savecookie = function (c)
 	info('cookie saved', c)
-	savejson('pandora.json', c)
+	prop.set('pandora.cookie', c)
 end
 
 P.setcookie = function (c)
@@ -489,14 +491,14 @@ P.setopt_genres_choose = function (o, done)
 
 	P.auto_auth(c, P.choose_genres, function (r, err)
 		if err then
-			finish{result=1}
+			finish{result=1, msg=err}
 			return
 		end
 
 		c.station_id = r.stationId
 		P.auto_auth(c, P.songs_list, function (r, err)
 			if err then
-				finish{result=1}
+				finish{result=1, msg=err}
 				return
 			end
 
@@ -524,7 +526,7 @@ P.setopt_station_choose = function (o, done)
 
 	P.auto_auth(c, P.songs_list, function (r, err)
 		if err then
-			finish{result=1}
+			finish{result=1, msg=err}
 			return
 		end
 
@@ -553,7 +555,7 @@ P.setopt_login = function (o, done)
 
 	P.auto_auth(c, P.songs_list, function (r, err)
 		if err then
-			finish{result=1}
+			finish{result=1, msg=err}
 			return
 		end
 
@@ -568,7 +570,7 @@ P.setopt_genres_list = function (o, done)
 	local c = table.copy(P.cookie)
 	P.auto_auth(c, P.genres_list, function (r, err)
 		if err then
-			done{result=1}
+			done{result=1, msg=err}
 		else
 			done{result=0, genres=r}
 		end
@@ -579,7 +581,7 @@ P.setopt_stations_list = function (o, done)
 	local c = table.copy(P.cookie)
 	P.auto_auth(c, P.stations_list, function (r, err)
 		if err then
-			done{result=1}
+			done{result=1, msg=err}
 		else
 			done{result=0, stations=r}
 		end

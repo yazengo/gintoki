@@ -1,4 +1,6 @@
 
+require('prop')
+
 --[[
 
 songs_fetching == fetching
@@ -46,12 +48,12 @@ songs_list
 local D = {}
 
 D.loadcookie = function ()
-	return loadjson('douban.json')
+	return prop.get('douban.cookie', {})
 end
 
 D.savecookie = function (c)
 	info('cookie saved', c)
-	savejson('douban.json', c)
+	prop.set('douban.cookie', c)
 end
 
 D.setcookie = function (c)
@@ -143,7 +145,7 @@ D.channels_list = function (c, done)
 	return D.curl(p)
 end
 
-D.grep_songs = function (songs)
+D.grep_songs = function (songs, channel_id)
 	local r = {}
 	for _, _s in ipairs(songs) do
 		local s = totable(_s)
@@ -156,6 +158,7 @@ D.grep_songs = function (songs)
 			cover_url = s.picture,
 			dur = s.length,
 			like = (s.like == 1),
+			channel_id = channel_id,
 		})
 	end
 	return r
@@ -210,7 +213,7 @@ D.songs_list = function (c, done)
 		}),
 		done = function (r, st)
 			r = cjson.decode(r) or {}
-			s = D.grep_songs(r.song or {})
+			s = D.grep_songs(r.song or {}, c.channel)
 			if table.maxn(s) > 0 then
 				done(s, nil)
 			elseif r.msg then
@@ -299,6 +302,7 @@ D.next = function (opt)
 	if left > -1 then
 		D.songs_i = D.songs_i + 1
 	end
+
 	return r
 end
 
