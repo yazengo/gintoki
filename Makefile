@@ -9,6 +9,7 @@ cobjs += audio_mixer.o audio_out_test.o audio_in_avconv.o audio_in.o pcm.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
 cobjs += airplay.o airplay_v2.o
+cobjs += noise.o
 cobjs += net.o curl.o http_parser.o zpnp.o itunes.o
 
 luvmods += utils os audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm timer

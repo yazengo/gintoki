@@ -1,8 +1,4 @@
 
-require('localmusic')
-require('pandora')
-require('douban')
-require('bbcradio')
 require('airplay')
 require('radio')
 require('audio')
@@ -19,17 +15,8 @@ handle = function (a, done)
 		return
 	end
 
-	if airplay.setopt(a, done) then
+	if radio.setopt_hook(a, done) then
 		return
-	end
-
-	if a.op == 'local.toggle_repeat_mode' and radio.source == slumbermusic then
-		a.op = 'slumber.toggle_repeat_mode'
-	end
-
-	if a.op == 'audio.play' then
-		if radio.source == slumbermusic then a.op = 'slumber.play' end
-		if radio.source == localmusic then a.op = 'local.play' end
 	end
 
 	if a.op == 'audio.volume' then 
@@ -54,51 +41,12 @@ handle = function (a, done)
 	elseif a.op == 'audio.alert' then
 		audio.alert{url=a.url}
 		done{result=0}
-	elseif string.hasprefix(a.op, 'local.') then
-		if not localmusic.setopt(a, done) then fail() end
-	elseif string.hasprefix(a.op, 'pandora.') then
-		if not pandora.setopt(a, done) then fail() end
-	elseif string.hasprefix(a.op, 'bbcradio.') then
-		if not bbcradio.setopt(a, done) then fail() end
-	elseif string.hasprefix(a.op, 'douban.') then
-		if not douban.setopt(a, done) then fail() end
-	elseif string.hasprefix(a.op, 'slumber.') then
-		if not slumbermusic.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'muno.') then
 		if not muno.setopt(a, done) then fail() end
 	elseif string.hasprefix(a.op, 'alarm.') then
 		if not alarm or not alarm.setopt(a, done) then fail() end
-	elseif a.op == 'radio.change_type' then
-		radio.change(a)
-		done{result=0}
 	else
 		fail()
-	end
-end
-
-radio.name2obj = function (s)
-	if s == 'pandora' then
-		return pandora
-	elseif s == 'local' then
-		return localmusic
-	elseif s == 'slumber' then
-		return slumbermusic
-	elseif s == 'bbcradio' then
-		return bbcradio
-	elseif s == 'douban' then
-		return douban
-	end
-end
-
-radio.change = function (opt)
-	info('radio.change', opt)
-
-	local to = radio.name2obj(opt.type)
-
-	if to and radio.source ~= to then
-		radio.stop()
-		radio.start(to)
-		prop.set('radio.default', opt.type)
 	end
 end
 
@@ -106,21 +54,6 @@ audio.track_stat_change = function (i)
 	if i ~= 0 then return end
 	local r = muno.audioinfo()
 	pnp.notify_event{['audio.info']=r}
-end
-
-radio.play = function (song) 
-	info('play', song.title)
-	audio.play {
-		url = song.url,
-		done = function (dur) 
-			info('playdone')
-			radio.next{dur=dur, playdone=true}
-		end
-	}
-end
-
-radio.stop = function ()
-	audio.stop()
 end
 
 if input then
@@ -142,7 +75,11 @@ if input then
 		[[ handle({op='audio.play', id='2'}, info)]],
 		[[ handle({op='audio.play', id='1'}, info)]],
 		[[ handle{op='audio.alert', url='testaudios/beep0.5s.mp3'} ]],
-		[[ handle{op='audio.insert', url='testaudios/10s-1.mp3', type='douban'} ]],
+		[[ handle{op='radio.insert', url='testaudios/2s-1.mp3', resume=true} ]],
+		[[ handle{op='radio.insert', url='testaudios/2s-2.mp3'} ]],
+		[[ handle{op='burnin.start'} ]],
+		[[ handle{op='burnin.stop'} ]],
+		[[ handle({op='burnin.totaltime'}, info) ]],
 	}
 end
 
