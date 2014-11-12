@@ -6,9 +6,13 @@ fwupdate_recovery = function ()
 	pnp.stop()
 	system('sync && reboot_recovery')
 end
+
 arch_poweroff = function ()
 end
+
 prop_filepath = '/mnt/sdcard/prop.json'
+
+arch_version = loadconfig('/usr/app/version')
 
 local say_and_do = function (k)
 	return function ()

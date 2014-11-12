@@ -2,11 +2,13 @@
 require('poweroff')
 require('fwupdate')
 
+local M = {}
+
+fwupdate.curversion = M.version
+
 fwupdate.notify = function (r)
 	pnp.notify { ['muno.update_stat'] = r }
 end
-
-local M = {}
 
 M.setopt = function (a, done)
 	if a.op == 'muno.request_sync' then
@@ -95,19 +97,29 @@ M.allinfo = function (done)
 	end)
 end
 
+M.version = function ()
+	if arch_version then
+		return arch_version.revision
+	else
+		return builddate
+	end
+end
+
 M.info = function (done) 
+
 	local ret = function (ssid, ipaddr)
 		done {
 			battery = 90,
 			volume = audio.getvol(),
 			wifi = {ssid = ssid or 'Unknown'},
-            itunes_server = {ipaddr = ipaddr or "Unknown", port = '8883'},
-			firmware_version = "1.0.1",
+			itunes_server = {ipaddr = ipaddr or "Unknown", port = '8883'},
+			firmware_version = M.version(),
 			name = hostname(),
 			local_music_num = table.maxn(localmusic.list),
 			poweroff = M.poweroff and M.poweroff:info()
 		}
 	end
+
 	if getssid then
 		getssid(ret)
 	else

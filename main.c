@@ -60,6 +60,9 @@ int main(int argc, char *argv[]) {
 
 	lua_State *L = luaL_newstate();
 
+	lua_pushstring(L, BUILDDATE);
+	lua_setglobal(L, "builddate");
+
 	luaL_openlibs(L);
 	luaopen_cjson_safe(L);
 

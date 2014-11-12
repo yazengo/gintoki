@@ -280,3 +280,18 @@ loadconfig = function (path)
 	return t
 end
 
+version_cmp = function (tpl, a, b)
+	local ta = {}
+	local tb = {}
+	ta[1],ta[2],ta[3],ta[4] = string.match(a, tpl)
+	tb[1],tb[2],tb[3],tb[4] = string.match(b, tpl)
+	if table.maxn(ta) == 0 or table.maxn(tb) == 0 then return end
+	if table.maxn(ta) ~= table.maxn(tb) then return end
+	for i=1,4 do
+		if ta[i] == nil then break end
+		local v = tonumber(ta[i]) - tonumber(tb[i])
+		if v ~= 0 then return v end
+	end
+	return 0
+end
+

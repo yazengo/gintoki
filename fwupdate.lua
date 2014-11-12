@@ -22,6 +22,28 @@ end
 
 F.firmwares = {}
 
+F.check_need_update = function (r)
+	local fw = F.firmwares[1]
+
+	if not fw or not fw.version then
+		return false
+	end
+
+	info(fw.version, F.curversion())
+
+	local r = version_cmp('^NightlyBuild%-(%d+)%-(%d+)$', fw.version, F.curversion())
+	if r ~= nil then
+		return r > 0
+	end
+
+	r = version_cmp('^(%d+)%.(%d+)$', fw.version, F.curversion())
+	if r ~= nil then
+		return r > 0
+	end
+
+	return false
+end
+
 F.check_update = function (done)
 	local url = prop.get('fwupdate.url', 'firmware.sugrsugr.com/info')
 	curl {
@@ -29,6 +51,7 @@ F.check_update = function (done)
 		done = function (ret)
 			local r = cjson.decode(ret) or {}
 			F.firmwares = r.firmwares_list or {}
+			r.need_update = F.check_need_update()
 			done(r)
 		end,
 	}

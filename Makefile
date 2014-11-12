@@ -15,6 +15,7 @@ cobjs += net.o curl.o http_parser.o zpnp.o itunes.o
 luvmods += utils os audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm timer
 
 exe ?= server${objsuffix}
+now = $(shell date +'%Y%m%d-%h%M')
 
 config-mk = config$(if ${arch},-${arch},).mk
 include ${config-mk}
@@ -25,7 +26,7 @@ hsrcs += $(wildcard *.h)
 gitver = $(shell git rev-parse HEAD | sed 's/\(.......\).*/\1/')
 luvinit = $(foreach m,${luvmods}, extern void luv_${m}_init(lua_State *L, uv_loop_t *); luv_${m}_init(L, loop);)
 
-cflags-main += -DGITVER=\"${gitver}\" -DLUVINIT="${luvinit}"
+cflags-main += -DGITVER=\"${gitver}\" -DLUVINIT="${luvinit}" -DBUILDDATE=\"${now}\"
 
 main.o: ${config-mk} Makefile
 
