@@ -13,7 +13,7 @@ audio.alert = function (o)
 		enabled = true,
 		slot = 0,
 		type = 'highlight',
-		i = 1,
+		track = 1,
 		vol = o.vol,
 		fadeothers = o.fadeothers,
 	}

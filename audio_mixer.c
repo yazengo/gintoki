@@ -59,7 +59,7 @@ enum {
 typedef struct {
 	int type;
 	float vol;
-	int i;
+	int ti;
 	unsigned flags;
 } filter_t;
 
@@ -451,7 +451,7 @@ static void mixer_do_mix(mixer_t *am, do_mix_t *dm) {
 	filter_t *highlight = NULL;
 	for (i = 0; i < FILTERS_NR; i++) {
 		filter_t *f = &am->filters[i];
-		if (f->type == HIGHLIGHT && am->tracks[f->i])
+		if (f->type == HIGHLIGHT && am->tracks[f->ti])
 			highlight = f;
 	}
 
@@ -464,13 +464,13 @@ static void mixer_do_mix(mixer_t *am, do_mix_t *dm) {
 
 		if (highlight) {
 			if (highlight->flags & HL_FADEOTHERS) {
-				if (tr->ti == highlight->i) {
+				if (tr->ti == highlight->ti) {
 					pcm_do_volume(buf, dm->len, am->vol);
 				} else {
 					pcm_do_volume(buf, dm->len, am->vol*highlight->vol);
 				}
 			} else {
-				if (tr->ti == highlight->i) {
+				if (tr->ti == highlight->ti) {
 					pcm_do_volume(buf, dm->len, highlight->vol);
 				} else {
 					pcm_do_volume(buf, dm->len, am->vol);
@@ -531,9 +531,11 @@ static void mixer_play(mixer_t *am) {
 	debug("n=%d len=%d", dm.n, dm.len);
 	if (dm.n == 0) 
 		return;
+
 	mixer_do_mix(am, &dm);
 	mixer_do_track_change(am, &dm);
 
+	debug("stat=playing");
 	am->stat = PLAYING;
 	audio_out_play(am->ao, dm.buf, dm.len, mixer_on_play_done);
 }
@@ -755,7 +757,7 @@ static int lua_audio_stop(lua_State *L) {
 	return 0;
 }
 
-// audio.setfilter{enabled=false, slot=0, type='highlight', i=3, vol=20}
+// audio.setfilter{enabled=false, slot=0, type='highlight', track=3, vol=20}
 static int lua_audio_setfilter(lua_State *L) {
 	mixer_t *am = lua_getam(L);
 
@@ -784,8 +786,8 @@ static int lua_audio_setfilter(lua_State *L) {
 			lua_getfield(L, 1, "vol");
 			f->vol = vol2fvol(lua_tonumber(L, -1));
 
-			lua_getfield(L, 1, "i");
-			f->i = lua_tonumber(L, -1);
+			lua_getfield(L, 1, "track");
+			f->ti = lua_tonumber(L, -1);
 
 			f->flags = 0;
 
@@ -794,7 +796,7 @@ static int lua_audio_setfilter(lua_State *L) {
 			if (fadeothers)
 				f->flags |= HL_FADEOTHERS;
 
-			info("highlight: i=%d vol=%f fadeothers=%d", f->i, f->vol, fadeothers);
+			info("highlight: ti=%d vol=%f fadeothers=%d", f->ti, f->vol, fadeothers);
 		}
 	}
 
