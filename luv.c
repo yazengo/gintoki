@@ -19,6 +19,7 @@ static int __gc(lua_State *L) {
 
 	if (l->gc)
 		l->gc(l->loop, l->data);
+
 	if (l->Lt)
 		lua_close(l->Lt);
 
@@ -57,12 +58,71 @@ static void *_new(lua_State *L, uv_loop_t *loop, int size, int usethread) {
 	lua_settable(L, -3);
 	lua_pop(L, 1);
 
-	if (usethread) {
-		l->Lt = lua_newthread(L);
-		lua_setfield(L, t, "_thread");
-	}
+	if (usethread)
+		l->Lt = luaL_newstate();
 
 	return l->data;
+}
+
+static void luv_xmovetable(lua_State *Lsrc, lua_State *Ldst) {
+	lua_newtable(Ldst);
+
+	int t = lua_gettop(Lsrc);
+	lua_pushnil(Lsrc);
+	while (lua_next(Lsrc, t) != 0) {
+		// key -2
+		// val -1
+		lua_pushvalue(Lsrc, -2);
+		lua_pushvalue(Lsrc, -2);
+		luv_xmove(Lsrc, Ldst, 2);
+		lua_settable(Ldst, -3);
+
+		lua_pop(Lsrc, 1);
+	}
+	lua_pop(Lsrc, 1);
+}
+
+static void luv_xmove1(lua_State *Lsrc, lua_State *Ldst) {
+	int type = lua_type(Lsrc, -1);
+
+	switch (type) {
+	case LUA_TNIL:
+		lua_pushnil(Ldst);
+		lua_pop(Lsrc, 1);
+		break;
+
+	case LUA_TNUMBER:
+		lua_pushnumber(Ldst, lua_tonumber(Lsrc, -1));
+		lua_pop(Lsrc, 1);
+		break;
+
+	case LUA_TBOOLEAN:
+		lua_pushboolean(Ldst, lua_toboolean(Lsrc, -1));
+		lua_pop(Lsrc, 1);
+		break;
+
+	case LUA_TSTRING:
+		lua_pushstring(Ldst, lua_tostring(Lsrc, -1));
+		lua_pop(Lsrc, 1);
+		break;
+
+	case LUA_TTABLE:
+		luv_xmovetable(Lsrc, Ldst);
+		break;
+
+	default:
+		lua_pushnil(Ldst);
+		lua_pop(Lsrc, 1);
+		break;
+	}
+}
+
+void luv_xmove(lua_State *Lsrc, lua_State *Ldst, int n) {
+	int i = lua_gettop(Ldst);
+	while (n--) {
+		luv_xmove1(Lsrc, Ldst);
+		lua_insert(Ldst, i+1);
+	}
 }
 
 void *luv_newthreadctx(lua_State *L, uv_loop_t *loop, int size) {
