@@ -6,6 +6,9 @@ fwupdate_recovery = function ()
 	pnp.stop()
 	system('sync && reboot_recovery')
 end
+arch_poweroff = function ()
+end
+config_root = '/mnt/sdcard/'
 
 local say_and_do = function (k)
 	return function ()
@@ -208,19 +211,14 @@ inputdev_on_event = function (e)
 end
 
 hostname = function ()
-	local fp = io.open('macaddr', 'r')
-	local mac = fp:read('*a')
-	fp:close()
-
-	mac = string.gsub(mac, '\n', '')
-
-	local name = string.sub(mac, -6)
-	hostname = function ()
-		return name
+	local cid = io.readstring('/sys/devices/platform/jz4775-efuse.0/chip_id')
+	if not cid then
+		cid = randomhexstring(7)
 	end
+	return cid
 end
 
-local vol = readint('/sys/module/adc_volume_driver/drivers/platform:jz4775-hwmon/jz4775-hwmon.0/volume')
+local vol = io.readnumber('/sys/module/adc_volume_driver/drivers/platform:jz4775-hwmon/jz4775-hwmon.0/volume')
 inputdev_init() 
 setvol(vol)
 
