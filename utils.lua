@@ -257,7 +257,7 @@ function queue()
 end
 
 hostuuid = function ()
-	return tonumber(string.sub(sha1_encode(hostname()), -8), 15)
+	return tonumber(string.sub(sha1_encode(hostname()), -7), 16)
 end
 
 system = function (cmd, done)
