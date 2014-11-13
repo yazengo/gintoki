@@ -3,21 +3,27 @@
 
 #include "luv.h"
 
-struct pipe_s;
-
-typedef struct {
-	struct pipe_s *src, *sink;
-	char rbuf[1024];
-	char wbuf[1024];
-	uv_buf_t wub;
-	uv_write_t wr;
-} pipecopy_t;
+struct pcopy_s;
 
 typedef struct pipe_s {
 	int type;
 	uv_stream_t *st;
 	uv_pipe_t p;
+	uv_file fd;
 	void *data;
-	pipecopy_t *cpy;
+	struct pcopy_s *cpy;
 } pipe_t;
+
+enum {
+	PT_STREAM,
+	PT_DIRECT,
+	PT_FILE,
+};
+
+typedef uv_buf_t (*pipe_allocbuf_cb)(pipe_t *p, int size);
+typedef uv_buf_t (*pipe_read_cb)(pipe_t *p, uv_buf_t ub);
+typedef uv_buf_t (*pipe_write_cb)(pipe_t *p, int stat);
+
+void pipe_read(pipe_t *p, pipe_allocbuf_cb allocbuf, pipe_read_cb done);
+void pipe_close(pipe_t *p);
 

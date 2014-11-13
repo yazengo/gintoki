@@ -19,6 +19,7 @@ void luv_getfield(lua_State *L, int t, const char *k);
 void *luv_toctx(lua_State *L, int i);
 void luv_pushctx(lua_State *L, void *_l);
 
+uv_loop_t *luv_loop(void *_l);
 lua_State *luv_state(void *_l);
 lua_State *luv_threadstate(void *_l);
 

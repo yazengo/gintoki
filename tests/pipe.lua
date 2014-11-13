@@ -1,5 +1,5 @@
 
 require('pipe')
 
-apipe(fopen('a.txt'), fopen('b.txt', 'w'))
+pcopy(pexec('echo hello', {stdout=true}), pexec('cat >hello.txt', {stdin=true}))
 

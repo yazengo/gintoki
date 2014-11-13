@@ -183,6 +183,11 @@ void luv_unref(void *_l) {
 	lua_gc(L, LUA_GCCOLLECT, 0);
 }
 
+uv_loop_t *luv_loop(void *_l) {
+	luv_t *l = (luv_t *)(_l - sizeof(luv_t));
+	return l->loop;
+}
+
 lua_State *luv_state(void *_l) {
 	luv_t *l = (luv_t *)(_l - sizeof(luv_t));
 	return l->L;

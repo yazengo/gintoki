@@ -849,6 +849,26 @@ static void test_luv(lua_State *L, uv_loop_t *loop) {
 	lua_dostring_or_die(L, "threadtest(function (r) info(r) end)");
 }
 
+static uv_buf_t tprf_allocbuf(uv_handle_t *h, size_t len) {
+	static char buf[1024];
+	return uv_buf_init(buf, sizeof(buf));
+}
+
+static void tprf_readdone(uv_stream_t *st, ssize_t n, uv_buf_t buf) {
+	info("n=%d", n);
+}
+
+static void test_pipe_read_file(lua_State *L, uv_loop_t *loop) {
+	uv_pipe_t *p = (uv_pipe_t *)zalloc(sizeof(uv_pipe_t));
+
+	int fd = open("a.txt", O_RDONLY);
+
+	info("fd=%d", fd);
+	uv_pipe_init(loop, p, 0);
+	uv_pipe_open(p, fd);
+	uv_read_start((uv_stream_t *)p, tprf_allocbuf, tprf_readdone);
+}
+
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 	info("i=%d", i);
 	if (i == 3)
@@ -869,5 +889,8 @@ void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 		test_metatable(L);
 	if (i == 14)
 		test_luv(L, loop);
+	if (i == 15)
+		test_pipe_read_file(L, loop);
+
 }
 

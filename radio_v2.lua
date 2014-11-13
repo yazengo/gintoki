@@ -81,6 +81,17 @@ apipe = function (...)
 	return r
 end
 
+amixer = function (...)
+	m = {
+		srcs[10],
+	}
+
+	srcs[0 ~ 10].closed(function (this)
+		m.remove(this)
+	end)
+
+end
+
 --
 -- node = {
 --   stdin  = [native pipe_t] or nil,
@@ -112,13 +123,6 @@ end
 --    stdout = [native pipe_t] or nil,
 -- }
 --
--- typedef struct {
---   int type; // PTYPE_CALLBACK, PTYPE_FD, PTYPE_DIRECT
---   void (*trans)(pipe_t *p, void *buf, int size);
---   pipe_t *peer;
---   int fd;
---   void *data;
--- } pipe_t;
 --
 -- typedef struct {
 -- } pipecopy_t;
@@ -136,6 +140,337 @@ end
 -- close(oldfd);
 --
 
+--[[
+
+enum {
+	P_RUNNING
+	P_CLOSING
+	P_CLOSED
+};
+
+typedef struct {
+	struct {
+		struct {
+			uv_buf_t ub; // exists when waiting write done
+			done;   // exists when waiting write done
+		} write;
+		struct {
+			int len;
+			done;    // 
+		} read;
+		struct {
+			done;
+		} shutdown;
+		int stat;
+	} direct;
+
+	struct {
+		readdone;
+		writedone;
+	} stream;
+
+	allocbuf;
+	readdone;
+	writedone;
+} pipe_t;
+
+pipe_allocbuf();
+
+// pdirect functions
+p->type = PT_DIRECT;
+pdirect_read(p, len, done) {
+	if p.closenr == 2 or p.read.done {
+		panic()
+	}
+	p.read.done = done
+	p.read.len = len
+
+	set_immediate(func () {
+		w = d.write
+		r = d.read
+		shutdown = d.shutdown
+
+		do_trans = func (r, w) {
+			if r.len > w.ub.len {
+				r.len = w.ub.len
+			}
+
+			rub.base = w.ub.base
+			rub.len = r.len
+
+			w.ub.base += r.len
+			w.ub.len -= r.len
+
+			r.done(rub)
+			r.done = nil
+			r.len = 0
+
+			if w.ub.len == 0 { 
+				w.done(0)
+			}
+		}
+
+		if p.closecnt > 0 {
+			p.read.done(-1)
+			return
+		}
+		if w.ub.len > 0 {
+			do_trans(r, w)
+		}
+	})
+}
+
+pdirect_write(p, ub, done) {
+	if p.closenr == 2 or p.write.done {
+		panic()
+	}
+	p.write.done = done
+	p.write.ub = ub
+
+	set_immediate(func () {
+		w = p.write
+		r = p.read
+
+		if p.closenr > 0 {
+			p.write.done(-1)
+			return
+		}
+		if r.done {
+			do_trans(r, w)
+		}
+	})
+}
+
+pdirect_stop(p) {
+	pdirect_close(p)
+}
+
+pdirect_close(p) {
+	if p.closenr == 2 {
+		panic()
+	}
+	p.closenr++
+
+	set_immediate(func () {
+		if w.done {
+			w.done(-1)
+			w.done = nil
+		}
+		if r.done {
+			r.done(-1)
+			r.done = nil
+		}
+		if p.closenr == 2 {
+			luv_pushctx(p)
+			lua_getfield("on_closed")
+			lua_call();
+		}
+	})
+}
+
+pstream_stop(p) {
+	uv_shutdown(p.st);
+}
+
+pstream_close(p) {
+	uv_close(p.st)
+}
+
+- pipe_write -> [direct sink] <- pipe_read - pipe_write -> [direct src] <- pipe_read
+
+// pipe function
+pipe_read(p, allocbuf, readdone);
+// if allocbuf == NULL use the buffer he pass me, dont do memcpy
+// if allocbuf != NULL. if allocbuf == pipe_allocbuf then alloc buffer in pipe_t.buf.
+//   or user pass your own allocbuf
+//   pipe_t.buf will be released when pipe_t gc
+pipe_read(p, allocbuf, readdone) {
+	if p.type == PT_DIRECT {
+		if allocbuf {
+			to = allocbuf()
+			pdirect_read(p, to.len, func (ub) {
+				if ub.len < 0 { readdone(-1) }
+				memcpy(to.base, ub.base, ub.len);
+				readdone(ub)
+			})
+		} else {
+			pdirect_read(p, -1, func (ub) {
+				readdone(ub)
+			})
+		}
+	}
+	if p.type == PT_STREAM {
+		pstream_read(p, allocbuf, readdone)
+	}
+}
+
+pipe_write(p, ub, writedone) {
+	if p.type == PT_DIRECT {
+		pdirect_write(p, ub, func (stat) {
+			if stat < 0 { writedone(-1) }
+			writedone(0)
+		})
+	}
+	if p.type == PT_STREAM {
+		pstream_write(p, ub, writedone);
+	}
+}
+
+pipe_close(p) {
+	if p.type == PT_DIRECT {
+		pdirect_close(p)
+	}
+	if p.type == PT_STREAM {
+		pstream_close(p)
+	}
+}
+
+pipe_stop(p) {
+	if p.type == PT_DIRECT {
+		pdirect_stop(p)
+	}
+	if p.type == PT_STREAM {
+		pstream_stop(p)
+	}
+}
+
+// pipe copy
+//   close next sink if read src failed
+//   close next sink if write sink failed
+loop = func () {
+	pipe_read(src, NULL, func (ub) {
+		if ub.len < 0 {
+			pipe_close(sink)
+			return
+		}
+		pipe_write(sink, ub, func (stat) {
+			if stat < 0 {
+				pipe_close(sink)
+				return
+			}
+			loop()
+		})
+	})
+}
+
+pipe_copy(src, sink) {
+	loop()
+}
+
+// a simple filter
+sink->type = PT_DIRECT
+src->type = PT_DIRECT
+
+func writedone(src, stat) {
+	if stat < 0 {
+		pipe_close(src);
+		pipe_close(sink);
+	} else {
+		loop()
+	}
+}
+
+func loop() {
+	pipe_read(sink, NULL, func (ub) {
+		if ub.len < 0 {
+			pipe_close(sink);
+			pipe_close(src);
+			return;
+		}
+		do_volume(ub)
+		pipe_write(src, ub, writedone)
+	})
+}
+
+// a audio out sink
+sink->type = PT_DIRECT
+
+func play(ub, done) {
+}
+
+func loop() {
+	pipe_read(sink, NULL, func (ub) {
+		play(ub, loop)
+	})
+}
+
+// a audio generate src
+src->type = PT_DIRECT
+
+func loop() {
+	ub = generate()
+	pdirect_write(src, ub, loop)
+}
+
+// a audio mixer src
+func done() {
+	m->src[0]
+}
+
+m.mixlen = PIPE_BUFSIZE
+m.mixbuf = char buf[m.mixlen];
+m.srcs = {
+	buf char[1024],
+	ub uv_buf_t,
+	p pipe_t,
+}
+m.waiting = true
+m.sink = new pipe_t(type=PT_DIRECT)
+
+func allocbuf(s, len) {
+	return s.buf
+}
+
+func can_mix(m) {
+	return [max ub.len in srcs] > 0
+}
+
+func do_mix(m) {
+	maxlen = [calc maxlen]
+	for s in srcs {
+		s.ub.len -= len;
+	}
+	pipe_write(m.sink, mix_ub, writedone)
+}
+
+func writedone(s, stat) {
+	if can_mix(m) {
+		do_mix(m)
+	} else {
+		m.waiting = true
+	}
+	do_read()
+}
+
+func m.del(s) {
+	if s.ub.len > 0 {
+		m.ub.len
+	}
+}
+
+func readdone(s, ub) {
+	if ub.len < 0 {
+		m.del(s)
+		pipe_close(s)
+		return
+	}
+	
+	s.ub = ub
+
+	if m.waiting {
+		do_mix(m)
+		m.waiting = false
+	}
+
+	pipe_read(s, allocbuf, readdone)
+}
+
+for s in srcs {
+	pipe_read(s, allocbuf, readdone)
+}
+
+]]--
+
 adecoder = function (on_meta)
 	local p = popen('avconv -i - -f s16le -ar 44100 -ac 2 -')
 	avprobeparser(p.stderr, on_meta)
@@ -143,7 +478,7 @@ adecoder = function (on_meta)
 end
 
 urlopen = function (url)
-	if string.hasprefix(url, 'http://') then
+	if string.hasprefix(url, 'http') then
 		return pcurl(url)
 	else
 		return fopen(url)
@@ -227,7 +562,7 @@ m = amixer()
 m.add(tts('Somebody ...'), {vol=30})
 m.add(adecoder(url), {vol=40})
 
-http_server {
+http.server {
 	handler = function (req, res)
 		m.fadein(function ()
 			m.add(res.body).on_end(function ()
@@ -240,7 +575,7 @@ http_server {
 	end,
 }
 
-http_server {
+http.server {
 	parse_headers = true,
 	handler = function (req, res)
 		apipe(req.body, fopen('file', 'w+')).closed(function ()
@@ -249,7 +584,7 @@ http_server {
 	end,
 }
 
-tcp_server {
+tcp.server {
 	host = 'localhost',
 	port = 8811,
 	handler = function (req, res)

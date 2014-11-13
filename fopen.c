@@ -26,14 +26,19 @@ static int luv_fopen(lua_State *L, uv_loop_t *loop) {
 	if (mode == NULL)
 		mode = "r";
 
-	int fd;
+	uv_file fd; 
+	uv_fs_t req;
+	int r;
 
 	if (mode[0] == 'r')
-		fd = open(filename, O_RDONLY);
+		r = uv_fs_open(loop, &req, filename, O_RDONLY, 0644, NULL);
 	else
-		fd = open(filename, O_WRONLY|O_CREAT, 0777);
+		r = uv_fs_open(loop, &req, filename, O_WRONLY|O_CREAT, 0644, NULL);
 
-	if (fd == -1) {
+	fd = req.result;
+	uv_fs_req_cleanup(&req);
+
+	if (r) {
 		info("open %s mode %s failed", filename, mode);
 		lua_pushnil(L);
 		return 1;
@@ -42,9 +47,8 @@ static int luv_fopen(lua_State *L, uv_loop_t *loop) {
 	lua_newtable(L);
 
 	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
-	uv_pipe_init(loop, &p->p, 0);
-	uv_pipe_open(&p->p, fd);
-	p->st = (uv_stream_t *)&p->p;
+	p->type = PT_FILE;
+	p->fd = fd; 
 
 	luv_setgc(p, on_closed);
 
