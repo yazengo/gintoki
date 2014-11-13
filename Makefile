@@ -4,17 +4,14 @@ cflags += -g -I. -Werror
 ldflags += -g -lm -luv -lcurl
 
 cobjs += main.o tests.o
-cobjs += utils.o luv.o strbuf.o popen.o ringbuf.o timer.o os.o
-cobjs += audio_mixer.o audio_out_test.o audio_in_avconv.o audio_in.o pcm.o
+cobjs += utils.o luv.o strbuf.o timer.o os.o
+cobjs += pcm.o pipe.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
-cobjs += airplay.o airplay_v2.o
-cobjs += noise.o
-cobjs += net.o curl.o http_parser.o zpnp.o itunes.o
 
-luvmods += utils os audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm timer noise
+luvmods += utils os blowfish base64 sha1 pcm timer pipe
 
-exe ?= server${objsuffix}
+exe ?= server
 now = $(shell date +'%Y%m%d-%h%M')
 
 config-mk = config$(if ${arch},-${arch},).mk
@@ -30,7 +27,7 @@ cflags-main += -DGITVER=\"${gitver}\" -DLUVINIT="${luvinit}" -DBUILDDATE=\"${now
 
 main.o: ${config-mk} Makefile
 
-%${objsuffix}.o: %.c $(hsrcs)
+%.o: %.c $(hsrcs)
 	$(CC) $(cflags) $(cflags-$*) -c -o $@ $<
 
 ${exe}: ${cobjs}

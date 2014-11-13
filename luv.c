@@ -15,7 +15,7 @@ typedef struct {
 
 static int __gc(lua_State *L) {
 	lua_getfield(L, 1, "_ctx");
-	luv_t *l = (luv_t *)lua_touserptr(L, -1);
+	luv_t *l = (luv_t *)lua_touserdata(L, -1);
 
 	if (l->gc)
 		l->gc(l->loop, l->data);
@@ -49,7 +49,7 @@ static void *_new(lua_State *L, uv_loop_t *loop, int size, int usethread) {
 	lua_newmetatbl(L);
 	lua_setmetatable(L, t);
 
-	lua_pushuserptr(L, l);
+	lua_pushlightuserdata(L, l);
 	lua_setfield(L, t, "_ctx");
 
 	lua_pushmaptbl(L);
@@ -149,7 +149,7 @@ void luv_pushctx(lua_State *L, void *_l) {
 
 void *luv_toctx(lua_State *L, int i) {
 	lua_getfield(L, i, "_ctx");
-	luv_t *l = (luv_t *)lua_touserptr(L, -1);
+	luv_t *l = (luv_t *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 
 	return l->data;
@@ -179,27 +179,27 @@ lua_State *luv_threadstate(void *_l) {
 }
 
 static int lua_cb(lua_State *L) {
-	uv_loop_t *loop = (uv_loop_t *)lua_touserptr(L, lua_upvalueindex(1));
-	luv_cb cb = (luv_cb)lua_touserptr(L, lua_upvalueindex(2));
+	uv_loop_t *loop = (uv_loop_t *)lua_touserdata(L, lua_upvalueindex(1));
+	luv_cb cb = (luv_cb)lua_touserdata(L, lua_upvalueindex(2));
 	return cb(L, loop);
 }
 
 void luv_register(lua_State *L, uv_loop_t *loop, const char *name, luv_cb cb) {
-	lua_pushuserptr(L, loop);
-	lua_pushuserptr(L, cb);
+	lua_pushlightuserdata(L, loop);
+	lua_pushlightuserdata(L, cb);
 	lua_pushcclosure(L, lua_cb, 2);
 	lua_setglobal(L, name);
 }
 
 static int lua_closure_cb(lua_State *L) {
-	luv_t *l = (luv_t *)lua_touserptr(L, lua_upvalueindex(1));
-	luv_closure_cb cb = (luv_closure_cb)lua_touserptr(L, lua_upvalueindex(2));
+	luv_t *l = (luv_t *)lua_touserdata(L, lua_upvalueindex(1));
+	luv_closure_cb cb = (luv_closure_cb)lua_touserdata(L, lua_upvalueindex(2));
 	return cb(L, l->loop, l->data);
 }
 
 void luv_pushcclosure(lua_State *L, luv_closure_cb cb, void *_l) {
-	lua_pushuserptr(L, _l - sizeof(luv_t));
-	lua_pushuserptr(L, cb);
+	lua_pushlightuserdata(L, _l - sizeof(luv_t));
+	lua_pushlightuserdata(L, cb);
 	lua_pushcclosure(L, lua_closure_cb, 2);
 }
 

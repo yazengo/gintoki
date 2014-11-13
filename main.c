@@ -14,7 +14,7 @@
 static void usage(char *prog) {
 	fprintf(stderr, "Usage: %s\n", prog);
 	fprintf(stderr, "   -t 101                           run C test #101          \n");
-	fprintf(stderr, "   -run a.lua b.lua ...             run lua script one by one\n");
+	fprintf(stderr, "   -r/-run a.lua b.lua ...          run lua script one by one\n");
 	exit(-1);
 }
 
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
 			i++;
 			continue;
 		}
-		if (!strcmp(argv[i], "-run")) {
+		if (!strcmp(argv[i], "-r") || !strcmp(argv[i], "-run")) {
 			if (i+1 >= argc) usage(argv[0]);
 			run_lua = &argv[i+1];
 			break;

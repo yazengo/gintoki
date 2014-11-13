@@ -387,42 +387,6 @@ static void write2(void *buf, int len) {
 	}
 }
 
-static void test_fake_shairport() {
-	info("starts");
-
-#define step 44100
-#define n 3
-#define repeat 3
-
-	static char buf[step];
-	int key = 0;
-	int i, r;
-
-	for (r = 0; r < repeat; r++) {
-		cmdhdr_t c = {};
-
-		c.type = 0;
-		write2(&c, sizeof(c));
-
-		for (i = 0; i < n; i++) {
-			audio_out_test_fill_buf_with_key(buf, sizeof(buf), 44100, key);
-
-			cmdhdr_t c = {.type = 1, .len = sizeof(buf)};
-			write2(&c, sizeof(c));
-			write2(buf, sizeof(buf));
-
-			key = (key+1)%7;
-		}
-
-		c.type = 2;
-		write2(&c, sizeof(c));
-	}
-
-#undef step
-#undef n
-#undef repeat
-}
-
 void run_test_c_pre(int i) {
 	info("run C pre test #%d", i);
 	if (i == 1)
@@ -439,8 +403,6 @@ void run_test_c_pre(int i) {
 		test_uv_subprocess(i);
 	if (i == 9)
 		test_blowfish();
-	if (i == 10)
-		test_fake_shairport();
 }
 
 static uv_buf_t uv_malloc_buffer(uv_handle_t *h, size_t len) {
@@ -851,8 +813,6 @@ static void test_luv(lua_State *L, uv_loop_t *loop) {
 
 void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 	info("i=%d", i);
-	if (i == 3)
-		test_audio_out(loop);
 	if (i == 5) 
 		test_ttyraw_open(loop);
 	if (i == 6)
