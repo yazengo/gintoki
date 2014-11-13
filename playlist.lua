@@ -59,7 +59,7 @@ P.setopt = function (opt, done)
 		local i = tonumber(opt.id)
 		if i > 0 and i <= table.maxn(P.list) then
 			P.i = i-1
-			if P.next_callback then P.next_callback() end
+			P.skip()
 		end
 
 		done{result=0}
@@ -98,10 +98,15 @@ P.setopt = function (opt, done)
 	end
 end
 
--- return song or nil
-P.next = function (opt)
-	if P.mode == 'repeat_one' and opt and opt.playdone then
-		return P.list[P.i]
+P.skip = function ()
+	if P.on_skip then P.on_skip() end
+end
+
+P.stop = function () end
+
+P.next = function (o, done)
+	if P.mode == 'repeat_one' and o and o.playdone then
+		done(P.list[P.i])
 	end
 
 	if P.mode == 'repeat_all' then
@@ -109,13 +114,13 @@ P.next = function (opt)
 		if P.i > table.maxn(P.list) then
 			P.i = 1
 		end
-		return P.list[P.i]
+		done(P.list[P.i])
 	elseif P.mode == 'normal' or P.mode == 'repeat_one' then
 		P.i = P.i+1
 		if P.i > table.maxn(P.list) then
-			return nil
+			return 
 		end
-		return P.list[P.i]
+		done(P.list[P.i])
 	elseif P.mode == 'shuffle' then
 		P.i = math.random(1, table.maxn(P.list))
 
@@ -125,30 +130,30 @@ P.next = function (opt)
 			P.log_list[P.log_i-P.log_max] = nil
 		end
 
-		return P.list[P.i]
+		done(P.list[P.i])
 	end
 end
 
-P.prev = function ()
+P.prev = function (o, done)
 	if P.mode == 'repeat_all' then
 		P.i = P.i-1
 		if P.i <= 0 then
 			P.i = table.maxn(P.list)
 		end
-		return P.list[P.i]
+		done(P.list[P.i])
 	elseif P.mode == 'normal' or P.mode == 'repeat_one' then
 		P.i = P.i-1
 		if P.i <= 0 then
-			return nil
+			return
 		end
-		return P.list[P.i]
+		done(P.list[P.i])
 	elseif P.mode == 'shuffle' then
 		if not P.log_list[P.log_i] then
 			P.i = math.random(1, table.maxn(P.list))
-			return P.list[P.i]
+			done(P.list[P.i])
 		else
 			P.log_i = P.log_i-1
-			return P.log_list[P.log_i]
+			done(P.log_list[P.log_i])
 		end
 	end
 end

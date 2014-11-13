@@ -42,13 +42,20 @@ B.setopt = function (o, done)
 	end
 end
 
-B.next = function ()
+B.next = function (o, done)
 	if not B.i then B.i = 0 end
 	B.i = (B.i+1) % table.maxn(B.json)
 	local r = table.copy(B.json[B.i] or {})
 	r.title = r.name
 	r.name = nil
-	return r 
+	done(r)
+end
+
+B.skip = function ()
+	if B.on_skip then B.on_skip() end
+end
+
+B.stop = function ()
 end
 
 bbcradio = B

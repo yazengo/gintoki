@@ -15,9 +15,7 @@ handle = function (a, done)
 		return
 	end
 
-	if radio.setopt_hook(a, done) then
-		return
-	end
+	if radio.setopt(a, done) then return end
 
 	if a.op == 'audio.volume' then 
 		local vol = audio.setvol(a.value)

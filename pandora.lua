@@ -400,16 +400,18 @@ P.fetch_songs = function ()
 	end)
 end
 
-P.songs_add = function (r)
-	info('got songs nr', table.maxn(r))
-	local left = table.maxn(P.songs) - P.songs_i
-	table.append(P.songs, r)
-	if left == -1 and P.next_callback then
-		P.next_callback()
+P.songs_add = function (songs)
+	songs = songs or {}
+	info('got songs nr', table.maxn(songs))
+	table.append(P.songs, songs)
+	local r = P.songs[P.songs_i]
+	if P.next_cb and r then
+		P.next_cb(r)
+		P.next_cb = nil
 	end
 end
 
-P.next = function ()
+P.next = function (o, done)
 	local left = table.maxn(P.songs) - P.songs_i
 
 	if left <= 1 and P.stat == 'songs_ready' then
@@ -420,7 +422,26 @@ P.next = function ()
 	if left > -1 then
 		P.songs_i = P.songs_i + 1
 	end
-	return r
+
+	if P.next_cb then
+		panic('please call next() before previous call ends')
+	end
+
+	if r then
+		done(r)
+	else
+		P.next_cb = done
+	end
+
+	return
+end
+
+P.skip = function ()
+	if P.on_skip then P.on_skip() end
+end
+
+P.stop = function ()
+	P.next_cb = nil
 end
 
 P.init = function ()
@@ -479,7 +500,7 @@ P.setopt_genres_choose = function (o, done)
 	P.stat = 'songs_fetching'
 	P.songs = {}
 	P.songs_i = 1
-	if P.stop_callback then P.stop_callback() end
+	P.skip()
 
 	local c = table.copy(P.cookie)
 	c.station_id = nil
@@ -515,7 +536,7 @@ P.setopt_station_choose = function (o, done)
 	P.stat = 'songs_fetching'
 	P.songs = {}
 	P.songs_i = 1
-	if P.stop_callback then P.stop_callback() end
+	P.skip()
 
 	local c = table.copy(P.cookie)
 	c.station_id = o.id
@@ -542,7 +563,7 @@ P.setopt_login = function (o, done)
 	P.stat = 'songs_fetching'
 	P.songs = {}
 	P.songs_i = 1
-	if P.stop_callback then P.stop_callback() end
+	P.skip()
 
 	local c = table.copy(P.cookie)
 	P.clean_user_cookie(c)
@@ -600,7 +621,7 @@ P.setopt_rate = function (o, done)
 		done{result=0}
 	end)
 	if not like then
-		if P.next_callback then P.next_callback() end
+		P.skip()
 	end
 end
 

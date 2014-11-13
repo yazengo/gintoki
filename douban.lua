@@ -164,13 +164,14 @@ D.grep_songs = function (songs, channel_id)
 	return r
 end
 
-D.songs_add = function (r)
-	r = r or {}
-	info('got songs nr', table.maxn(r))
-	local left = table.maxn(D.songs) - D.songs_i
-	table.append(D.songs, r)
-	if left == -1 and D.next_callback then
-		D.next_callback()
+D.songs_add = function (songs)
+	songs = songs or {}
+	info('got songs nr', table.maxn(songs))
+	table.append(D.songs, songs)
+	local r = D.songs[D.songs_i]
+	if D.next_cb and r then
+		D.next_cb(r)
+		D.next_cb = nil
 	end
 end
 
@@ -287,7 +288,7 @@ D.auto_run = function (c, cb, done)
 	end)
 end
 
-D.next = function (opt)
+D.next = function (o, done)
 	local left = table.maxn(D.songs) - D.songs_i
 
 	if left <= 1 and not D.running[D.songs_list] then
@@ -303,7 +304,23 @@ D.next = function (opt)
 		D.songs_i = D.songs_i + 1
 	end
 
-	return r
+	if D.next_cb then
+		panic('please call next() before previous call ends')
+	end
+
+	if r then
+		done(r)
+	else
+		D.next_cb = done
+	end
+end
+
+D.skip = function ()
+	if D.on_skip then D.on_skip() end
+end
+
+D.stop = function ()
+	D.next_cb = nil
 end
 
 D.init = function ()
@@ -345,7 +362,7 @@ end
 D.setopt_channel_choose = function (o, done) 
 	D.songs = {}
 	D.songs_i = 1
-	if D.stop_callback then D.stop_callback() end
+	D.skip()
 
 	local c = table.copy(D.cookie)
 	c.channel = o.id
@@ -391,7 +408,7 @@ D.setopt_logout = function (o, done)
 	c.icon = nil
 	D.setcookie(c)
 
-	if D.stop_callback then D.stop_callback() end
+	D.skip()
 
 	D.auto_run(c, D.songs_list, function (c, r, err)
 		if err then
@@ -431,7 +448,7 @@ D.setopt = function (o, done)
 	elseif o.op == 'douban.rate_ban' then
 		D.rate(D.cookie, 'b', o.id, function () 
 			done{result=0} 
-			if D.next_callback then D.next_callback() end
+			D.skip()
 		end)
 		return true
 	elseif o.op == 'douban.rate_toggle_like' then
