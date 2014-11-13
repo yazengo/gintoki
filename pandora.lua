@@ -181,7 +181,7 @@ P.handle_common = function (r, st, done)
 	end
 end
 
-P.grep_songs = function (old)
+P.grep_songs = function (old, station_id)
 	local r = {}
 
 	local grep = function (s)
@@ -197,6 +197,7 @@ P.grep_songs = function (old)
 			album = s.albumName,
 			artist = s.artistName,
 			id = s.trackToken,
+			station_id = station_id,
 			cover_url = s.albumArtUrl,
 			like = (s.songRating == 1),
 		}
@@ -299,7 +300,7 @@ P.songs_list = function (c, done)
 			stationToken = c.station_id,
 		}),
 		done = function (r, st)
-			if r then r = P.grep_songs(r) end
+			if r then r = P.grep_songs(r, c.station_id) end
 			P.handle_common(r, st, done)
 		end,
 	}
