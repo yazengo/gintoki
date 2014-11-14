@@ -213,6 +213,11 @@ inputdev_on_event = function (e)
 	if e >= 0 and e <= 15 then
 		setvol(e)
 	end
+
+    if e == 33 or e == 40 or e == 41 then
+        alarm.cancel()
+    end
+
 end
 
 hostname = function ()

@@ -43,6 +43,13 @@ local function alarm_fade(svol, step, evol)
 end
 
 local alarm_cancel = false
+local alarm_oldvol = audio.getvol()
+
+A.cancel = function ()
+    alarm_cancel = true
+    audio.pause{track = 3}
+    audio.setvol(alarm_oldvol)
+end
 
 local function alarm_repeat (url)
 	if alarm_cancel then return end
@@ -59,13 +66,13 @@ end
 local function alarm_trigger(o)
     alarm_cancel = false
     if o.fadein then
-        audio.setvol(20)
-        local f = alarm_fade(20, 5)
+        audio.setvol(10)
+        local f = alarm_fade(10, 5)
         interval = set_interval(function ()
             vol = f()
             audio.setvol(vol)
             info("Alarm setvol:", vol)
-            if vol >= 60 then
+            if vol >= 60 or alarm_cancel then
                 clear_interval(interval)
             end
         end, 2000)
@@ -73,13 +80,11 @@ local function alarm_trigger(o)
 
     alarm_repeat(o.url)
 
-    set_timeout(function()
-        alarm_cancel = true
-        audio.pause{track = 3}
-    end, o.timeout)
+    set_timeout(A.cancel, o.timeout)
 end
 
 alarm_on_trigger = function () 
+    alarm_oldvol = audio.getvol()
     audio.pause()
     alarm_trigger { url = 'testaudios/10s-2.mp3', timeout = 1000*60, fadein = true }
     alarm_set_next()
