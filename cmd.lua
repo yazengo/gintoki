@@ -30,6 +30,7 @@ I.handle = function (line)
 		local r, err = pcall(f)
 		if not r then
 			print(err)
+			print(ldebug.traceback())
 		end
 	end
 

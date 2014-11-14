@@ -36,3 +36,23 @@ zpnp.start = function ()
 	zpnp.online()
 end
 
+pnp = {}
+pnp.init = function ()
+	pnp.notify = function () end
+	pnp.online = function () end
+	pnp.stop = function () end
+end
+pnp.init()
+pnp.start = function ()
+	zpnp.start()
+	zpnp.on_action = handle
+	pnp.notify = function (r) zpnp.notify(r) end
+	pnp.online = zpnp.online
+	pnp.stop = function ()
+		zpnp.stop()
+		pnp.init()
+	end
+end
+pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end
+pnp.notify_sync  = function (r) pnp.notify(table.add(r, {type='sync'})) end
+

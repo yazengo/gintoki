@@ -1,10 +1,12 @@
 
 require('airplay')
+require('itunes')
 require('radio')
 require('audio')
 require('muno')
 require('zpnp')
 require('prop')
+require('ctrl')
 
 handle = function (a, done)
 	done = done or function () end
@@ -108,52 +110,10 @@ http_server {
 	end,
 }
 
-http_server {
-	port = 8883,
-	handler = function (r)
-		info('url', r:url())
-		info('method', r:method())
-        local upload_dir = jz_itunes_dir or 'www/'
-        if r:url() == "/upload" then
-            if r:method() == 1 then
-                r:retfile('www/upload.html')
-            elseif r:method() == 3 then
-                local _, _, filename = string.find(r:body(), 'filename="(.-)"')
-                if not filename then
-                    r:retjson(cjson.encode{result = 1})
-                    return
-                end
-                r:savebody(upload_dir .. filename)
-                r:retjson(cjson.encode{result = 0})
-                localmusic.addlist(upload_dir .. filename)
-            end
-        end
-	end,
-}
-
-pnp = {}
-pnp.init = function ()
-	pnp.notify = function () end
-	pnp.online = function () end
-	pnp.stop = function () end
-end
-pnp.init()
-pnp.start = function ()
-	zpnp.start()
-	zpnp.on_action = handle
-	pnp.notify = function (r) zpnp.notify(r) end
-	pnp.online = zpnp.online
-	pnp.stop = function ()
-		zpnp.stop()
-		pnp.init()
-	end
-end
-pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end
-pnp.notify_sync  = function (r) pnp.notify(table.add(r, {type='sync'})) end
-
 info('hostname', hostname())
 airplay.start()
 pnp.start()
+ctrl.start()
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}
 

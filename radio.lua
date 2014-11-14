@@ -14,12 +14,12 @@ R.info = function ()
 	return r
 end
 
-R.next = function (done)
-	R.source.next(done)
+R.next = function (o, done)
+	R.source.next(o, done)
 end
 
-R.prev = function (o)
-	R.source.prev(done)
+R.prev = function (o, done)
+	R.source.prev(o, done)
 end
 
 R.setopt = function (o, done)
@@ -82,6 +82,11 @@ R.source_on_skip = function ()
 	if R.on_skip then R.on_skip() end
 end
 
+R.set_source = function (to)
+	R.source = to
+	R.source.on_skip = R.source_on_skip
+end
+
 R.change = function (o)
 	info('radio.change', o)
 
@@ -89,14 +94,15 @@ R.change = function (o)
 	if to and R.source ~= to then 
 		prop.set('radio.default', o.type) 
 		if R.source then R.source.stop() end
-		R.source = to
-		to.on_skip = R.source_on_skip
+		R.set_source(to)
 	end
 
 	if o.autostart ~= false then
 		R.skip()
 	end
 end
+
+R.set_source(localmusic)
 
 radio = R
 
