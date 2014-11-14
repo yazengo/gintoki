@@ -92,6 +92,71 @@ amixer = function (...)
 
 end
 
+--[[
+
+Pipe queue:
+
+StreamPipe:
+
+pending_readdone
+pending_read
+pending_writedone
+pending_write
+paused
+stopped
+cancelled
+
+read() {
+	enque(READ)
+}
+cancel() {
+}
+
+init
+ioing
+ioing|paused
+iodone|paused
+iodone|resuming
+stopped
+ioing|stopped
+ioing|stopped|closed
+
+proc() {
+	q = deque()
+	q == PAUSE && p.setpaused()
+	q == RESUME && {
+		pending_readdone && pending_read {
+			clear both
+			readdone()
+		}
+	}
+	q == READ && {
+		if paused { return }
+		if stopped { readdone(-1) }
+	}
+	q == STOP && {
+		p.setstopped()
+	}
+	q == CLOSE && {
+		p.setclosed()
+	}
+	q == CANCEL && {
+		p.setcancelled()
+	}
+	q == READDONE && {
+		if p.cancelled() {
+		}
+	}
+}
+
+DirectPipe:
+
+pending_read
+pending_write
+
+
+--]]
+
 --
 -- node = {
 --   stdin  = [native pipe_t] or nil,
@@ -123,15 +188,6 @@ end
 --    stdout = [native pipe_t] or nil,
 -- }
 --
---
--- typedef struct {
--- } pipecopy_t;
---
--- void uv_pipecopy_start(pipecopy_t *cpy, pipe_t *src, pipe_t *sink) {
---   uv_splice(src, sink);
--- }
--- uv_pipecopy_stop(pipecopy_t *cpy);
---
 -- [urlopen:1  -> file:??]
 -- [adecoder:0 -> avconv:stdin]
 --
@@ -141,6 +197,52 @@ end
 --
 
 --[[
+
+API of pipe:
+
+pipe_read(p, done)
+pipe_write(p, done)
+pipe_pause(p)
+pipe_resume(p)
+pipe_stop(p)
+pipe_cancel(p)
+pipe_close(p)
+pipe_copy(src, sink)
+pipe_is_stopped(p)
+pipe_is_paused(p)
+
+pdirect_read(p)   # only for PDIRECT_SRC
+pdirect_write(p)  # only for PDIRECT_SINK
+
+Lua API of pipe
+
+pipe.pause(p)
+pipe.resume(p)
+pipe.stop(p)
+pipe.copy(src, sink, {
+	align = 8,
+	done = function () end,
+})
+
+Types of pipe:
+
+PSTREAM_SINK
+PSTREAM_SRC
+PDIRECT_SINK
+PDIRECT_SRC
+
+States of pipe stream:
+
+INIT
+READING
+WRITING
+
+read() -> done(0) -> read() -> done(-1) -> close()
+write() -> done(0) -> write() -> done(-1) -> close()
+pause()/resume()/stop()/cancel() at any time
+
+when pause() called. read() and write() will never done. until resume() called.
+when cancel() called. in-progress operations will be cancelled.
 
 enum {
 	P_RUNNING
@@ -174,6 +276,8 @@ typedef struct {
 	writedone;
 } pipe_t;
 
+
+
 pipe_allocbuf();
 
 // pdirect functions
@@ -188,7 +292,6 @@ pdirect_read(p, len, done) {
 	set_immediate(func () {
 		w = d.write
 		r = d.read
-		shutdown = d.shutdown
 
 		do_trans = func (r, w) {
 			if r.len > w.ub.len {

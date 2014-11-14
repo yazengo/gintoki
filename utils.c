@@ -80,43 +80,6 @@ void print_traceback() {
 	fprintf(stderr, "\n");
 }
 
-static void globalptr_name(char *name, const char *pref, void *p) {
-	sprintf(name, "%s_%p", pref, p);
-}
-
-void lua_setglobalptr(lua_State *L, const char *pref, void *p) {
-	char name[128]; globalptr_name(name, pref, p);
-	lua_setglobal(L, name);
-}
-
-void lua_getglobalptr(lua_State *L, const char *pref, void *p) {
-	char name[128]; globalptr_name(name, pref, p);
-	lua_getglobal(L, name);
-}
-
-void lua_set_global_callback(lua_State *L, const char *pref, void *p) {
-	lua_setglobalptr(L, pref, p);
-}
-
-int lua_do_global_callback(lua_State *L, const char *pref, void *p, int nargs, int setnil) {
-	lua_getglobalptr(L, pref, p);
-
-	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
-		return 1;
-	}
-
-	if (setnil) {
-		lua_pushnil(L);
-		lua_setglobalptr(L, pref, p);
-	}
-
-	lua_insert(L, -nargs-1);
-	lua_call_or_die(L, nargs, 0);
-
-	return 0;
-}
-
 void _lua_dumpstack_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L) {
 	int i;
 	_log(LOG_INFO, at_func, at_file, at_lineno, "==== top=%d", lua_gettop(L));
@@ -143,176 +106,6 @@ void _lua_dumpstack_at(const char *at_func, const char *at_file, int at_lineno, 
 			"%d %s%s", i, typename, str
 		);
 	}
-}
-
-typedef struct {
-	lua_State *L;
-
-	lua_CFunction on_start;
-	lua_CFunction on_done;
-
-	void *data;
-	pthread_mutex_t lock;
-} pcall_luv_v2_t;
-
-static void pcall_luv_v2_handle_free(uv_handle_t *h) {
-	free(h);
-}
-
-static int pcall_luv_v2_done(lua_State *L) {
-	pcall_luv_v2_t *p = (pcall_luv_v2_t *)lua_touserptr(L, lua_upvalueindex(1));
-	if (p == NULL)
-		return 0;
-
-	lua_pushcfunction(p->L, p->on_done);
-
-	// arg[1] = data
-	lua_pushuserptr(p->L, p->data);
-
-	// arg[2] = ret
-	lua_pushvalue(p->L, 1);
-
-	lua_call_or_die(p->L, 2, 0);
-
-	pthread_mutex_unlock(&p->lock);
-
-	return 0;
-}
-
-static void pcall_luv_v2_start(uv_async_t *as, int _) {
-	pcall_luv_v2_t *p = (pcall_luv_v2_t *)as->data;
-
-	lua_pushcfunction(p->L, p->on_start);
-
-	// arg[1] = data
-	lua_pushuserptr(p->L, p->data);
-
-	// arg[2] = done
-	lua_pushuserptr(p->L, p);
-	lua_pushcclosure(p->L, pcall_luv_v2_done, 1);
-
-	lua_call_or_die(p->L, 2, 0);
-
-	uv_close((uv_handle_t *)as, pcall_luv_v2_handle_free);
-}
-
-void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_start, lua_CFunction on_done, void *data) {
-	pcall_luv_v2_t p = {
-		.L = L, .data = data,
-		.on_start = on_start,
-		.on_done = on_done,
-		.lock = PTHREAD_MUTEX_INITIALIZER,
-	};
-	pthread_mutex_lock(&p.lock);
-
-	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
-	uv_async_init(loop, as, pcall_luv_v2_start);
-	as->data = &p;
-	uv_async_send(as);
-
-	pthread_mutex_lock(&p.lock);
-	pthread_mutex_destroy(&p.lock);
-}
-
-typedef struct {
-	pcall_uv_cb cb;
-	void *cb_p;
-	pthread_mutex_t lock;
-	const char *name;
-} pcall_uv_t;
-
-void pthread_call_uv_complete(void *_p) {
-	pcall_uv_t *p = (pcall_uv_t *)_p;
-	pthread_mutex_unlock(&p->lock);
-}
-
-static void pcall_uv_handle_free(uv_handle_t *h) {
-	free(h);
-}
-
-static void pcall_uv_done(uv_async_t *as, int _) {
-	pcall_uv_t *p = (pcall_uv_t *)as->data;
-	debug("async_call %s:%p", p->name, as);
-	p->cb(p, p->cb_p);
-	uv_close((uv_handle_t *)as, pcall_uv_handle_free);
-}
-
-void pthread_call_uv_wait_withname(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p, const char *name) {
-	pcall_uv_t p = {
-		.lock = PTHREAD_MUTEX_INITIALIZER,
-		.cb = cb, .cb_p = cb_p,
-		.name = name,
-	};
-	pthread_mutex_lock(&p.lock);
-
-	uv_async_t *as = (uv_async_t *)zalloc(sizeof(uv_async_t));
-
-	if (uv_async_init(loop, as, pcall_uv_done))
-		panic("async_init failed");
-
-	as->data = &p;
-	debug("async_send %s:%p", name, as);
-	uv_async_send(as);
-
-	pthread_mutex_lock(&p.lock);
-	pthread_mutex_destroy(&p.lock);
-}
-
-void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p) {
-	pthread_call_uv_wait_withname(loop, cb, cb_p, "normal");
-}
-
-/*
-static void uv_call_free(uv_handle_t *h) {
-	free(h);
-}
-
-static void uv_call_done(uv_async_t *as, int _) {
-	uv_call_t *c = (uv_call_t *)as->data;
-	c->done_cb(c);
-	uv_close((uv_handle_t *)as, uv_call_free);
-}
-*/
-
-static void timer_free(uv_handle_t *t) {
-	free(t);
-}
-
-static void uv_call_timeout(uv_timer_t *t, int _) {
-	uv_call_t *c = (uv_call_t *)t->data;
-	if (c->done_cb)
-		c->done_cb(c);
-	uv_close((uv_handle_t *)t, timer_free);
-}
-
-void uv_call_cancel(uv_call_t *c) {
-	c->done_cb = NULL;
-}
-
-void uv_call(uv_loop_t *loop, uv_call_t *c) {
-	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
-	t->data = c;
-	uv_timer_init(loop, t);
-	uv_timer_start(t, uv_call_timeout, 0, 0);
-}
-
-static void uv_call_free(uv_handle_t *h) {
-	uv_callreq_t *req = (uv_callreq_t *)h->data;
-	req->cb(req);
-	uv_barrier_wait(&req->b);
-}
-
-static void uv_call_handler(uv_async_t *h, int stat) {
-	uv_close((uv_handle_t *)h, uv_call_free);
-}
-
-void uv_call_sync(uv_loop_t *loop, uv_callreq_t *req, uv_call_cb cb) {
-	uv_barrier_init(&req->b, 2);
-	req->a.data = req;
-	req->cb = cb;
-	uv_async_init(loop, &req->a, uv_call_handler);
-	uv_async_send(&req->a);
-	uv_barrier_wait(&req->b);
 }
 
 static int lua_log(lua_State *L) {
@@ -375,34 +168,6 @@ void lua_call_or_die_at(const char *at_func, const char *at_file, int at_lineno,
 	if (lua_docall(L, nargs, nresults)) {
 		_log(LOG_PANIC, at_func, at_file, at_lineno, "lua_call: %s", lua_tostring(L, -1));
 	}
-}
-
-// os.readdir('path', done)
-static int os_readdir(lua_State *L) {
-	const char *path = lua_tostring(L, 1);
-
-	lua_newtable(L);
-
-	DIR *dir = opendir(path);
-	if (dir) {
-		struct dirent *e;
-		int i;
-		for (i = 1; ; i++) {
-			e = readdir(dir);
-			if (e == NULL)
-				break;
-			if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) {
-				i--;
-				continue;
-			}
-			lua_pushnumber(L, i);
-			lua_pushstring(L, e->d_name);
-			lua_settable(L, -3);
-		}
-		closedir(dir);
-	}
-
-	return 1;
 }
 
 void lua_pushuserptr(lua_State *L, void *p) {
@@ -475,13 +240,6 @@ void utils_preinit(uv_loop_t *loop) {
 }
 
 void luv_utils_init(lua_State *L, uv_loop_t *loop) {
-	// os.readdir = [native function]
-	lua_getglobal(L, "os");
-	lua_pushuserptr(L, loop);
-	lua_pushcclosure(L, os_readdir, 1);
-	lua_setfield(L, -2, "readdir");
-	lua_pop(L, 1);
-
 	lua_pushcfunction(L, lua_log);
 	lua_setglobal(L, "_log");
 

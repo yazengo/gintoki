@@ -516,6 +516,7 @@ static int httpcli_save_body(lua_State *L) {
     if (filename == NULL)
         panic("iTunes filename must be set");
     itunes_save_body(tc->ts->loop, tc->reqsb, filename);
+
     return 0;
 }
 

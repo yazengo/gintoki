@@ -70,8 +70,10 @@ static int luv_pexec(lua_State *L, uv_loop_t *loop) {
 	opts.args = args;
 	opts.exit_cb = proc_on_exit;
 
-	int r = uv_spawn(loop, &p->proc, opts);
-	info("cmd=%s spawn=%d pid=%d", cmd, r, p->proc.pid);
+	uv_process_t *proc = (uv_process_t *)zalloc(sizeof(uv_process_t));
+
+	int r = uv_spawn(loop, proc, opts);
+	info("cmd=%s spawn=%d pid=%d", cmd, r, proc->pid);
 }
 
 void luv_pexec_init(lua_State *L, uv_loop_t *loop) {

@@ -27,30 +27,6 @@ void log_init();
 
 float now();
 
-typedef struct uv_call_s {
-	void (*done_cb)(struct uv_call_s *);
-	void *data, *data2;
-} uv_call_t;
-void uv_call(uv_loop_t *loop, uv_call_t *c);
-void uv_call_cancel(uv_call_t *c);
-
-struct uv_callreq_s;
-typedef void (*uv_call_cb)(struct uv_callreq_s *req);
-typedef struct uv_callreq_s {
-	void *data;
-	uv_barrier_t b;
-	uv_async_t a;
-	uv_call_cb cb;
-} uv_callreq_t;
-void uv_call_sync(uv_loop_t *loop, uv_callreq_t *req, uv_call_cb cb);
-
-void pthread_call_luv_sync_v2(lua_State *L, uv_loop_t *loop, lua_CFunction on_start, lua_CFunction on_done, void *data);
-
-typedef void (*pcall_uv_cb)(void *pcall, void *p);
-void pthread_call_uv_wait(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p);
-void pthread_call_uv_wait_withname(uv_loop_t *loop, pcall_uv_cb cb, void *cb_p, const char *name);
-void pthread_call_uv_complete(void *pcall);
-
 #define lua_dofile_or_die(L, fname) lua_dofile_or_die_at(__func__, __FILE__, __LINE__, L, fname)
 #define lua_dostring_or_die(L, str) lua_dostring_or_die_at(__func__, __FILE__, __LINE__, L, str)
 #define lua_call_or_die(L, nargs, nresults) lua_call_or_die_at(__func__, __FILE__, __LINE__, L, nargs, nresults)
@@ -67,13 +43,6 @@ void luv_utils_init(lua_State *L, uv_loop_t *loop);
 void utils_preinit();
 void utils_onexit(void (*cb)());
 
-void lua_setglobalptr(lua_State *L, const char *pref, void *p);
-void lua_getglobalptr(lua_State *L, const char *pref, void *p);
-
-void lua_set_global_callback_and_pushname(lua_State *L, const char *pref, void *p);
-void lua_set_global_callback(lua_State *L, const char *name, void *p);
-int lua_do_global_callback(lua_State *L, const char *name, void *p, int nargs, int setnil);
-
 void lua_pushuserptr(lua_State *L, void *p);
 void lua_pushuserdata(lua_State *L, void *p, int len);
 void *lua_touserptr(lua_State *L, int index);
@@ -83,4 +52,10 @@ void lua_setuserptr(lua_State *L, int index, void *p);
 void _lua_dumpstack_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L);
 
 char *strndup(const char *s, size_t n);
+
+typedef struct immediate_s {
+	void *data;
+	void (*cb)(struct immediate_s *);
+} immediate_t;
+void set_immediate(immediate_t *im);
 
