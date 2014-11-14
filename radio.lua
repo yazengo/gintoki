@@ -14,12 +14,49 @@ R.info = function ()
 	return r
 end
 
-R.next = function (o, done)
-	R.source.next(o, done)
+-- urls = {'http://...', ...}
+-- option = {loop=true/false, done=[function]}
+R.new_songlist = function (urls, o)
+	local S = {}
+
+	S.list = urls
+	S.i = 1
+
+	S.stop = function ()
+	end
+
+	S.next = function (o, done)
+		if S.i > table.maxn(S.list) then
+			if not o.loop then
+				if S.on_stop then S.on_stop() end
+				return
+			else
+				S.i = 1
+			end
+		end
+		local s = S.list[S.i]
+		done({url=s})
+		S.i = S.i + 1
+	end
+
+	return S
 end
 
-R.prev = function (o, done)
-	R.source.prev(o, done)
+R.fetching = false
+
+R.next_done = function (song)
+	R.fetching = false
+	R.next_cb(song)
+end
+
+R.next = function (o, done)
+	R.fetching = true
+	R.next_cb = done
+	R.source.next(o, R.next_done)
+end
+
+R.stop = function ()
+	R.source.stop()
 end
 
 R.setopt = function (o, done)
@@ -33,6 +70,7 @@ R.setopt = function (o, done)
 	end
 
 	local ok
+
 	if string.hasprefix(o.op, 'local.') then
 		ok = localmusic.setopt(o, done)
 	elseif string.hasprefix(o.op, 'pandora.') then
@@ -43,6 +81,12 @@ R.setopt = function (o, done)
 		ok = douban.setopt(o, done)
 	elseif string.hasprefix(o.op, 'slumber.') then
 		ok = slumbermusic.setopt(o, done)
+	elseif o.op == 'audio.next' then
+		R.do_skip()
+		done{result=0}
+		ok = true
+	elseif o.op == 'audio.prev' then
+		ok = R.source.setopt(o, done)
 	elseif o.op == 'radio.change_type' then
 		R.change(o)
 		done{result=0}
@@ -66,39 +110,31 @@ R.name2obj = function (s)
 	end
 end
 
-R.next = function (o, done)
-	R.source.next(o, done)
-end
-
-R.stop = function ()
-	R.source.stop()
-end
-
-R.skip = function ()
-	R.source.skip()
-end
-
-R.source_on_skip = function ()
-	if R.on_skip then R.on_skip() end
+R.do_skip = function ()
+	if R.fetching then
+		R.stop()
+		R.source.next(o, R.next_done)
+	else
+		if R.on_skip then R.on_skip() end
+	end
 end
 
 R.set_source = function (to)
 	R.source = to
-	R.source.on_skip = R.source_on_skip
+	R.source.on_skip = R.do_skip
 end
 
 R.change = function (o)
 	info('radio.change', o)
-
 	local to = R.name2obj(o.type)
+
 	if to and R.source ~= to then 
 		prop.set('radio.default', o.type) 
 		if R.source then R.source.stop() end
 		R.set_source(to)
-	end
-
-	if o.autostart ~= false then
-		R.skip()
+		if o.autostart ~= false then
+			R.do_skip()
+		end
 	end
 end
 

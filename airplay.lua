@@ -1,8 +1,10 @@
 
+require('ctrl')
+
 local A = {}
 
 airplay_on_start = function ()
-	radio.insert('airplay://')
+	ctrl.breaking_audio('airplay', 'airplay://')
 end
 
 A.start = function ()

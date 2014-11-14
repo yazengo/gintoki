@@ -652,17 +652,8 @@ P.info_login = function ()
 	return {login=true, username=D.cookie.username, password=D.cookie.password}
 end
 
-P.is_fetching = function ()
-	return P.stat == 'songs_fetching' and table.maxn(P.songs)+1 == P.songs_i 
-		or P.stat == 'server_error'
-end
-
-
 P.info = function ()
-	return {
-		type = 'pandora',
-		fetching = P.is_fetching(),
-	}
+	return { type = 'pandora' }
 end
 
 P.init()

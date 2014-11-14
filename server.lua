@@ -8,43 +8,21 @@ require('zpnp')
 require('prop')
 require('ctrl')
 
-handle = function (a, done)
+handle = function (o, done)
 	done = done or function () end
 	local fail = function () done{result=1, msg='params invalid'} end
 	
-	if not a or not a.op or not isstr(a.op) then
+	if not o or not o.op or not isstr(o.op) then
 		fail()
 		return
 	end
 
-	if radio.setopt(a, done) then return end
+	if ctrl.setopt(o, done) then return end
 
-	if a.op == 'audio.volume' then 
-		local vol = audio.setvol(a.value)
-		muno.notify_vol_change(vol)
-		done{result=vol}
-	elseif a.op == 'audio.prev' then
-		radio.prev()
-		done{result=0}
-	elseif a.op == 'audio.next' then
-		radio.next()
-		done{result=0}
-	elseif a.op == 'audio.play_pause_toggle' then
-		audio.pause_resume_toggle()
-		done{result=0}
-	elseif a.op == 'audio.pause' then
-		audio.pause()
-		done{result=0}
-	elseif a.op == 'audio.resume' then
-		audio.resume()
-		done{result=0}
-	elseif a.op == 'audio.alert' then
-		audio.alert{url=a.url}
-		done{result=0}
-	elseif string.hasprefix(a.op, 'muno.') then
-		if not muno.setopt(a, done) then fail() end
-	elseif string.hasprefix(a.op, 'alarm.') then
-		if not alarm or not alarm.setopt(a, done) then fail() end
+	if string.hasprefix(o.op, 'muno.') then
+		if not muno.setopt(o, done) then fail() end
+	elseif string.hasprefix(o.op, 'alarm.') then
+		if not alarm or not alarm.setopt(o, done) then fail() end
 	else
 		fail()
 	end

@@ -465,15 +465,8 @@ D.info_login = function ()
 	end
 end
 
-D.is_fetching = function ()
-	return D.songs_i > table.maxn(D.songs) and (D.running[D.songs_list] ~= nil)
-end
-
 D.info = function ()
-	return {
-		type = 'douban',
-		fetching = D.is_fetching(),
-	}
+	return { type = 'douban' }
 end
 
 D.debug = function (...)

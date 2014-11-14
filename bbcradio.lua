@@ -2,9 +2,7 @@
 local B = {}
 
 B.info = function ()
-	return {
-		type = 'bbcradio'
-	}
+	return { type = 'bbcradio' }
 end
 
 B.json = (function ()

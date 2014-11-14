@@ -79,10 +79,9 @@ end
 M.audioinfo = function ()
 	local ai = audio.info()
 	local ri = radio.info()
-	if ri.fetching then
+	if radio.fetching then
 		ai.stat = 'fetching'
 	end
-	ri.fetching = nil
 	local r = table.add({}, ai, ri)
 	if r.url then r.url = nil end
 	return r
