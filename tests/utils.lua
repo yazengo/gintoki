@@ -10,3 +10,5 @@ info(r)
 r = version_cmp('^(%d+)%.(%d+)$', '3.2', '3.1')
 info(r)
 
+info(os.date())
+

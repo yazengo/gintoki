@@ -1,6 +1,7 @@
 
 #include <dirent.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "luv.h"
 #include "utils.h"
@@ -115,10 +116,18 @@ static int luv_readdir(lua_State *L, uv_loop_t *loop) {
 	return 0;
 }
 
+static int luv_pathexists(lua_State *L, uv_loop_t *loop) {
+	char *path = (char *)lua_tostring(L, 1);
+	struct stat st;
+	lua_pushboolean(L, (stat(path, &st) == 0));
+	return 1;
+}
+
 void luv_os_init(lua_State *L, uv_loop_t *loop) {
 	luv_register(L, loop, "readdir", luv_readdir);
 	luv_register(L, loop, "readline", luv_readline);
 	luv_register(L, loop, "hostname", luv_hostname);
+	luv_register(L, loop, "pathexists", luv_pathexists);
 	luv_register(L, loop, "now", luv_now);
 }
 

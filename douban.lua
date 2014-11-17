@@ -1,5 +1,6 @@
 
 require('prop')
+require('radio')
 
 --[[
 
@@ -79,6 +80,9 @@ D.common_params = function (p)
 	}, p)
 end
 
+--
+-- API
+--
 D.user_info = function (c, done)
 	return D.curl {
 		access_token = c.access_token,
@@ -145,63 +149,6 @@ D.channels_list = function (c, done)
 	return D.curl(p)
 end
 
-D.grep_songs = function (songs, channel_id)
-	local r = {}
-	for _, _s in ipairs(songs) do
-		local s = totable(_s)
-		table.insert(r, {
-			url = s.url,
-			title = s.title,
-			artist = s.artist,
-			album = s.albumtitle,
-			id = s.sid,
-			cover_url = s.picture,
-			dur = s.length,
-			like = (s.like == 1),
-			channel_id = channel_id,
-		})
-	end
-	return r
-end
-
-D.songs_add = function (songs)
-	songs = songs or {}
-	info('got songs nr', table.maxn(songs))
-	table.append(D.songs, songs)
-	local r = D.songs[D.songs_i]
-	if D.next_cb and r then
-		D.next_cb(r)
-		D.next_cb = nil
-	end
-end
-
-D.report = function (c, done)
-	local s; if radio and radio.song then s = radio.song end; s = s or {}
-	local sid = s.id or ''
-	return D.curl {
-		access_token = c.access_token,
-		url = 'https://api.douban.com/v2/fm/playlist?' .. encode_params(D.common_params{
-			type = c.type,
-			sid = s.id,
-		}),
-		done = function (r, st)
-			done(r, nil)
-		end,
-	}
-end
-
-D.rate = function (c, type, sid, done)
-	local s
-	if radio and radio.song then s = radio.song end
-	if not sid then sid = s.id end
-	if type == 't' then
-		if s and s.like then type = 'u' else type = 'r' end
-	end
-	if s and type == 'r' then s.like = true end
-	if s and (type == 'u' or type == 'b') then s.like = false end
-	D.report(table.add({id=sid, type=type}, D.cookie), done)
-end
-
 D.songs_list = function (c, done)
 	if c.channel == nil then
 		c.channel = 0
@@ -229,110 +176,118 @@ D.songs_list = function (c, done)
 	}
 end
 
-D.auto_auth = function (c, cb, done) 
+D.report = function (c, done)
+	local s; if radio and radio.song then s = radio.song end; s = s or {}
+	local sid = s.id or ''
+	return D.curl {
+		access_token = c.access_token,
+		url = 'https://api.douban.com/v2/fm/playlist?' .. encode_params(D.common_params{
+			type = c.type,
+			sid = s.id,
+		}),
+		done = function (r, st)
+			done(r, nil)
+		end,
+	}
+end
+
+D.grep_songs = function (songs, channel_id)
+	local r = {}
+	for _, _s in ipairs(songs) do
+		local s = totable(_s)
+		table.insert(r, {
+			url = s.url,
+			title = s.title,
+			artist = s.artist,
+			album = s.albumtitle,
+			id = s.sid,
+			cover_url = s.picture,
+			dur = s.length,
+			like = (s.like == 1),
+			channel_id = channel_id,
+		})
+	end
+	return r
+end
+
+D.rate = function (c, type, sid, done)
+	local s = D.cursong()
+	if not sid then sid = s.id end
+	if type == 't' then
+		if s and s.like then type = 'u' else type = 'r' end
+	end
+	if s and type == 'r' then s.like = true end
+	if s and (type == 'u' or type == 'b') then s.like = false end
+	D.report(table.add({id=sid, type=type}, D.cookie), done)
+end
+
+D.auto_auth = function (c, call, done, fail) 
+	local do_call = function ()
+		call(c, function (r, err)
+			if err then fail(err) else done(c, r) end
+		end)
+	end
+
 	local login = function ()
 		D.user_login(c, function (r, err)
 			if not err then
 				c.name = r.name
 				c.icon = r.icon
 				c.access_token = r.access_token
-				cb(c, function (r, err) done(c, r, err) end)
+				do_call()
 			elseif err == 'invalid_userpass' then
 				c.name = nil
 				c.icon = nil
 				c.username = nil
 				c.password = nil
 				c.access_token = nil
-				cb(c, function (r, err) done(c, r, err) end)
+				do_call()
 			else
-				done(nil, nil, err)
+				fail(err)
 			end
 		end)
 	end
 
 	local change_default_channel = function ()
 		c.channel = 0
-		cb(c, function (r, err) done(c, r, err) end)
+		do_call()
 	end
 
 	if c.username and not c.access_token then
 		login()
 	else
-		cb(c, function (r, err)
+		call(c, function (r, err)
 			if not err then
-				done(nil, r, nil)
+				done(nil, r)
 			elseif err == 'invalid_token' then
 				login()
 			elseif err == 'wrong_channel' then
 				change_default_channel()
 			else
-				done(nil, nil, err)
+				fail(err)
 			end
 		end)
 	end
 end
 
-D.auto_run = function (c, cb, done)
-	local add = function (cb, inc)
-		local n = D.running[cb]
-		if not n then n = 0 end
-		n = n + inc
-		if n == 0 then n = nil end
-		D.running[cb] = n
+D.fetch = function ()
+	local task = radio.canceller()
+
+	task.on_done = function (r, c)
+		if c then D.setcookie(c) end
 	end
 
-	add(cb, 1)
-	D.auto_auth(c, cb, function (c, r, err)
-		add(cb, -1)
-		done(c, r, err)
+	D.auto_auth(D.cookie, D.songs_list, function (c, r)
+		task.done(r, c)
+	end, function (err)
+		task.fail(err)
 	end)
-end
 
-D.next = function (o, done)
-	local left = table.maxn(D.songs) - D.songs_i
-
-	if left <= 1 and not D.running[D.songs_list] then
-		D.debug('fetching')
-		D.auto_run(D.cookie, D.songs_list, function (c, r, err)
-			if c then D.setcookie(c) end
-			D.songs_add(r)
-		end)
-	end
-
-	local r = D.songs[D.songs_i]
-	if left > -1 then
-		D.songs_i = D.songs_i + 1
-	end
-
-	if D.next_cb then
-		panic('please call next() before previous call ends')
-	end
-
-	if r then
-		done(r)
-	else
-		D.next_cb = done
-	end
-end
-
-D.skip = function ()
-	if D.on_skip then D.on_skip() end
-end
-
-D.stop = function ()
-	D.next_cb = nil
-end
-
-D.init = function ()
-	D.cookie = D.loadcookie()
-	D.songs = {}
-	D.songs_i = 1
-	D.running = {}
+	return task
 end
 
 D.setopt_login = function (o, done)
-	D.songs = {}
-	D.songs_i = 1
+	local task = D.restart()
 
 	local c = table.copy(D.cookie)
 	c.username = o.username
@@ -341,64 +296,57 @@ D.setopt_login = function (o, done)
 	c.name = nil
 	c.icon = nil
 
-	D.auto_run(c, D.songs_list, function (c, r, err)
-		if err then
-			done{result=1, msg=err}
-			return
-		end
-
-		if not c or not c.username then
-			done{result=1, msg='cookie not saved'}
-			return
-		end
-
+	task.on_done = function (r, c)
 		if c then D.setcookie(c) end
+	end
 
-		D.songs_add(r)
+	D.auto_auth(c, D.songs_list, function (c, r)
+		if not c or not c.username then
+			fail('invalid password')
+			return
+		end
+
 		done{result=0, icon=c.icon, name=c.name}
+		task.done(r, c)
+	end, function (err)
+		done{result=1, msg=err}
+		task.fail(err)
 	end)
 end
 
 D.setopt_channel_choose = function (o, done) 
-	D.songs = {}
-	D.songs_i = 1
-	D.skip()
+	local task = D.restart()
 
 	local c = table.copy(D.cookie)
 	c.channel = o.id
 
-	D.auto_run(c, D.songs_list, function (c, r, err)
-		if err then
-			done{result=1}
-			return
-		end
-
+	task.on_done = function ()
 		if c then D.setcookie(c) end
+	end
 
-		D.songs_add(r)
+	D.auto_auth(c, D.songs_list, function (c, r)
 		done{result=0}
+		task.done(r, c)
+	end, function (err)
+		done{result=1, msg=err}
+		task.fail(err)
 	end)
 end
 
 D.setopt_channels_list = function (o, done) 
 	local c = table.copy(D.cookie)
 
-	D.auto_run(c, D.channels_list, function (c, r, err) 
-		if err then
-			done{result=1}
-			return
-		end
-
+	D.auto_auth(c, D.channels_list, function (c, r) 
 		if c then D.setcookie(c) end
-
 		r.result = 0
 		done(r)
+	end, function (err)
+		done{result=1, msg=err}
 	end)
 end
 
 D.setopt_logout = function (o, done)
-	D.songs = {}
-	D.songs_i = 1
+	local task = D.restart()
 
 	local c = D.cookie
 	c.username = nil
@@ -406,18 +354,17 @@ D.setopt_logout = function (o, done)
 	c.access_token = nil
 	c.name = nil
 	c.icon = nil
-	D.setcookie(c)
 
-	D.skip()
+	task.on_done = function ()
+		D.setcookie(c)
+	end
 
-	D.auto_run(c, D.songs_list, function (c, r, err)
-		if err then
-			done{result=1}
-			return
-		end
-
-		D.songs_add(r)
+	D.auto_auth(c, D.songs_list, function (c, r)
 		done{result=0}
+		task.done(r, c)
+	end, function (err)
+		done{result=1, msg=err}
+		task.fail(err)
 	end)
 end
 
@@ -473,7 +420,11 @@ D.debug = function (...)
 	if D.verbose then info(...) end
 end
 
+D.init = function ()
+	D.cookie = D.loadcookie()
+end
+
 D.init()
 
-douban = D
+douban = radio.new_station(D)
 

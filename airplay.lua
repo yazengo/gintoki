@@ -1,10 +1,8 @@
 
-require('ctrl')
-
 local A = {}
 
 airplay_on_start = function ()
-	ctrl.breaking_audio('airplay', 'airplay://')
+	ctrl.breaking_audio('airplay://', {name='airplay'})
 end
 
 A.start = function ()

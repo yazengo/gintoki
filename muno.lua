@@ -73,18 +73,8 @@ M.on_poweroff = function ()
 	info('power off now')
 	if arch_poweroff then arch_poweroff() end
 	M.poweroff = nil
-	audio.pause()
-end
 
-M.audioinfo = function ()
-	local ai = audio.info()
-	local ri = radio.info()
-	if radio.fetching then
-		ai.stat = 'fetching'
-	end
-	local r = table.add({}, ai, ri)
-	if r.url then r.url = nil end
-	return r
+	handle{op='audio.pause', sleeping=true}
 end
 
 M.allinfo = function (done)

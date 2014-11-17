@@ -19,7 +19,7 @@ m.getvol() -- 1
 m.highlight(p)
 
 ctrl.mixer = amixer()
-ctrl.psong = pipe()
+ctrl.psong = apipe()
 ctrl.pmain = pswitcher(ctrl.psong)
 
 popen('ls /tmp').closed(function ()
@@ -52,8 +52,60 @@ ctrl.mixer = amixer()
 ctrl.msong = amixer()
 apipe(ctrl.msong, ctrl.mixer)
 
+--
+-- {
+--    stdin  = [native pipe_t] or nil,
+--    stdout = [native pipe_t] or nil,
+--    stderr = [native pipe_t] or nil,
+-- }
+--
+-- {
+--    stdout = [native pipe_t] or nil,
+-- }
+--
+-- typedef struct {
+--   int type; // PTYPE_CALLBACK, PTYPE_FD, PTYPE_DIRECT
+--   void (*trans)(pipe_t *p, void *buf, int size);
+--   pipe_t *peer;
+--   int fd;
+--   void *data;
+-- } pipe_t;
+--
+-- typedef struct {
+-- } pipecopy_t;
+--
+-- void uv_pipecopy_start(pipecopy_t *cpy, pipe_t *src, pipe_t *sink) {
+--   uv_splice(src, sink);
+-- }
+-- uv_pipecopy_stop(pipecopy_t *cpy);
+--
+-- [urlopen:1  -> file:??]
+-- [adecoder:0 -> avconv:stdin]
+--
+-- int oldfd = open("app_log", O_RDWR|O_CREATE, 0644);
+-- dup2(oldfd, 1);
+-- close(oldfd);
+--
+
+adecoder = function (on_meta)
+	local p = popen('avconv -i - -f s16le -ar 44100 -ac 2 -')
+	avprobeparser(p.stderr, on_meta)
+	return p.stdout
+end
+
+urlopen = function (url)
+	if string.hasprefix(url, 'http://') then
+		return pcurl(url)
+	else
+		return fopen(url)
+	end
+end
+
 ctrl.playsong = function ()
-	ctrl.psong = apipe(opener(ctrl.song.url), adecoder(), afilter{fadein=300}).closed(function ()
+	urlopen('', function (p)
+		apipe(p, adecoder(), ...)
+	end)
+	ctrl.psong = apipe(urlopen(ctrl.song.url), adecoder(), afilter{fadein=300}).closed(function ()
 		ctrl.psong = nil
 		ctrl.song = nil
 		ctrl.loadsong()
@@ -113,16 +165,6 @@ burnin.on_start = function (p)
 end
 
 servermsg.pipe = function ()
-end
-
-servermsg.on_msg = function (p)
-	ctrl.insert(p, function ()
-	end)
-end
-
-serversync.on_start = function (p)
-	ctrl.insert(p, function ()
-	end)
 end
 
 alert.on_trigger = function ()

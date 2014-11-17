@@ -16,9 +16,6 @@ P.loadlist = function (dir)
 			cover_url = '',
 		}
 	end
-	if table.maxn(list) > 0 then 
-		info(dir, table.maxn(list), 'songs')
-	end
 	return list
 end
 
@@ -61,7 +58,7 @@ P.setopt = function (o, done)
 		return true
 	end
 
-	if o.op == popt.type .. '.play' and o.id then
+	if o.op == 'audio.play' and o.id then
 		local i = tonumber(o.id)
 		if i > 0 and i <= table.maxn(P.list) then
 			P.i = i-1
@@ -72,7 +69,7 @@ P.setopt = function (o, done)
 		return true
 	end
 
-	if o.op == popt.type .. '.toggle_repeat_mode' then
+	if o.op == 'audio.toggle_repeat_mode' then
 		if P.mode == 'repeat_all' then
 			P.mode = 'repeat_one'
 		elseif P.mode == 'repeat_one' then

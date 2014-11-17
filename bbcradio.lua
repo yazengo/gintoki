@@ -53,7 +53,7 @@ B.skip = function ()
 	if B.on_skip then B.on_skip() end
 end
 
-B.stop = function ()
+B.cancel_next = function ()
 end
 
 bbcradio = B

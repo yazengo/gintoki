@@ -12,6 +12,8 @@ end
 
 prop_filepath = '/mnt/sdcard/prop.json'
 jz_itunes_dir = '/mnt/sdcard/musics/'
+localmusic_dir = '/mnt/sdcard/musics/'
+slumbermusic_dir = '/mnt/sdcard/slumbermusics/'
 
 arch_version = loadconfig('/usr/app/version')
 
@@ -29,8 +31,8 @@ local say_and_do = function (k)
 	end
 end
 
-gsensor_prev = say_and_do('prev')
-gsensor_next = say_and_do('next')
+local gsensor_prev = say_and_do('prev')
+local gsensor_next = say_and_do('next')
 
 getssid = function (done)
 	popen {
@@ -102,7 +104,7 @@ local keypress = {
 
 	click = function (p)
 		info('click')
-		handle{op='audio.play_pause_toggle', current=true}
+		handle{op='audio.play_pause_toggle', eventsrc='inputdev'}
 	end,
 
 	dblclick = function (p)
@@ -146,7 +148,10 @@ inputdev_on_event = function (e)
 			vol = 20,
 		}
 		info('network up')
-		pnp.online()
+		getssid(function (ssid, ip) 
+			zpnp_setopt{name=hostuuid() .. '@' .. ip}
+			pnp.online()
+		end)
 	end
 
 	-- network down
@@ -214,9 +219,9 @@ inputdev_on_event = function (e)
 		setvol(e)
 	end
 
-    if e == 33 or e == 40 or e == 41 then
-        alarm.cancel()
-    end
+	if e == 33 or e == 40 or e == 41 then
+		alarm.cancel()
+	end
 
 end
 

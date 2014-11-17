@@ -1,6 +1,33 @@
 
 // please visit http://www.processon.com/view/link/542c8e090cf2e6eabf18d01d
 
+/*
+ * TODO
+ * [   8.017] [./ctrl.lua:52:on_closed] closed 
+ * [   8.017] [./ctrl.lua:24:breaking_leave] resume 0 
+ * [   8.017] [./radio.lua:130:change] radio.change {"type":"douban","op":"radio.change_type"} 
+ * [   8.017] [audio_in_avconv.c:353:audio_in_close] close
+ * [   8.017] [airplay_v2.c:506:proc_kill] pid=93607 stat=15
+ * [   8.018] [audio_in_avconv.c:251:proc_on_exit] sig=13
+ * [   8.018] [audio_mixer.c:136:track_on_free] closed
+ * [   8.019] [airplay_v2.c:425:on_proc_exit] sig=0 stat=15 stat_close=1
+ * [   8.019] [audio_mixer.c:136:track_on_free] closed
+ * [   8.019] [airplay_v2.c:490:proc_init] proc=shairport spawn=0 pid=93608
+ * Assertion failed: (handle->flags & UV_CLOSING), function uv__finish_close, file src/unix/core.c, line 171.
+ * [   8.019] [utils.c:452:fault] sig=6
+ * native traceback:
+ * 0   server                              0x0000000107501928 print_traceback + 72
+ * 1   server                              0x0000000107502f2d print_traceback_and_exit + 13
+ * 2   server                              0x0000000107502b9c fault + 156
+ * 3   libsystem_platform.dylib            0x00007fff8f22c5aa _sigtramp + 26
+ * 4   server                              0x000000010752162a libao_list_drivers + 9258
+ * 5   libsystem_c.dylib                   0x00007fff97abeb1a abort + 125
+ * 6   libsystem_c.dylib                   0x00007fff97a889bf basename + 0
+ * 7   libuv.dylib                         0x000000010755a396 uv_update_time + 0
+ * 8   server                              0x00000001074fe7ff main + 1247
+ * 9   libdyld.dylib                       0x00007fff974775fd start + 1
+ */
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -663,20 +690,10 @@ static int lua_airplay_start(lua_State *L) {
 	return 0;
 }
 
-static void onexit() {
-	if (g_ap && g_ap->pid) {
-		int r;
-		kill(g_ap->pid, SIGTERM);
-		waitpid(g_ap->pid, &r, 0);
-	}
-}
-
 void luv_airplay_v2_init(lua_State *L, uv_loop_t *loop) {
 	// airplay_start = [native function]
 	lua_pushuserptr(L, loop);
 	lua_pushcclosure(L, lua_airplay_start, 1);
 	lua_setglobal(L, "airplay_start");
-
-	utils_onexit(onexit);
 }
 

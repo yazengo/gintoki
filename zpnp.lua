@@ -32,7 +32,7 @@ end
 zpnp.start = function ()
 	zpnp_start()
 	zpnp.stop = zpnp_stop
-	zpnp_setopt{uuid=hostuuid(), name=hostname()}
+	zpnp_setopt{uuid=hostuuid(), name=hostuuid()}
 	zpnp.online()
 end
 
@@ -45,7 +45,11 @@ end
 pnp.init()
 pnp.start = function ()
 	zpnp.start()
-	zpnp.on_action = handle
+	zpnp.on_action = function (...)
+		if pnp.on_action then
+			pnp.on_action(...)
+		end
+	end
 	pnp.notify = function (r) zpnp.notify(r) end
 	pnp.online = zpnp.online
 	pnp.stop = function ()

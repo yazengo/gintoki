@@ -1,5 +1,6 @@
 
 require('prop')
+require('radio')
 
 local P = {}
 
@@ -39,7 +40,7 @@ P.call = function (p)
 
 	return curl {
 		retry = 1000,
-		proxy = 'sugrsugr.com:8889',
+		proxy = prop.get('gfw.exist', true) and 'sugrsugr.com:8889',
 		url = url,
 		content_type = 'text/plain',
 		user_agent = 'pithos',
@@ -380,238 +381,145 @@ P.stations_list = function (c, done)
 	}
 end
 
-P.fetch_songs = function ()
-	info('fetch songs')
-	P.stat = 'songs_fetching'
-	local c = table.copy(P.cookie)
+P.auto_auth = function (c, call, done, fail)
+	local choose_default_station = function ()
+		P.stations_list(c, function (r, err)
+			if err then
+				fail(err)
+			end
+			c.station_id = r[1].id
+			info('station_id', c.station_id)
 
-	P.auto_auth(c, P.songs_list, function (r, err)
-		if err == 'need_auth' then
-			P.stat = err
-			return
-		end
-		if err then
-			P.fetch_songs()
-			return
-		end
-		P.setcookie(c)
-		P.stat = 'songs_ready'
-		P.songs_add(r)
-	end)
-end
-
-P.songs_add = function (songs)
-	songs = songs or {}
-	info('got songs nr', table.maxn(songs))
-	table.append(P.songs, songs)
-	local r = P.songs[P.songs_i]
-	if P.next_cb and r then
-		P.next_cb(r)
-		P.next_cb = nil
-	end
-end
-
-P.next = function (o, done)
-	local left = table.maxn(P.songs) - P.songs_i
-
-	if left <= 1 and P.stat == 'songs_ready' then
-		P.fetch_songs()
+			call(c, function (r, err)
+				if err then fail(err) else done(r) end
+			end)
+		end)
 	end
 
-	local r = P.songs[P.songs_i]
-	if left > -1 then
-		P.songs_i = P.songs_i + 1
-	end
-
-	if P.next_cb then
-		panic('please call next() before previous call ends')
-	end
-
-	if r then
-		done(r)
-	else
-		P.next_cb = done
-	end
-
-	return
-end
-
-P.skip = function ()
-	if P.on_skip then P.on_skip() end
-end
-
-P.stop = function ()
-	P.next_cb = nil
-end
-
-P.init = function ()
-	P.cookie = P.loadcookie()
-	P.songs = {}
-	P.songs_i = 1
-	P.stat = 'songs_ready'
-end
-
-P.auto_auth = function (c, cb, done)
 	local login = function ()
 		P.login(c, function (r, err)
 			if err then
-				done(nil, err)
+				fail(err)
 				return
 			end
 
 			table.add(c, r)
-			P.stations_list(c, function (r, err)
-				if err then
-					done(nil, err)
-				end
-				c.station_id = r[1].id
-				info('station_id ->', c.station_id)
-
-				cb(c, function (r, err)
-					done(r, err)
-				end)
-			end)
+			choose_default_station()
 		end)
 	end
 	
 	if not c.username or not c.password then
-		done(nil, 'need_auth')
+		set_timeout(function ()
+			fail('need_auth')
+		end, 0)
 		return
 	end
 
 	if not P.has_all_user_cookie(c) then
-		info('need login', c)
+		info('try login', c)
 		login()
 		return
 	end
 
-	cb(c, function (r, err)
+	call(c, function (r, err)
 		if not err then
-			done(r, nil)
+			done(r)
 		elseif err == 'invalid_token' then
 			login()
 		else
-			done(nil, err)
+			fail(err)
 		end
 	end)
 end
 
-P.setopt_genres_choose = function (o, done)
-	P.stat = 'songs_fetching'
-	P.songs = {}
-	P.songs_i = 1
-	P.skip()
+P.setopt_genres_choose = function (o, done, fail)
+	local task = P.restart()
 
 	local c = table.copy(P.cookie)
 	c.station_id = nil
 	c.genres_id = o.id
 
-	local finish = function (r)
-		done(r)
-		P.stat = 'songs_ready'
+	local fail = function (err)
+		done{result=1, msg=err}
+		task.fail(err)
 	end
 
-	P.auto_auth(c, P.choose_genres, function (r, err)
-		if err then
-			finish{result=1, msg=err}
-			return
-		end
+	task.on_done = function (r, c)
+		P.setcookie(c)
+	end
 
+	P.auto_auth(c, P.choose_genres, function (r)
 		c.station_id = r.stationId
-		P.auto_auth(c, P.songs_list, function (r, err)
-			if err then
-				finish{result=1, msg=err}
-				return
-			end
-
-			P.setcookie(c)
-
-			finish{result=0}
-			P.songs_add(r)
-		end)
-	end)
+		P.auto_auth(c, P.songs_list, function (r)
+			done{result=0}
+			task.done(r, c)
+		end, fail)
+	end, fail)
 end
 
 P.setopt_station_choose = function (o, done)
-	P.stat = 'songs_fetching'
-	P.songs = {}
-	P.songs_i = 1
-	P.skip()
+	local task = P.restart()
 
 	local c = table.copy(P.cookie)
 	c.station_id = o.id
 
-	local finish = function (r)
-		done(r)
-		P.stat = 'songs_ready'
+	task.on_done = function (r, c)
+		P.setcookie(c)
 	end
 
-	P.auto_auth(c, P.songs_list, function (r, err)
-		if err then
-			finish{result=1, msg=err}
-			return
-		end
-
-		P.setcookie(c)
-
-		finish{result=0}
-		P.songs_add(r)
+	P.auto_auth(c, P.songs_list, function (r)
+		done{result=0}
+		task.done(r, c)
+	end, function (err)
+		done{result=1, msg=err}
+		task.fail(err)
 	end)
 end
 
 P.setopt_login = function (o, done)
-	P.stat = 'songs_fetching'
-	P.songs = {}
-	P.songs_i = 1
-	P.skip()
+	local task = P.restart()
 
 	local c = table.copy(P.cookie)
 	P.clean_user_cookie(c)
 	c.username = o.username
 	c.password = o.password
 
-	local finish = function (r)
-		done(r)
-		P.stat = 'songs_ready'
+	task.on_done = function (r, c)
+		P.setcookie(c)
 	end
 
-	P.auto_auth(c, P.songs_list, function (r, err)
-		if err then
-			finish{result=1, msg=err}
-			return
-		end
-
-		P.setcookie(c)
-
-		finish{result=0}
-		P.songs_add(r)
+	P.auto_auth(c, P.songs_list, function (r)
+		done{result=0}
+		task.done(r, c)
+	end, function (err)
+		done{result=1, msg=err}
+		task.fail(err)
 	end)
 end
 
 P.setopt_genres_list = function (o, done)
 	local c = table.copy(P.cookie)
-	P.auto_auth(c, P.genres_list, function (r, err)
-		if err then
-			done{result=1, msg=err}
-		else
-			done{result=0, genres=r}
-		end
+
+	P.auto_auth(c, P.genres_list, function (r)
+		done{result=0, genres=r}
+	end, function (err)
+		done{result=1, msg=err}
 	end)
 end
 
 P.setopt_stations_list = function (o, done)
 	local c = table.copy(P.cookie)
-	P.auto_auth(c, P.stations_list, function (r, err)
-		if err then
-			done{result=1, msg=err}
-		else
-			done{result=0, stations=r}
-		end
+
+	P.auto_auth(c, P.stations_list, function (r)
+		done{result=0, stations=r}
+	end, function (err)
+		done{result=1, msg=err}
 	end)
 end
 
 P.setopt_rate = function (o, done)
-	local s; if radio and radio.song then s = radio.song end; s = s or {}
+	local s = P.cursong() or {}
+
 	o.id = o.id or s.id
 	local like = (o.op == 'pandora.rate_like')
 	if s then s.like = like end
@@ -620,6 +528,7 @@ P.setopt_rate = function (o, done)
 	P.add_feedback(c, function ()
 		done{result=0}
 	end)
+
 	if not like then
 		P.skip()
 	end
@@ -656,7 +565,28 @@ P.info = function ()
 	return { type = 'pandora' }
 end
 
+P.fetch = function ()
+	local c = table.copy(P.cookie)
+	local task = radio.canceller()
+
+	task.on_done = function (r, c)
+		P.setcookie(c)
+	end
+
+	P.auto_auth(c, P.songs_list, function (r)
+		task.done(r, c)
+	end, function (err)
+		task.fail(err)
+	end)
+
+	return task
+end
+
+P.init = function ()
+	P.cookie = P.loadcookie()
+end
+
 P.init()
 
-pandora = P
+pandora = radio.new_station(P)
 

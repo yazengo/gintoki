@@ -1,17 +1,98 @@
 
-require('prop')
-require('localmusic')
-require('pandora')
-require('douban')
-require('bbcradio')
-
 local R = {}
 
-R.info = function ()
-	local r = {}
-	table.add(r, R.source.info())
-	table.add(r, R.song or {})
-	return r
+R.canceller = function ()
+	local C = {}
+
+	C.cancel = function ()
+		C.cancelled = true
+	end
+
+	C.wrap = function (func)
+		return function ()
+			if not C.cancelled then func() end
+		end
+	end
+
+	return C
+end
+
+R.new_station = function (S)
+	local call2 = function (a, b)
+		return function (...)
+			a(...)
+			b(...)
+		end
+	end
+
+	S.songs = {}
+	S.songs_i = 1
+
+	S.skip = function ()
+		if s.on_skip then s.on_skip() end
+	end
+
+	S.song_next = function ()
+		if S.songs_i <= table.maxn(S.songs) then
+			S.songs_i = S.songs_i+1
+			return S.songs[S.songs_i-1]
+		end
+	end
+
+	S.restart_done = function (songs)
+		table.append(S.songs, songs)
+		if S.next_cb then
+			S.next_cb(S.song_next())
+			S.next_cb = nil
+		end
+	end
+
+	S.restart_fail = function (...)
+	end
+
+	S.restart = function ()
+		if S.fetching then
+			S.fetching.cancel()
+		end
+		local task = R.canceller()
+		task.done = call2(task.on_done, C.restart_done)
+		task.fail = C.restart_fail
+		S.fetching = task
+		return task
+	end
+
+	S.fetch_done = function (songs)
+		table.append(S.songs, songs)
+		S.next_cb(S.song_next())
+		S.fetching = nil
+		S.next_cb = nil
+	end
+
+	S.fetch_fail = function (err)
+		S.fetching = nil
+	end
+
+	S.cancel_next = function ()
+		S.next_cb = nil
+	end
+
+	S.next = function (o, done)
+		local song = S.song_next()
+		if song then 
+			set_timeout(function () done(song) end, 0)
+			return
+		end
+		S.next_o = o
+		S.next_cb = done
+		if not S.fetching then 
+			local task = S.fetch()
+			task.done = call2(S.fetch_done, task.on_done)
+			task.fail = S.fetch_fail
+			S.fetching = task
+		end
+	end
+
+	return S
 end
 
 -- urls = {'http://...', ...}
@@ -41,104 +122,6 @@ R.new_songlist = function (urls, o)
 
 	return S
 end
-
-R.fetching = false
-
-R.next_done = function (song)
-	R.fetching = false
-	R.next_cb(song)
-end
-
-R.next = function (o, done)
-	R.fetching = true
-	R.next_cb = done
-	R.source.next(o, R.next_done)
-end
-
-R.stop = function ()
-	R.source.stop()
-end
-
-R.setopt = function (o, done)
-	if o.op == 'local.toggle_repeat_mode' and R.source == slumbermusic then
-		o.op = 'slumber.toggle_repeat_mode'
-	end
-
-	if o.op == 'audio.play' then
-		if R.source == slumbermusic then o.op = 'slumber.play' end
-		if R.source == localmusic then o.op = 'local.play' end
-	end
-
-	local ok
-
-	if string.hasprefix(o.op, 'local.') then
-		ok = localmusic.setopt(o, done)
-	elseif string.hasprefix(o.op, 'pandora.') then
-		ok = pandora.setopt(o, done)
-	elseif string.hasprefix(o.op, 'bbcradio.') then
-		ok = bbcradio.setopt(o, done)
-	elseif string.hasprefix(o.op, 'douban.') then
-		ok = douban.setopt(o, done)
-	elseif string.hasprefix(o.op, 'slumber.') then
-		ok = slumbermusic.setopt(o, done)
-	elseif o.op == 'audio.next' then
-		R.do_skip()
-		done{result=0}
-		ok = true
-	elseif o.op == 'audio.prev' then
-		ok = R.source.setopt(o, done)
-	elseif o.op == 'radio.change_type' then
-		R.change(o)
-		done{result=0}
-		ok = true
-	end
-
-	return ok
-end
-
-R.name2obj = function (s)
-	if s == 'pandora' then
-		return pandora
-	elseif s == 'local' then
-		return localmusic
-	elseif s == 'slumber' then
-		return slumbermusic
-	elseif s == 'bbcradio' then
-		return bbcradio
-	elseif s == 'douban' then
-		return douban
-	end
-end
-
-R.do_skip = function ()
-	if R.fetching then
-		R.stop()
-		R.source.next(o, R.next_done)
-	else
-		if R.on_skip then R.on_skip() end
-	end
-end
-
-R.set_source = function (to)
-	R.source = to
-	R.source.on_skip = R.do_skip
-end
-
-R.change = function (o)
-	info('radio.change', o)
-	local to = R.name2obj(o.type)
-
-	if to and R.source ~= to then 
-		prop.set('radio.default', o.type) 
-		if R.source then R.source.stop() end
-		R.set_source(to)
-		if o.autostart ~= false then
-			R.do_skip()
-		end
-	end
-end
-
-R.set_source(localmusic)
 
 radio = R
 

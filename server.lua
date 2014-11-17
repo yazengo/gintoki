@@ -1,6 +1,7 @@
 
 require('airplay')
 require('itunes')
+require('dbgsrv')
 require('radio')
 require('audio')
 require('muno')
@@ -40,8 +41,9 @@ if input then
 		[[ audio.setvol(audio.getvol() + 10); print(audio.getvol()) ]],
 		[[ audio.setvol(80); print(audio.getvol()) ]],
 		[[ audio.setvol(0); print(audio.getvol()) ]],
+		[[ handle{op='muno.request_sync'} ]],
 		[[ handle{op='audio.play_pause_toggle'} ]],
-		[[ handle{op='audio.play_pause_toggle', current=true} ]],
+		[[ handle{op='audio.play_pause_toggle', eventsrc='inputdev'} ]],
 		[[ handle{op='audio.next'} ]],
 		[[ handle{op='radio.change_type', type='pandora'} ]],
 		[[ handle{op='radio.change_type', type='local'} ]],
@@ -53,45 +55,23 @@ if input then
 		[[ handle({op='audio.play', id='2'}, info)]],
 		[[ handle({op='audio.play', id='1'}, info)]],
 		[[ handle{op='audio.alert', url='testaudios/beep0.5s.mp3'} ]],
-		[[ handle{op='radio.insert', url='testaudios/2s-1.mp3', resume=true} ]],
-		[[ handle{op='radio.insert', url='testaudios/2s-2.mp3'} ]],
+		[[ handle{op='breaking.audio', url='testaudios/2s-1.mp3'} ]],
 		[[ handle{op='burnin.start'} ]],
 		[[ handle{op='burnin.stop'} ]],
 		[[ handle({op='burnin.totaltime'}, info) ]],
 	}
 end
 
-http_server {
-	addr = '127.0.0.1',
-	port = 9991,
-	handler = function (hr)
-		local cmd = hr:body()
-		local func = loadstring(cmd)
-		local r, err = pcall(func)
-		local s = ''
-		if err then
-			s = cjson.encode{err=tostring(err)}
-		else
-			s = cjson.encode{err=0}
-		end
-		hr:retjson(s)
-	end,
-}
+info(os.date(), hostname(), muno.version())
 
-http_server {
-	port = 8881,
-	handler = function (hr)
-		local js = cjson.decode(hr:body()) or {}
-		handle(js, function (r)
-			hr:retjson(cjson.encode(r))
-		end)
-	end,
-}
+pnp.on_action = function (o, done)
+end
 
-info('hostname', hostname())
 airplay.start()
 pnp.start()
+itunes.start()
 ctrl.start()
+dbgsrv.start()
 
 handle{op='radio.change_type', type=prop.get('radio.default', 'local')}
 

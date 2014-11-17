@@ -453,14 +453,6 @@ static void fault(int sig) {
 	print_traceback_and_exit();
 }
 
-void utils_onexit(onexit_cb cb) {
-	int i;
-	for (i = 0; i < EXITCB_NR; i++) {
-		if (exitcbs[i] == NULL)
-			exitcbs[i] = cb;
-	}
-}
-
 void utils_preinit(uv_loop_t *loop) {
 	g_loop = loop;
 
