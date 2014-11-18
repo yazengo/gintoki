@@ -4,7 +4,7 @@ cflags += -g -I. -Werror
 ldflags += -g -lm -luv -lcurl
 
 cobjs += main.o tests.o
-cobjs += utils.o luv.o strbuf.o popen.o ringbuf.o timer.o os.o
+cobjs += utils.o luv.o strbuf.o popen.o ringbuf.o timer.o os.o fopen.o pipe.o
 cobjs += audio_mixer.o audio_out_test.o audio_in_avconv.o audio_in.o pcm.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
@@ -12,7 +12,7 @@ cobjs += airplay.o airplay_v2.o
 cobjs += noise.o
 cobjs += net.o curl.o http_parser.o zpnp.o itunes.o
 
-luvmods += utils os audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm timer noise
+luvmods += fopen pipe utils os audio_mixer popen curl zpnp blowfish base64 sha1 net airplay_v2 pcm timer noise
 
 exe ?= server${objsuffix}
 now = $(shell date +'%Y%m%d-%h%M')

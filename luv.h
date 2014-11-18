@@ -23,6 +23,7 @@ lua_State *luv_state(void *_l);
 lua_State *luv_threadstate(void *_l);
 
 void luv_xmove(lua_State *Lsrc, lua_State *Ldst, int n);
+void luv_ref(void *_l);
 void luv_unref(void *_l);
 
 void luv_register(lua_State *L, uv_loop_t *loop, const char *name, luv_cb cb);

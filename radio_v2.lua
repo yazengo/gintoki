@@ -52,12 +52,61 @@ ctrl.mixer = amixer()
 ctrl.msong = amixer()
 apipe(ctrl.msong, ctrl.mixer)
 
+apipe = function (...)
+	local nodes = {...}
+	local n = table.maxn(nodes)
+	local r = {}
+
+	r.refcnt = 0
+
+	if nodes[1].stdin then
+		r.stdin = nodes[1].stdin
+		r.refcnt = r.refcnt + 1
+	end
+
+	if nodes[n].stdout then
+		r.stdout = nodes[n].stdout
+		r.refcnt = r.refcnt + 1
+	end
+
+	for i = 1, n-1 do
+		local src = nodes[i].stdout
+		local sink = nodes[i+1].stdin
+		if not src or not sink then
+			panic('must specify src and sink')
+		end
+		pcopy(src, sink)
+	end
+
+	return r
+end
+
 --
--- {
---    stdin  = [native pipe_t] or nil,
---    stdout = [native pipe_t] or nil,
---    stderr = [native pipe_t] or nil,
+-- node = {
+--   stdin  = [native pipe_t] or nil,
+--   stdout = [native pipe_t] or nil,
+--   stderr = [native pipe_t] or nil,
+--   closed = function () end,
 -- }
+--
+-- pcopy(node.stdout, node2.stdin)
+--
+-- node.refcnt = 3
+--
+-- node.stdin.closed(function ()
+--   node.unref(node.close_funcs)
+-- end)
+--
+-- node.stdout.closed(function ()
+--   node.unref(node.close_funcs)
+-- end)
+--
+-- node.stderr.closed(function ()
+--   node.unref(node.close_funcs)
+-- end)
+--
+-- node.closed(function ()
+-- end)
 --
 -- {
 --    stdout = [native pipe_t] or nil,

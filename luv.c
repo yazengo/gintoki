@@ -11,6 +11,7 @@ typedef struct {
 	uv_loop_t *loop;
 	luv_gc_cb gc;
 	char data[0];
+	int refcnt;
 } luv_t;
 
 static int __gc(lua_State *L) {
@@ -60,6 +61,8 @@ static void *_new(lua_State *L, uv_loop_t *loop, int size, int usethread) {
 
 	if (usethread)
 		l->Lt = luaL_newstate();
+
+	l->refcnt++;
 
 	return l->data;
 }
@@ -152,12 +155,24 @@ void *luv_toctx(lua_State *L, int i) {
 	luv_t *l = (luv_t *)lua_touserptr(L, -1);
 	lua_pop(L, 1);
 
+	if (l == NULL)
+		return NULL;
 	return l->data;
+}
+
+void luv_ref(void *_l) {
+	luv_t *l = (luv_t *)(_l - sizeof(luv_t));
+
+	l->refcnt++;
 }
 
 void luv_unref(void *_l) {
 	luv_t *l = (luv_t *)(_l - sizeof(luv_t));
 	lua_State *L = l->L;
+
+	l->refcnt--;
+	if (l->refcnt > 0)
+		return;
 	
 	lua_pushmaptbl(L);
 	lua_pushlightuserdata(L, l);
