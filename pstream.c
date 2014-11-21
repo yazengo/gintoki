@@ -1,6 +1,7 @@
 
 #include "luv.h"
 #include "pipe.h"
+#include "uvwrite.h"
 
 enum {
 	IO          = (1<<0),
