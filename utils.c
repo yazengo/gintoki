@@ -239,6 +239,23 @@ void utils_preinit(uv_loop_t *loop) {
 	}
 }
 
+static void immediate_cb(uv_idle_t *idle, int stat) {
+	uv_idle_stop(idle);
+	immediate_t *im = (immediate_t *)idle->data;
+	im->cb(im);
+	uv_close((uv_handle_t *)idle, NULL);
+}
+
+void cancel_immediate(immediate_t *im) {
+	uv_idle_stop(&im->idle);
+}
+
+void set_immediate(uv_loop_t *loop, immediate_t *im) {
+	im->idle.data = im;
+	uv_idle_init(loop, &im->idle);
+	uv_idle_start(&im->idle, immediate_cb);
+}
+
 void luv_utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_pushcfunction(L, lua_log);
 	lua_setglobal(L, "_log");

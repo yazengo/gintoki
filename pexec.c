@@ -1,29 +1,44 @@
 
+#include <stdlib.h>
+
 #include "luv.h"
 #include "utils.h"
 #include "pipe.h"
 
-static void proc_on_exit(uv_process_t *p, int stat, int sig) {
-	uv_close((uv_handle_t *)p, NULL);
+static void proc_closed(uv_handle_t *h) {
+	free(h);
 }
 
+static void proc_on_exit(uv_process_t *p, int stat, int sig) {
+	uv_close((uv_handle_t *)p, proc_closed);
+}
+
+static uv_stdio_container_t 
+newpipe(lua_State *L, uv_loop_t *loop, int type) {
+	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
+	p->type = type;
+
+	debug("loop=%p loop=%p src=%p", loop, luv_loop(p), p);
+
+	uv_pipe_init(loop, &p->p, 0);
+	p->st = (uv_stream_t *)&p->p;
+
+	uv_stdio_container_t c = {
+		.flags = UV_CREATE_PIPE,
+		.data.stream = p->st,
+	};
+	return c;
+}
+
+// stdout = pexec('ls -l', 'r')
+// stdin, stdout, stderr = pexec('cat >l', 'rwe')
+// stdin, stderr = pexec('curl ...', 'we')
 static int luv_pexec(lua_State *L, uv_loop_t *loop) {
 	char *cmd = (char *)lua_tostring(L, 1);
+	char *mode = (char *)lua_tostring(L, 2);
 
-	if (cmd == NULL) 
+	if (cmd == NULL)
 		panic("cmd must be set");
-
-	lua_getfield(L, 2, "stdin");
-	int need_stdin = lua_toboolean(L, -1);
-
-	lua_getfield(L, 2, "stdout");
-	int need_stdout = lua_toboolean(L, -1);
-
-	lua_getfield(L, 2, "stderr");
-	int need_stderr = lua_toboolean(L, -1);
-
-	lua_newtable(L);
-	int t = lua_gettop(L);
 
 	uv_process_options_t opts = {};
 
@@ -35,34 +50,24 @@ static int luv_pexec(lua_State *L, uv_loop_t *loop) {
 	opts.stdio = stdio;
 	opts.stdio_count = 3;
 
-	if (need_stdin) {
-		pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
-		uv_stdio_container_t c = {
-			.flags = UV_CREATE_PIPE,
-			.data.stream = (uv_stream_t *)&p->p,
-		};
-		stdio[0] = c;
-		lua_setfield(L, t, "stdin");
-	}
-
-	if (need_stdout) {
-		pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
-		uv_stdio_container_t c = {
-			.flags = UV_CREATE_PIPE,
-			.data.stream = (uv_stream_t *)&p->p,
-		};
-		stdio[1] = c;
-		lua_setfield(L, t, "stdout");
-	}
-
-	if (need_stderr) {
-		pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
-		uv_stdio_container_t c = {
-			.flags = UV_CREATE_PIPE,
-			.data.stream = (uv_stream_t *)&p->p,
-		};
-		stdio[2] = c;
-		lua_setfield(L, t, "stderr");
+	int n = 0;
+	char *i = mode;
+	while (i && *i) {
+		switch (*i) {
+		case 'r':
+			stdio[1] = newpipe(L, loop, PSTREAM_SRC);
+			n++;
+			break;
+		case 'w':
+			stdio[0] = newpipe(L, loop, PSTREAM_SINK);
+			n++;
+			break;
+		case 'e':
+			stdio[2] = newpipe(L, loop, PSTREAM_SRC);
+			n++;
+			break;
+		}
+		i++;
 	}
 
 	char *args[] = {"sh", "-c", cmd, NULL};
@@ -74,6 +79,8 @@ static int luv_pexec(lua_State *L, uv_loop_t *loop) {
 
 	int r = uv_spawn(loop, proc, opts);
 	info("cmd=%s spawn=%d pid=%d", cmd, r, proc->pid);
+
+	return n;
 }
 
 void luv_pexec_init(lua_State *L, uv_loop_t *loop) {

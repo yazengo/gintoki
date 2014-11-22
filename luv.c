@@ -10,7 +10,6 @@ typedef struct {
 	lua_State *L, *Lt;
 	uv_loop_t *loop;
 	luv_gc_cb gc;
-	char data[0];
 	int refcnt;
 } luv_t;
 
@@ -19,7 +18,7 @@ static int __gc(lua_State *L) {
 	luv_t *l = (luv_t *)lua_touserptr(L, -1);
 
 	if (l->gc)
-		l->gc(l->loop, l->data);
+		l->gc(l->loop, (void *)l + sizeof(luv_t));
 
 	if (l->Lt)
 		lua_close(l->Lt);
@@ -64,7 +63,7 @@ static void *_new(lua_State *L, uv_loop_t *loop, int size, int usethread) {
 
 	l->refcnt++;
 
-	return l->data;
+	return (void *)l + sizeof(luv_t);
 }
 
 static void luv_xmovetable(lua_State *Lsrc, lua_State *Ldst) {
@@ -157,7 +156,7 @@ void *luv_toctx(lua_State *L, int i) {
 
 	if (l == NULL)
 		return NULL;
-	return l->data;
+	return (void *)l + sizeof(luv_t);
 }
 
 void luv_ref(void *_l) {
@@ -214,7 +213,7 @@ void luv_register(lua_State *L, uv_loop_t *loop, const char *name, luv_cb cb) {
 static int lua_closure_cb(lua_State *L) {
 	luv_t *l = (luv_t *)lua_touserptr(L, lua_upvalueindex(1));
 	luv_closure_cb cb = (luv_closure_cb)lua_touserptr(L, lua_upvalueindex(2));
-	return cb(L, l->loop, l->data);
+	return cb(L, l->loop, (void *)l + sizeof(luv_t));
 }
 
 void luv_pushcclosure(lua_State *L, luv_closure_cb cb, void *_l) {

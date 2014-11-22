@@ -1,5 +1,7 @@
 
+#include "luv.h"
 #include "uvwrite.h"
+#include "utils.h"
 
 enum {
 	INIT,
@@ -39,6 +41,7 @@ void uv_write_adv(uv_write_adv_t *wa, uv_buf_t ub, uv_write_adv_cb done) {
 		wa->w.data = wa;
 		wa->done = done;
 		wa->ub = ub;
+		debug("p=%p n=%d", wa->ub.base, wa->ub.len);
 		uv_write(&wa->w, wa->st, &wa->ub, 1, write_done);
 	} else if (wa->stat == WRITING_CANCEL) {
 		// pending
