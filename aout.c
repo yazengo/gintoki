@@ -71,14 +71,15 @@ static void init(aout_t *ao) {
 	info("libao opened");
 }
 
+static void read_done(pipe_t *p, ssize_t n, uv_buf_t ub);
+
 static void play_thread(uv_work_t *w) {
 	pipe_t *p = (pipe_t *)w->data;
 	aout_t *ao = (aout_t *)p->data;
 
+	debug("n=%d", ao->ub.len);
 	ao_play(ao->dev, ao->ub.base, ao->ub.len);
 }
-
-static void read_done(pipe_t *p, ssize_t n, uv_buf_t ub);
 
 static void play_done(uv_work_t *w, int stat) {
 	pipe_t *p = (pipe_t *)w->data;
@@ -87,6 +88,8 @@ static void play_done(uv_work_t *w, int stat) {
 }
 
 static void read_done(pipe_t *p, ssize_t n, uv_buf_t ub) {
+	debug("n=%d", n);
+
 	if (n < 0) {
 		pipe_close_read(p);
 		return;

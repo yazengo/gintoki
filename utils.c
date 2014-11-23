@@ -239,21 +239,27 @@ void utils_preinit(uv_loop_t *loop) {
 	}
 }
 
-static void immediate_cb(uv_idle_t *idle, int stat) {
-	uv_idle_stop(idle);
-	immediate_t *im = (immediate_t *)idle->data;
-	im->cb(im);
-	uv_close((uv_handle_t *)idle, NULL);
+static void immediate_closed(uv_handle_t *h) {
+	free(h);
+}
+
+static void immediate_cb(uv_timer_t *t, int stat) {
+	immediate_t *im = (immediate_t *)t->data;
+	if (im->cb)
+		im->cb(im);
+	uv_close((uv_handle_t *)t, immediate_closed);
 }
 
 void cancel_immediate(immediate_t *im) {
-	uv_idle_stop(&im->idle);
+	im->cb = NULL;
 }
 
 void set_immediate(uv_loop_t *loop, immediate_t *im) {
-	im->idle.data = im;
-	uv_idle_init(loop, &im->idle);
-	uv_idle_start(&im->idle, immediate_cb);
+	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
+	im->t = t;
+	t->data = im;
+	uv_timer_init(loop, t);
+	uv_timer_start(t, immediate_cb, 0, 0);
 }
 
 void luv_utils_init(lua_State *L, uv_loop_t *loop) {

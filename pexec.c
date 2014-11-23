@@ -10,6 +10,7 @@ static void proc_closed(uv_handle_t *h) {
 }
 
 static void proc_on_exit(uv_process_t *p, int stat, int sig) {
+	debug("r=%d", stat);
 	uv_close((uv_handle_t *)p, proc_closed);
 }
 
@@ -17,8 +18,6 @@ static uv_stdio_container_t
 newpipe(lua_State *L, uv_loop_t *loop, int type) {
 	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
 	p->type = type;
-
-	debug("loop=%p loop=%p src=%p", loop, luv_loop(p), p);
 
 	uv_pipe_init(loop, &p->p, 0);
 	p->st = (uv_stream_t *)&p->p;

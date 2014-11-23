@@ -45,6 +45,7 @@ static void uv_closed(uv_handle_t *h) {
 }
 
 void pstream_close(pipe_t *p) {
+	debug("close p=%p", p);
 	p->st->data = p;
 	uv_close((uv_handle_t *)p->st, uv_closed);
 }

@@ -4,12 +4,12 @@
 #include "luv.h"
 #include "utils.h"
 #include "uvwrite.h"
+#include "pipe.h"
 
 struct pipe_s;
 struct pcopy_s;
 
-typedef uv_buf_t (*pipe_allocbuf_cb)(struct pipe_s *p, int size);
-typedef void (*pipe_read_cb)(struct pipe_s *p, ssize_t n, uv_buf_t ub);
+typedef void (*pipe_read_cb)(struct pipe_s *p, pipebuf_t *pb);
 typedef void (*pipe_write_cb)(struct pipe_s *p, int stat);
 typedef void (*pipe_close_cb)(struct pipe_s *p);
 
@@ -22,6 +22,7 @@ typedef struct pipe_s {
 
 	void *data;
 	unsigned stat;
+	pipebuf_t pb;
 
 	struct pcopy_s *copy;
 
@@ -34,7 +35,7 @@ typedef struct pipe_s {
 	} pwrite;
 
 	struct {
-		uv_buf_t ub;
+		pipebuf_t *pb;
 		uv_write_adv_t w;
 		pipe_write_cb done;
 		immediate_t im_direct, im_stop, im_resume;
@@ -47,9 +48,7 @@ typedef struct pipe_s {
 
 	struct {
 		void *buf;
-		uv_buf_t ub;
-		ssize_t n;
-		pipe_allocbuf_cb allocbuf;
+		pipebuf_t *pb;
 		pipe_read_cb done;
 		immediate_t im_direct, im_stop, im_resume;
 	} read;
@@ -81,9 +80,8 @@ enum {
 	PS_MAX        = (1<<11),
 };
 
-uv_buf_t pipe_allocbuf(pipe_t *p, int n);
-void pipe_read(pipe_t *p, pipe_allocbuf_cb allocbuf, pipe_read_cb done);
-void pipe_write(pipe_t *p, uv_buf_t ub, pipe_write_cb done);
+void pipe_read(pipe_t *p, pipe_read_cb done);
+void pipe_write(pipe_t *p, pipebuf_t *pb, pipe_write_cb done);
 void pipe_stop(pipe_t *p);
 void pipe_pause(pipe_t *p);
 void pipe_resume(pipe_t *p);

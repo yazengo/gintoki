@@ -12,43 +12,31 @@ pipe_t *pipe_new(lua_State *L, uv_loop_t *loop) {
 	return p;
 }
 
-uv_buf_t pipe_allocbuf(pipe_t *p, int n) {
-	const int bufsize = 1024;
-	if (p->read.buf == NULL)
-		p->read.buf = zalloc(bufsize);
-	return uv_buf_init(p->read.buf, bufsize);
-}
-
 static int do_check_close(pipe_t *p);
 
 static void do_read_done(pipe_t *p) {
-	uv_buf_t ub = p->read.ub;
-	ssize_t n = p->read.n;
-
 	p->stat &= ~PS_DOING_R;
-	if (n < 0)
+	if (p->read.pb == NULL)
 		p->stat |= PS_STOPPED_R;
 
-	debug("n=%d", n);
+	debug("n=%d type=%d", n, p->type);
 
-	p->pread.done(p, n, ub);
+	p->pread.done(p, p->read.pb);
 	do_check_close(p);
 }
 
-static void read_done(pipe_t *p, ssize_t n, uv_buf_t ub) {
-	p->read.n = n;
-	p->read.ub = ub;
+static void read_done(pipe_t *p, pipebuf_t *pb) {
+	p->read.pb = pb;
 	if (p->stat & PS_PAUSED)
 		return;
 	do_read_done(p);
 }
 
-void pipe_read(pipe_t *p, pipe_allocbuf_cb allocbuf, pipe_read_cb done) {
+void pipe_read(pipe_t *p, pipe_read_cb done) {
 	if (p->stat & PS_DOING_R)
 		panic("dont call read() before done");
 	p->stat |= PS_DOING_R;
 	
-	p->read.allocbuf = allocbuf;
 	p->read.done = read_done;
 	p->pread.done = done;
 
@@ -71,6 +59,8 @@ static void do_write_done(pipe_t *p) {
 	p->stat &= ~PS_DOING_W;
 	if (stat < 0)
 		p->stat |= PS_STOPPED_W;
+	
+	debug("stat=%d type=%d", stat, p->type);
 
 	p->pwrite.done(p, stat);
 	do_check_close(p);
@@ -83,14 +73,16 @@ static void write_done(pipe_t *p, int stat) {
 	do_write_done(p);
 }
 
-void pipe_write(pipe_t *p, uv_buf_t ub, pipe_write_cb done) {
+void pipe_write(pipe_t *p, pipebuf_t *pb, pipe_write_cb done) {
 	if (p->stat & PS_DOING_W)
 		panic("dont call write() before done");
 	p->stat |= PS_DOING_W;
 	
-	p->write.ub = ub;
+	p->write.pb = pb;
 	p->write.done = write_done;
 	p->pwrite.done = done;
+
+	debug("n=%d type=%d", pb->len, p->type);
 
 	switch (p->type) {
 	case PDIRECT_SRC:
@@ -174,7 +166,7 @@ static int do_check_close(pipe_t *p) {
 
 	unsigned need = 0;
 
-	switch (p->stat) {
+	switch (p->type) {
 	case PSTREAM_SINK:
 		need = PS_STOPPED_W | PS_CLOSING_W;
 		break;
@@ -190,7 +182,7 @@ static int do_check_close(pipe_t *p) {
 	if ((p->stat & need) != need)
 		return 0;
 
-	debug("close");
+	debug("close type=%d need=%x stat=%x", p->type, need, p->stat);
 
 	p->stat |= PS_CLOSED;
 	p->close.im.data = p;
@@ -213,8 +205,7 @@ static void do_stop_read(immediate_t *im) {
 
 	p->stat &= ~PS_DOING_R;
 	p->stat |= PS_STOPPED_R;
-	uv_buf_t ub = {};
-	p->read.done(p, -1, ub);
+	p->read.done(p, NULL);
 }
 
 void pipe_stop(pipe_t *p) {
@@ -240,6 +231,8 @@ void pipe_stop(pipe_t *p) {
 void pipe_close_read(pipe_t *p) {
 	p->stat |= PS_CLOSING_R;
 
+	debug("type=%d", p->type);
+
 	if (!(p->stat & PS_STOPPED_R)) {
 		pipe_stop(p);
 		return;
@@ -250,6 +243,8 @@ void pipe_close_read(pipe_t *p) {
 
 void pipe_close_write(pipe_t *p) {
 	p->stat |= PS_CLOSING_W;
+
+	debug("type=%d", p->type);
 
 	if (!(p->stat & PS_STOPPED_W)) {
 		pipe_stop(p);

@@ -33,6 +33,7 @@ static void read_done(pipe_t *src, ssize_t n, uv_buf_t ub) {
 		return;
 	}
 
+	debug("n=%d", n);
 	pipe_write(c->sink, ub, write_done);
 }
 
