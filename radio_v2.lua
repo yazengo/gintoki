@@ -94,6 +94,11 @@ end
 
 --[[
 
+Close:
+
+close(p) refcnt=1
+close(p) refcnt=2
+
 Pipe queue:
 
 StreamPipe:

@@ -25,20 +25,20 @@ static void write_done(pipe_t *sink, int stat) {
 	copy(c);
 }
 
-static void read_done(pipe_t *src, ssize_t n, uv_buf_t ub) {
+static void read_done(pipe_t *src, pipebuf_t *pb) {
 	pcopy_t *c = src->copy;
 
-	if (n < 0) {
+	if (pb == NULL) {
 		close_all(c);
 		return;
 	}
 
-	debug("n=%d", n);
-	pipe_write(c->sink, ub, write_done);
+	debug("n=%d", pb->len);
+	pipe_write(c->sink, pb, write_done);
 }
 
 static void copy(pcopy_t *c) {
-	pipe_read(c->src, NULL, read_done);
+	pipe_read(c->src, read_done);
 }
 
 static int luv_pcopy(lua_State *L, uv_loop_t *loop) {

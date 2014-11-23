@@ -4,11 +4,12 @@
 #include "utils.h"
 #include "luv.h"
 #include "pipe.h"
+#include "pipebuf.h"
 
 typedef struct {
 	ao_device *dev;
 	uv_work_t w;
-	uv_buf_t ub;
+	pipebuf_t *pb;
 } aout_t;
 
 static void libao_list_drivers() {
@@ -71,32 +72,37 @@ static void init(aout_t *ao) {
 	info("libao opened");
 }
 
-static void read_done(pipe_t *p, ssize_t n, uv_buf_t ub);
+static void read_done(pipe_t *p, pipebuf_t *pb);
 
 static void play_thread(uv_work_t *w) {
 	pipe_t *p = (pipe_t *)w->data;
 	aout_t *ao = (aout_t *)p->data;
+	pipebuf_t *pb = ao->pb;
 
-	debug("n=%d", ao->ub.len);
-	ao_play(ao->dev, ao->ub.base, ao->ub.len);
+	debug("n=%d", pb->len);
+	ao_play(ao->dev, pb->base, pb->len);
 }
 
 static void play_done(uv_work_t *w, int stat) {
 	pipe_t *p = (pipe_t *)w->data;
+	aout_t *ao = (aout_t *)p->data;
 
-	pipe_read(p, NULL, read_done);
+	pipebuf_unref(ao->pb);
+	pipe_read(p, read_done);
 }
 
-static void read_done(pipe_t *p, ssize_t n, uv_buf_t ub) {
-	debug("n=%d", n);
-
-	if (n < 0) {
+static void read_done(pipe_t *p, pipebuf_t *pb) {
+	if (pb == NULL) {
+		debug("close");
 		pipe_close_read(p);
 		return;
 	}
 
+	int n = pb->len;
+	debug("n=%d", n);
+
 	aout_t *ao = (aout_t *)p->data;
-	ao->ub = ub;
+	ao->pb = pb;
 	ao->w.data = p;
 	uv_queue_work(luv_loop(p), &ao->w, play_thread, play_done);
 }
@@ -111,7 +117,7 @@ int luv_aout(lua_State *L, uv_loop_t *loop) {
 	init(ao);
 	luv_setgc(p, deinit);
 
-	pipe_read(p, NULL, read_done);
+	pipe_read(p, read_done);
 
 	return 1;
 }

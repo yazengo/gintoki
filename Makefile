@@ -5,7 +5,7 @@ ldflags += -g -lm -luv -lcurl
 
 cobjs += main.o tests.o
 cobjs += utils.o luv.o strbuf.o ringbuf.o timer.o os.o 
-cobjs += pipe.o uvwrite.o pstream.o pdirect.o pexec.o pcopy.o
+cobjs += pipe.o uvwrite.o pstream.o pdirect.o pexec.o pcopy.o pipebuf.o
 cobjs += aout.o pcm.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o

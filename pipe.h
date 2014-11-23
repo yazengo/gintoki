@@ -43,7 +43,7 @@ typedef struct pipe_s {
 	} write;
 
 	struct {
-		uv_buf_t pool;
+		pipebuf_t *pool;
 	} direct;
 
 	struct {

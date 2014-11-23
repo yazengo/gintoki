@@ -7,19 +7,22 @@
 #include "pipe.h"
 #include "pdirect.h"
 
+static int do_check_close(pipe_t *p);
+
 pipe_t *pipe_new(lua_State *L, uv_loop_t *loop) {
 	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
 	return p;
 }
-
-static int do_check_close(pipe_t *p);
 
 static void do_read_done(pipe_t *p) {
 	p->stat &= ~PS_DOING_R;
 	if (p->read.pb == NULL)
 		p->stat |= PS_STOPPED_R;
 
-	debug("n=%d type=%d", n, p->type);
+	if (p->read.pb)
+		debug("n=%d type=%d", p->read.pb->len, p->type);
+	else
+		debug("n=nil type=%d", p->type);
 
 	p->pread.done(p, p->read.pb);
 	do_check_close(p);
@@ -33,6 +36,8 @@ static void read_done(pipe_t *p, pipebuf_t *pb) {
 }
 
 void pipe_read(pipe_t *p, pipe_read_cb done) {
+	debug("read type=%d", p->type);
+
 	if (p->stat & PS_DOING_R)
 		panic("dont call read() before done");
 	p->stat |= PS_DOING_R;
@@ -161,8 +166,10 @@ static void do_close(immediate_t *im) {
 }
 
 static int do_check_close(pipe_t *p) {
-	if (p->stat & PS_CLOSED)
+	if (p->stat & PS_CLOSED) {
+		debug("closed");
 		return 1;
+	}
 
 	unsigned need = 0;
 
@@ -179,8 +186,10 @@ static int do_check_close(pipe_t *p) {
 		break;
 	}
 
-	if ((p->stat & need) != need)
+	if ((p->stat & need) != need) {
+		debug("stat=%x need=%x", p->stat&need, need);
 		return 0;
+	}
 
 	debug("close type=%d need=%x stat=%x", p->type, need, p->stat);
 
@@ -233,10 +242,8 @@ void pipe_close_read(pipe_t *p) {
 
 	debug("type=%d", p->type);
 
-	if (!(p->stat & PS_STOPPED_R)) {
+	if (!(p->stat & PS_STOPPED_R))
 		pipe_stop(p);
-		return;
-	}
 
 	do_check_close(p);
 }
@@ -246,10 +253,8 @@ void pipe_close_write(pipe_t *p) {
 
 	debug("type=%d", p->type);
 
-	if (!(p->stat & PS_STOPPED_W)) {
+	if (!(p->stat & PS_STOPPED_W))
 		pipe_stop(p);
-		return;
-	}
 
 	do_check_close(p);
 }

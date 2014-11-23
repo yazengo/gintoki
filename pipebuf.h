@@ -8,10 +8,7 @@ typedef struct pipebuf_s {
 	void (*gc)(struct pipebuf_s *pb);
 } pipebuf_t;
 
-pbufque_t *pbufque_new();
-pbuf_t *pbufque_malloc(pbufque_t *que);
-
-pipebuf_t *pipebuf_new(int len);
+pipebuf_t *pipebuf_new();
 void pipebuf_ref(pipebuf_t *pb);
 void pipebuf_unref(pipebuf_t *pb);
 

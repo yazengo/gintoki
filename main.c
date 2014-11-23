@@ -89,6 +89,7 @@ int main(int argc, char *argv[]) {
 	
 	uv_run(loop, UV_RUN_DEFAULT);
 	lua_close(L);
+	
 	return 0;
 }
 

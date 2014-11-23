@@ -243,23 +243,27 @@ static void immediate_closed(uv_handle_t *h) {
 	free(h);
 }
 
-static void immediate_cb(uv_timer_t *t, int stat) {
+static void immediate_cb(uv_check_t *t, int stat) {
 	immediate_t *im = (immediate_t *)t->data;
-	if (im->cb)
-		im->cb(im);
+	im->t = NULL;
 	uv_close((uv_handle_t *)t, immediate_closed);
+	im->cb(im);
 }
 
 void cancel_immediate(immediate_t *im) {
-	im->cb = NULL;
+	if (im->t) {
+		uv_check_stop(im->t);
+		uv_close((uv_handle_t *)im->t, immediate_closed);
+		im->t = NULL;
+	}
 }
 
 void set_immediate(uv_loop_t *loop, immediate_t *im) {
-	uv_timer_t *t = (uv_timer_t *)zalloc(sizeof(uv_timer_t));
+	uv_check_t *t = (uv_check_t *)zalloc(sizeof(uv_check_t));
 	im->t = t;
 	t->data = im;
-	uv_timer_init(loop, t);
-	uv_timer_start(t, immediate_cb, 0, 0);
+	uv_check_init(loop, t);
+	uv_check_start(t, immediate_cb);
 }
 
 void luv_utils_init(lua_State *L, uv_loop_t *loop) {
