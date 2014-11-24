@@ -3,10 +3,6 @@
 #include "mem.h"
 #include "prof.h"
 
-typedef struct {
-	queue_t q;
-} obj_t;
-
 static prof_t pf_get = {"objpool.get"};
 static prof_t pf_put = {"objpool.put"};
 static prof_t pf_new = {"objpool.new"};

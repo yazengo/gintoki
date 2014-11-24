@@ -4,7 +4,7 @@
 #include "luv.h"
 #include "utils.h"
 #include "uvwrite.h"
-#include "pipe.h"
+#include "queue.h"
 
 struct pipe_s;
 struct pcopy_s;
@@ -19,6 +19,8 @@ typedef struct pipe_s {
 	uv_stream_t *st;
 	uv_pipe_t p;
 	uv_file fd;
+
+	queue_t q;
 
 	int stat;
 	int rdstat;

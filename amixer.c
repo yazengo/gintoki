@@ -47,7 +47,6 @@ static void track_close(track_t *tr) {
 	pipe_close_read(tr->p);
 	queue_remove(&tr->q);
 	tr->stat = CLOSED;
-	luv_callfield(tr, "done_cb", 0, 0);
 	luv_unref(tr);
 }
 
@@ -112,23 +111,28 @@ static void track_add(amixer_t *am, pipe_t *p, track_t *tr) {
 	track_read(tr);
 }
 
-static void track_pause(track_t *tr) {
+static int track_pause(track_t *tr) {
 	switch (tr->stat) {
 	case READDONE:
 		pipebuf_unref(tr->pb);
 		tr->stat = INIT;
-		break;
+		return 1;
 
 	case READING:
 		pipe_cancel_read(tr->p);
 		tr->stat = INIT;
-		break;
+		return 1;
 	}
+	return 0;
 }
 
-static void track_resume(track_t *tr) {
-	if (tr->stat == INIT) 
+static int track_resume(track_t *tr) {
+	switch (tr->stat) {
+	case INIT:
 		track_read(tr);
+		return 1;
+	}
+	return 0;
 }
 
 static void amixer_close(amixer_t *am) {
@@ -193,10 +197,11 @@ static int amixer_setopt(lua_State *L, uv_loop_t *loop) {
 	char *op = (char *)lua_tostring(L, 2);
 
 	if (!strcmp(op, "track.add")) {
-		pipe_t *p = (pipe_t *)luv_toctx(L, 3);
 		track_t *tr = (track_t *)luv_newctx(L, loop, sizeof(track_t));
+		pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
+		p->type = PDIRECT_SINK;
 		track_add(am, p, tr);
-		return 1;
+		return 2;
 	}
 
 	if (!strcmp(op, "setvol")) {
@@ -217,13 +222,13 @@ static int amixer_track_setopt(lua_State *L, uv_loop_t *loop) {
 	char *op = (char *)lua_tostring(L, 2);
 
 	if (!strcmp(op, "pause")) {
-		track_pause(tr);
-		return 0;
+		lua_pushboolean(L, track_pause(tr));
+		return 1;
 	}
 
 	if (!strcmp(op, "resume")) {
-		track_resume(tr);
-		return 0;
+		lua_pushboolean(L, track_resume(tr));
+		return 1;
 	}
 
 	if (!strcmp(op, "close")) {

@@ -47,15 +47,8 @@ audio.mixer = function ()
 		return amixer_setopt(m, 'getvol')
 	end
 
-	out.add = function (p)
-		if p[1] then p = p[1] end
-
-		local tr = amixer_setopt(m, 'track.add', p)
-
-		tr.done = function (cb)
-			tr.done_cb = cb
-			return tr
-		end
+	out.add = function ()
+		local tr, tr_p = amixer_setopt(m, 'track.add', p)
 
 		tr.close = function ()
 			amixer_track_setopt(tr, 'close')
@@ -82,7 +75,7 @@ audio.mixer = function ()
 			return amixer_track_setopt(tr, 'getvol')
 		end
 
-		return tr
+		return tr, tr_p
 	end
 
 	return out
