@@ -203,6 +203,19 @@ pending_write
 
 --[[
 
+UV Context:
+
+uvctx_new();
+uvctx_ref();
+uvctx_unref();
+uvctx_setgc();
+
+luv_pipe() {
+	p = pipe_new();
+	luv_fromctx(p);
+	luv_setgc(p, onclose);
+}
+
 API of pipe:
 
 pipe_read(p, done)

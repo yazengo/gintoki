@@ -222,3 +222,18 @@ void luv_pushcclosure(lua_State *L, luv_closure_cb cb, void *_l) {
 	lua_pushcclosure(L, lua_closure_cb, 2);
 }
 
+void luv_callfield(void *l, const char *field, int nargs, int nres) {
+	lua_State *L = luv_state(l);
+
+	luv_pushctx(L, l);
+	lua_getfield(L, -1, field);
+	lua_remove(L, -2);
+
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+	} else {
+		lua_insert(L, -1 - nargs);
+		lua_call_or_die(L, nargs, nres);
+	}
+}
+

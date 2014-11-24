@@ -183,6 +183,8 @@ void lua_pushuserdata(lua_State *L, void *p, int len) {
 void *lua_touserptr(lua_State *L, int index) {
 	void *p;
 	void *ud = lua_touserdata(L, index);
+	if (ud == NULL)
+		panic("userdata is nil");
 	memcpy(&p, ud, sizeof(p));
 	return p;
 }
@@ -193,6 +195,10 @@ typedef void (*onexit_cb)();
 static onexit_cb exitcbs[EXITCB_NR];
 
 static void print_traceback_and_exit() {
+	if (getenv("COREDUMP")) {
+		*(int *)NULL = 0x0;
+	}
+
 	print_traceback();
 
 	int i;
@@ -243,27 +249,23 @@ static void immediate_closed(uv_handle_t *h) {
 	free(h);
 }
 
-static void immediate_cb(uv_check_t *t, int stat) {
-	immediate_t *im = (immediate_t *)t->data;
-	im->t = NULL;
-	uv_close((uv_handle_t *)t, immediate_closed);
-	im->cb(im);
+static void immediate_cb(uv_async_t *a, int stat) {
+	uv_close((uv_handle_t *)a, immediate_closed);
+	immediate_t *im = (immediate_t *)a->data;
+	if (im->cb)
+		im->cb(im);
 }
 
 void cancel_immediate(immediate_t *im) {
-	if (im->t) {
-		uv_check_stop(im->t);
-		uv_close((uv_handle_t *)im->t, immediate_closed);
-		im->t = NULL;
-	}
+	im->cb = NULL;
 }
 
 void set_immediate(uv_loop_t *loop, immediate_t *im) {
-	uv_check_t *t = (uv_check_t *)zalloc(sizeof(uv_check_t));
-	im->t = t;
-	t->data = im;
-	uv_check_init(loop, t);
-	uv_check_start(t, immediate_cb);
+	uv_async_t *a = (uv_async_t *)zalloc(sizeof(uv_async_t));
+	a->data = im;
+	im->a = a;
+	uv_async_init(loop, a, immediate_cb);
+	uv_async_send(a);
 }
 
 void luv_utils_init(lua_State *L, uv_loop_t *loop) {

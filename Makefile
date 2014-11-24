@@ -6,12 +6,14 @@ ldflags += -g -lm -luv -lcurl
 cobjs += main.o tests.o
 cobjs += utils.o luv.o strbuf.o ringbuf.o timer.o os.o 
 cobjs += pipe.o uvwrite.o pstream.o pdirect.o pexec.o pcopy.o pipebuf.o
-cobjs += aout.o pcm.o
+cobjs += aout.o amixer.o pcm.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
 cobjs += curl.o http_parser.o zpnp.o
 
-luvmods += pexec pcopy aout utils os curl zpnp blowfish base64 sha1 pcm timer
+luvmods += pexec pcopy 
+luvmods += aout amixer pcm
+luvmods += utils os curl zpnp blowfish base64 sha1 timer
 
 exe ?= server${objsuffix}
 now = $(shell date +'%Y%m%d-%h%M')

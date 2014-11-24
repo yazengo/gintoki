@@ -56,6 +56,7 @@ char *strndup(const char *s, size_t n);
 typedef struct immediate_s {
 	void *data;
 	void (*cb)(struct immediate_s *);
+	uv_async_t *a;
 	uv_check_t *t;
 } immediate_t;
 void set_immediate(uv_loop_t *loop, immediate_t *im);

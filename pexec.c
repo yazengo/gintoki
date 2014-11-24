@@ -15,23 +15,28 @@ static void proc_on_exit(uv_process_t *p, int stat, int sig) {
 }
 
 static uv_stdio_container_t 
-newpipe(lua_State *L, uv_loop_t *loop, int type) {
+newpipe(lua_State *L, uv_loop_t *loop, int type, int i) {
+	lua_pushnumber(L, i+1);
 	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
-	p->type = type;
-
+	lua_settable(L, -3);
+	
 	uv_pipe_init(loop, &p->p, 0);
 	p->st = (uv_stream_t *)&p->p;
+	p->type = type;
 
 	uv_stdio_container_t c = {
 		.flags = UV_CREATE_PIPE,
 		.data.stream = p->st,
 	};
+
+	debug("p=%p", p);
+
 	return c;
 }
 
-// stdout = pexec('ls -l', 'r')
-// stdin, stdout, stderr = pexec('cat >l', 'rwe')
-// stdin, stderr = pexec('curl ...', 'we')
+// [stdout] = pexec('ls -l', 'r')
+// [stdin, stdout, stderr] = pexec('cat >l', 'rwe')
+// [stdin, stderr] = pexec('curl ...', 'we')
 static int luv_pexec(lua_State *L, uv_loop_t *loop) {
 	char *cmd = (char *)lua_tostring(L, 1);
 	char *mode = (char *)lua_tostring(L, 2);
@@ -49,20 +54,22 @@ static int luv_pexec(lua_State *L, uv_loop_t *loop) {
 	opts.stdio = stdio;
 	opts.stdio_count = 3;
 
+	lua_newtable(L);
+
 	int n = 0;
 	char *i = mode;
 	while (i && *i) {
 		switch (*i) {
 		case 'r':
-			stdio[1] = newpipe(L, loop, PSTREAM_SRC);
+			stdio[1] = newpipe(L, loop, PSTREAM_SRC, n);
 			n++;
 			break;
 		case 'w':
-			stdio[0] = newpipe(L, loop, PSTREAM_SINK);
+			stdio[0] = newpipe(L, loop, PSTREAM_SINK, n);
 			n++;
 			break;
 		case 'e':
-			stdio[2] = newpipe(L, loop, PSTREAM_SRC);
+			stdio[2] = newpipe(L, loop, PSTREAM_SRC, n);
 			n++;
 			break;
 		}
@@ -79,7 +86,7 @@ static int luv_pexec(lua_State *L, uv_loop_t *loop) {
 	int r = uv_spawn(loop, proc, opts);
 	info("cmd=%s spawn=%d pid=%d", cmd, r, proc->pid);
 
-	return n;
+	return 1;
 }
 
 void luv_pexec_init(lua_State *L, uv_loop_t *loop) {

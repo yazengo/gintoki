@@ -4,6 +4,7 @@
 #include "utils.h"
 #include "luv.h"
 #include "pipe.h"
+#include "pdirect.h"
 #include "pipebuf.h"
 
 typedef struct {
@@ -46,7 +47,9 @@ static const char *libao_strerror(int e) {
 
 static void deinit(uv_loop_t *loop, void *_p) {
 	pipe_t *p = (pipe_t *)_p;
-	aout_t *ao = (aout_t *)p->data;
+	aout_t *ao = (aout_t *)p->read.data;
+
+	info("closed");
 
 	ao_close(ao->dev);
 	free(ao);
@@ -76,16 +79,16 @@ static void read_done(pipe_t *p, pipebuf_t *pb);
 
 static void play_thread(uv_work_t *w) {
 	pipe_t *p = (pipe_t *)w->data;
-	aout_t *ao = (aout_t *)p->data;
+	aout_t *ao = (aout_t *)p->read.data;
 	pipebuf_t *pb = ao->pb;
 
-	debug("n=%d", pb->len);
-	ao_play(ao->dev, pb->base, pb->len);
+	debug("n=%d", PIPEBUF_SIZE);
+	ao_play(ao->dev, pb->base, PIPEBUF_SIZE);
 }
 
 static void play_done(uv_work_t *w, int stat) {
 	pipe_t *p = (pipe_t *)w->data;
-	aout_t *ao = (aout_t *)p->data;
+	aout_t *ao = (aout_t *)p->read.data;
 
 	pipebuf_unref(ao->pb);
 	pipe_read(p, read_done);
@@ -98,10 +101,10 @@ static void read_done(pipe_t *p, pipebuf_t *pb) {
 		return;
 	}
 
-	int n = pb->len;
+	int n = PIPEBUF_SIZE;
 	debug("n=%d", n);
 
-	aout_t *ao = (aout_t *)p->data;
+	aout_t *ao = (aout_t *)p->read.data;
 	ao->pb = pb;
 	ao->w.data = p;
 	uv_queue_work(luv_loop(p), &ao->w, play_thread, play_done);
@@ -111,7 +114,7 @@ int luv_aout(lua_State *L, uv_loop_t *loop) {
 	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
 	aout_t *ao = (aout_t *)zalloc(sizeof(aout_t));
 
-	p->data = ao;
+	p->read.data = ao;
 	p->type = PDIRECT_SINK;
 
 	init(ao);

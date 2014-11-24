@@ -8,31 +8,36 @@
 #include "pdirect.h"
 
 enum {
-	PS_PENDING_R = PS_MAX<<1,
-	PS_PENDING_W = PS_MAX<<2,
+	INIT,
+	READING,
+	WRITING,
+	CLOSED_WRITE,
+	CLOSED_READ,
+	CLOSED,
 };
 
 static void do_read(immediate_t *im) {
 	pipe_t *p = (pipe_t *)im->data;
+	debug("read stat=%d type=%d", p->stat, p->type);
 
-	if (p->stat & (PS_CLOSING_W | PS_STOPPED_W)) {
+	switch (p->stat) {
+	case WRITING:
+		p->write.done(p, 0);
+		p->read.done(p, p->direct.pool);
+		p->stat = INIT;
+		break;
+
+	case INIT:
+		p->stat = READING;
+		break;
+	
+	case CLOSED_WRITE:
 		p->read.done(p, NULL);
-		return;
+		break;
+
+	default:
+		panic("stat=%d type=%d invalid", p->stat, p->type);
 	}
-	if (!(p->stat & PS_PENDING_W)) {
-		p->stat |= PS_PENDING_R;
-		debug("pending");
-		return;
-	}
-
-	debug("trans");
-
-	p->stat &= ~PS_PENDING_W;
-	p->write.done(p, 0);
-	p->write.done = NULL;
-
-	p->read.done(p, p->direct.pool);
-	p->read.done = NULL;
 }
 
 void pdirect_read(pipe_t *p) {
@@ -44,27 +49,27 @@ void pdirect_read(pipe_t *p) {
 
 static void do_write(immediate_t *im) {
 	pipe_t *p = (pipe_t *)im->data;
-	
-	p->direct.pool = p->write.pb;
+	debug("write stat=%d", p->stat);
 
-	if (p->stat & (PS_CLOSING_R | PS_STOPPED_R)) {
+	switch (p->stat) {
+	case READING:
+		p->read.done(p, p->write.pb);
+		p->write.done(p, 0);
+		p->stat = INIT;
+		break;
+
+	case INIT:
+		p->direct.pool = p->write.pb;
+		p->stat = WRITING;
+		break;
+
+	case CLOSED_READ:
 		p->write.done(p, -1);
-		return;
+		break;
+
+	default:
+		panic("stat=%d invalid", p->stat);
 	}
-	if (!(p->stat & PS_PENDING_R)) {
-		p->stat |= PS_PENDING_W;
-		debug("pending");
-		return;
-	}
-
-	debug("trans");
-
-	p->stat &= ~PS_PENDING_R;
-	p->read.done(p, p->direct.pool);
-	p->read.done = NULL;
-
-	p->write.done(p, 0);
-	p->write.done = NULL;
 }
 
 void pdirect_write(pipe_t *p) {
@@ -74,18 +79,91 @@ void pdirect_write(pipe_t *p) {
 	set_immediate(luv_loop(p), &p->write.im_direct);
 }
 
+static void do_close(pipe_t *p) {
+	p->stat = CLOSED;
+	luv_unref(p);
+}
+
+static void close_read(immediate_t *im) {
+	pipe_t *p = (pipe_t *)im->data;
+
+	debug("close stat=%d", p->stat);
+
+	switch (p->stat) {
+	case INIT:
+		p->stat = CLOSED_READ;
+		break;
+
+	case READING:
+		p->stat = CLOSED_READ;
+		// need not call read.done
+		break;
+
+	case WRITING:
+		pipebuf_unref(p->direct.pool);
+		p->write.done(p, -1);
+		p->stat = CLOSED_READ;
+		break;
+
+	case CLOSED_WRITE:
+		do_close(p);
+		break;
+
+	default:
+		panic("stat=%d invalid", p->stat);
+	}
+}
+
+void pdirect_close_read(pipe_t *p) {
+	debug("close");
+	p->close_read.im.data = p;
+	p->close_read.im.cb = close_read;
+	set_immediate(luv_loop(p), &p->close_read.im);
+}
+
+static void close_write(immediate_t *im) {
+	pipe_t *p = (pipe_t *)im->data;
+
+	switch (p->stat) {
+	case INIT:
+		p->stat = CLOSED_WRITE;
+		break;
+
+	case READING:
+		p->read.done(p, NULL);
+		p->stat = CLOSED_WRITE;
+		break;
+
+	case WRITING:
+		pipebuf_unref(p->direct.pool);
+		p->stat = CLOSED_WRITE;
+		break;
+
+	case CLOSED_READ:
+		do_close(p);
+		break;
+
+	default:
+		panic("stat=%d invalid", p->stat);
+	}
+}
+
+void pdirect_close_write(pipe_t *p) {
+	debug("close");
+	p->close_write.im.data = p;
+	p->close_write.im.cb = close_write;
+	set_immediate(luv_loop(p), &p->close_write.im);
+}
+
 void pdirect_cancel_read(pipe_t *p) {
-	cancel_immediate(&p->read.im_direct);
-	p->stat &= ~PS_PENDING_R;
+	if (p->stat == READING)
+		p->stat = INIT;
 }
 
 void pdirect_cancel_write(pipe_t *p) {
-	cancel_immediate(&p->write.im_direct);
-	p->stat &= ~PS_PENDING_W;
-}
-
-void pdirect_close(pipe_t *p) {
-	debug("unref");
-	luv_unref(p);
+	if (p->stat == WRITING) {
+		pipebuf_unref(p->direct.pool);
+		p->stat = INIT;
+	}
 }
 
