@@ -1,49 +1,18 @@
 
-#include <ao/ao.h>
+#include <stdlib.h>
 
 #include "utils.h"
 #include "luv.h"
 #include "pipe.h"
 #include "pdirect.h"
 #include "pipebuf.h"
+#include "aout.h"
 
 typedef struct {
-	ao_device *dev;
+	void *dev;
 	uv_work_t w;
 	pipebuf_t *pb;
 } aout_t;
-
-static void libao_list_drivers() {
-	int n = 0, i;
-	ao_info **d = ao_driver_info_list(&n);
-
-	info("avail drvs:");
-	for (i = 0; i < n; i++) {
-		info("%s: %s", d[i]->short_name, d[i]->name);
-	}
-}
-
-static const char *libao_strerror(int e) {
-	switch (e) {
-		case AO_ENODRIVER:
-			return "no driver";
-
-		case AO_ENOTLIVE:
-			return "not alive";
-
-		case AO_EBADOPTION:
-			return "bad option";
-
-		case AO_EOPENDEVICE:
-			return "open device";
-
-		case AO_EFAIL:
-			return "efail";
-
-		default:
-			return "?";
-	}
-}
 
 static void deinit(uv_loop_t *loop, void *_p) {
 	pipe_t *p = (pipe_t *)_p;
@@ -51,28 +20,8 @@ static void deinit(uv_loop_t *loop, void *_p) {
 
 	info("closed");
 
-	ao_close(ao->dev);
+	aoutdev_close(ao->dev);
 	free(ao);
-}
-
-static void init(aout_t *ao) {
-	ao_sample_format fmt = {};
-	fmt.bits = 16;
-	fmt.channels = 2;
-	fmt.rate = 44100;
-	fmt.byte_format = AO_FMT_LITTLE;
-
-	int drv = ao_default_driver_id();
-	if (drv == -1) {
-		libao_list_drivers();
-		panic("default driver id not found");
-	}
-
-	ao->dev = ao_open_live(drv, &fmt, NULL);
-	if (ao->dev == NULL)
-		panic("open failed: %s", libao_strerror(errno));
-
-	info("libao opened");
 }
 
 static void read_done(pipe_t *p, pipebuf_t *pb);
@@ -117,7 +66,7 @@ int luv_aout(lua_State *L, uv_loop_t *loop) {
 	p->read.data = ao;
 	p->type = PDIRECT_SINK;
 
-	init(ao);
+	ao->dev = aoutdev_new();
 	luv_setgc(p, deinit);
 
 	pipe_read(p, read_done);

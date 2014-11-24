@@ -5,6 +5,7 @@
 
 typedef struct pipebuf_s {
 	void *base;
+	int len;
 	int refcnt;
 	void (*gc)(struct pipebuf_s *pb);
 } pipebuf_t;

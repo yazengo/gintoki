@@ -21,6 +21,8 @@ typedef struct pipe_s {
 	uv_file fd;
 
 	int stat;
+	int rdstat;
+	int wrstat;
 
 	struct pcopy_s *copy;
 
@@ -40,9 +42,11 @@ typedef struct pipe_s {
 	struct {
 		void *buf;
 		pipebuf_t *pb;
+		int len;
 		pipe_read_cb done;
 		immediate_t im_direct, im_stop, im_resume;
 		void *data;
+		int mode;
 	} read;
 
 	struct {
@@ -53,6 +57,11 @@ typedef struct pipe_s {
 		immediate_t im;
 	} close_write;
 } pipe_t;
+
+enum {
+	PREAD_NORMAL,
+	PREAD_BLOCK,
+};
 
 enum {
 	PSTREAM_SRC,

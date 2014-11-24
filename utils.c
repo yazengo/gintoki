@@ -250,17 +250,20 @@ static void immediate_closed(uv_handle_t *h) {
 }
 
 static void immediate_cb(uv_async_t *a, int stat) {
-	uv_close((uv_handle_t *)a, immediate_closed);
 	immediate_t *im = (immediate_t *)a->data;
-	if (im->cb)
-		im->cb(im);
+	uv_close((uv_handle_t *)a, immediate_closed);
+	im->a = NULL;
+	im->cb(im);
 }
 
 void cancel_immediate(immediate_t *im) {
-	im->cb = NULL;
+	uv_close((uv_handle_t *)im->a, immediate_closed);
+	im->a = NULL;
 }
 
 void set_immediate(uv_loop_t *loop, immediate_t *im) {
+	if (im->a)
+		panic("dont call twice");
 	uv_async_t *a = (uv_async_t *)zalloc(sizeof(uv_async_t));
 	a->data = im;
 	im->a = a;

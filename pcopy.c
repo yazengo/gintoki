@@ -22,6 +22,7 @@ static void write_done(pipe_t *sink, int stat) {
 	pcopy_t *c = sink->copy;
 
 	if (stat < 0) {
+		debug("write eof");
 		close_all(c);
 		return;
 	}
@@ -32,6 +33,7 @@ static void read_done(pipe_t *src, pipebuf_t *pb) {
 	pcopy_t *c = src->copy;
 
 	if (pb == NULL) {
+		debug("read eof");
 		close_all(c);
 		return;
 	}
@@ -54,6 +56,7 @@ static int pcopy_close(lua_State *L, uv_loop_t *loop, void *_c) {
 static int luv_pcopy(lua_State *L, uv_loop_t *loop) {
 	pipe_t *src = (pipe_t *)luv_toctx(L, 1);
 	pipe_t *sink = (pipe_t *)luv_toctx(L, 2);
+	char *mode = (char *)lua_tostring(L, 3);
 	pcopy_t *c = (pcopy_t *)luv_newctx(L, loop, sizeof(pcopy_t));
 
 	c->src = src;
@@ -64,12 +67,15 @@ static int luv_pcopy(lua_State *L, uv_loop_t *loop) {
 	luv_pushcclosure(L, pcopy_close, c);
 	lua_setfield(L, -2, "close");
 
+	if (mode && *mode == 'b')
+		src->read.mode = PREAD_BLOCK;
+
 	copy(c);
 
 	return 1;
 }
 
 void luv_pcopy_init(lua_State *L, uv_loop_t *loop) {
-	luv_register(L, loop, "_pcopy", luv_pcopy);
+	luv_register(L, loop, "pcopy", luv_pcopy);
 }
 

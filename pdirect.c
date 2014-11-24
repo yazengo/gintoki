@@ -12,12 +12,14 @@ enum {
 	READING,
 	WRITING,
 	CLOSED_WRITE,
+	CLOSING_WRITE,
 	CLOSED_READ,
 	CLOSED,
 };
 
 static void do_read(immediate_t *im) {
 	pipe_t *p = (pipe_t *)im->data;
+
 	debug("read stat=%d type=%d", p->stat, p->type);
 
 	switch (p->stat) {
@@ -25,6 +27,11 @@ static void do_read(immediate_t *im) {
 		p->write.done(p, 0);
 		p->read.done(p, p->direct.pool);
 		p->stat = INIT;
+		break;
+
+	case CLOSING_WRITE:
+		p->read.done(p, p->direct.pool);
+		p->stat = CLOSED_WRITE;
 		break;
 
 	case INIT:
@@ -105,6 +112,11 @@ static void close_read(immediate_t *im) {
 		p->stat = CLOSED_READ;
 		break;
 
+	case CLOSING_WRITE:
+		pipebuf_unref(p->direct.pool);
+		do_close(p);
+		break;
+
 	case CLOSED_WRITE:
 		do_close(p);
 		break;
@@ -135,8 +147,7 @@ static void close_write(immediate_t *im) {
 		break;
 
 	case WRITING:
-		pipebuf_unref(p->direct.pool);
-		p->stat = CLOSED_WRITE;
+		p->stat = CLOSING_WRITE;
 		break;
 
 	case CLOSED_READ:
