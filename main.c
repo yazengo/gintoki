@@ -21,7 +21,6 @@ static void usage(char *prog) {
 int main(int argc, char *argv[]) {
 	uv_loop_t *loop = uv_default_loop();
 
-	setenv("_", argv[0], 1);
 	utils_preinit(loop);
 
 	int test_c = -1;

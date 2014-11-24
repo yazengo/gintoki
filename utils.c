@@ -7,15 +7,14 @@
 #include <ctype.h>
 #include <sys/time.h>
 #include <stdarg.h>
-#include <execinfo.h>
 #include <signal.h>
-#include <dirent.h>
 
 #include <uv.h>
 #include <lua.h>
 #include <lauxlib.h>
-#include <pthread.h>
 
+#include "prof.h"
+#include "mem.h"
 #include "utils.h"
 
 static int log_level = LOG_INFO;
@@ -245,11 +244,18 @@ void utils_preinit(uv_loop_t *loop) {
 	}
 }
 
+static objpool_t op_async = {
+	.name = "uv_async_t",
+	.size = sizeof(uv_async_t),
+};
+prof_t pf_immediate = {"immediate"};
+
 static void immediate_closed(uv_handle_t *h) {
-	free(h);
+	objpool_put(&op_async, h);
 }
 
 static void immediate_cb(uv_async_t *a, int stat) {
+	prof_inc(&pf_immediate);
 	immediate_t *im = (immediate_t *)a->data;
 	uv_close((uv_handle_t *)a, immediate_closed);
 	im->a = NULL;
@@ -263,19 +269,31 @@ void cancel_immediate(immediate_t *im) {
 
 void set_immediate(uv_loop_t *loop, immediate_t *im) {
 	if (im->a)
-		panic("dont call twice");
-	uv_async_t *a = (uv_async_t *)zalloc(sizeof(uv_async_t));
+		panic("don't call twice");
+	uv_async_t *a = (uv_async_t *)objpool_get(&op_async);
 	a->data = im;
 	im->a = a;
 	uv_async_init(loop, a, immediate_cb);
 	uv_async_send(a);
 }
 
-void luv_utils_init(lua_State *L, uv_loop_t *loop) {
-	lua_pushcfunction(L, lua_log);
-	lua_setglobal(L, "_log");
+static void luv_immediate_cb(immediate_t *im) {
+	luv_callfield(im, "done_cb", 0, 0);
+	luv_unref(im);
+}
 
-	lua_pushcfunction(L, lua_setloglevel);
-	lua_setglobal(L, "setloglevel");
+static int luv_set_immediate(lua_State *L, uv_loop_t *loop) {
+	immediate_t *im = (immediate_t *)luv_newctx(L, loop, sizeof(immediate_t));
+	im->cb = luv_immediate_cb;
+	lua_pushvalue(L, 1);
+	lua_setfield(L, -2, "done_cb");
+	set_immediate(loop, im);
+	return 1;
+}
+
+void luv_utils_init(lua_State *L, uv_loop_t *loop) {
+	lua_register(L, "_log", lua_log);
+	lua_register(L, "setloglevel", lua_setloglevel);
+	luv_register(L, loop, "set_immediate", luv_set_immediate);
 }
 

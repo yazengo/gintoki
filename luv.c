@@ -4,9 +4,24 @@
 #include <lauxlib.h>
 #include <stdlib.h>
 
+#include "prof.h"
 #include "utils.h"
 
+static prof_t pf_new = {"luv.new"};
+static prof_t pf_gc = {"luv.gc"};
+static prof_t pf_toctx = {"luv.toctx"};
+static prof_t pf_pushctx = {"luv.pushctx"};
+
+prof_t *pf_luv[] = {
+	&pf_new,
+	&pf_gc,
+	&pf_toctx,
+	&pf_pushctx,
+	NULL,
+};
+
 typedef struct {
+	queue_t q;
 	lua_State *L, *Lt;
 	uv_loop_t *loop;
 	luv_gc_cb gc;
@@ -14,6 +29,8 @@ typedef struct {
 } luv_t;
 
 static int __gc(lua_State *L) {
+	prof_inc(&pf_gc);
+
 	lua_getfield(L, 1, "_ctx");
 	luv_t *l = (luv_t *)lua_touserptr(L, -1);
 
@@ -39,6 +56,8 @@ static void lua_pushmaptbl(lua_State *L) {
 }
 
 static void *_new(lua_State *L, uv_loop_t *loop, int size, int usethread) {
+	prof_inc(&pf_new);
+
 	luv_t *l = (luv_t *)zalloc(sizeof(luv_t) + size);
 	l->L = L;
 	l->loop = loop;
@@ -141,6 +160,8 @@ void luv_setgc(void *_l, luv_gc_cb cb) {
 }
 
 void luv_pushctx(lua_State *L, void *_l) {
+	prof_inc(&pf_pushctx);
+
 	luv_t *l = (luv_t *)(_l - sizeof(luv_t));
 
 	lua_pushmaptbl(L);
@@ -150,6 +171,8 @@ void luv_pushctx(lua_State *L, void *_l) {
 }
 
 void *luv_toctx(lua_State *L, int i) {
+	prof_inc(&pf_toctx);
+
 	lua_getfield(L, i, "_ctx");
 	luv_t *l = (luv_t *)lua_touserptr(L, -1);
 	lua_pop(L, 1);

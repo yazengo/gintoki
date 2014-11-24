@@ -10,13 +10,10 @@
 #include "luv.h"
 #include "utils.h"
 #include "strbuf.h"
-#include "strparser.h"
-#include "ringbuf.h"
 #include "curl.h"
 #include "blowfish.h"
 
 #include "cjson.h"
-#include "audio_out.h"
 
 static void test_blowfish() {
   uint32_t L = 1, R = 2;
