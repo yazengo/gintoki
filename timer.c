@@ -4,22 +4,21 @@
 #include "luv.h"
 #include "utils.h"
 
+static void timer_closed(uv_handle_t *t) {
+	luv_unref(t);
+}
+
+static void timer_close(uv_timer_t *t) {
+	uv_close((uv_handle_t *)t, timer_closed);
+}
+
 static void on_timeout(uv_timer_t *t, int stat) {
 	lua_State *L = luv_state(t);
 
-	luv_pushctx(L, t);
-	lua_getfield(L, -1, "done");
-	lua_call_or_die(L, 0, 0);
-	lua_pop(L, 1);
+	luv_callfield(t, "done_cb", 0, 0);
 
-	if (uv_timer_get_repeat(t) == 0) {
-		luv_unref(t);
-	}
-}
-
-static void timer_gc(uv_loop_t *loop, void *_t) {
-	uv_timer_t *t = (uv_timer_t *)_t;
-	uv_close((uv_handle_t *)t, NULL);
+	if (uv_timer_get_repeat(t) == 0) 
+		timer_close(t);
 }
 
 static int set_timer(lua_State *L, uv_loop_t *loop, int repeat) {
@@ -29,10 +28,8 @@ static int set_timer(lua_State *L, uv_loop_t *loop, int repeat) {
 	uv_timer_init(loop, t);
 	uv_timer_start(t, on_timeout, timeout, repeat ? timeout : 0);
 
-	luv_setgc(t, timer_gc);
-
 	lua_pushvalue(L, 1);
-	lua_setfield(L, -2, "done");
+	lua_setfield(L, -2, "done_cb");
 
 	return 1;
 }
@@ -48,7 +45,7 @@ static int set_interval(lua_State *L, uv_loop_t *loop) {
 static int clear_timer(lua_State *L, uv_loop_t *loop) {
 	uv_timer_t *t = (uv_timer_t *)luv_toctx(L, 1);
 	uv_timer_stop(t);
-	luv_unref(t);
+	timer_close(t);
 	return 0;
 }
 

@@ -41,6 +41,7 @@ static int __gc(lua_State *L) {
 		lua_close(l->Lt);
 
 	free(l);
+
 	return 0;
 }
 

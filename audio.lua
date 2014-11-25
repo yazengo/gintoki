@@ -18,15 +18,17 @@ audio.decoder = function (url)
 		local hh, mm, ss = string.match(s, 'Duration: (%d+):(%d+):(%d+)')
 		if hh and mm and ss then
 			d.dur = hh*3600 + mm*60 + ss
-			if d.probed_cb then d.probed_cb() end
+		else
+			d.dur = 0
 		end
+		if d.probed_cb then d.probed_cb(d) end
 	end)
 
 	return d
 end
 
 audio.mixer = function ()
-	local m, out = amixer_new()
+	local m = amixer()
 
 	local roundvol = function (v)
 		if v > 1.0 then 
@@ -38,47 +40,32 @@ audio.mixer = function ()
 		end
 	end
 
-	out.setvol = function (v)
+	m.setvol = function (v)
 		v = v or 0.0
-		amixer_setopt(m, 'setvol', roundvol(v))
+		m.setopt('setvol', roundvol(v))
 	end
 
-	out.getvol = function ()
-		return amixer_setopt(m, 'getvol')
+	m.getvol = function ()
+		return m.setopt('getvol')
 	end
 
-	out.add = function ()
-		local tr, tr_p = amixer_setopt(m, 'track.add', p)
-
-		tr.close = function ()
-			amixer_track_setopt(tr, 'close')
-			return tr
-		end
-
-		tr.pause = function ()
-			amixer_track_setopt(tr, 'pause')
-			return tr
-		end
-
-		tr.resume = function ()
-			amixer_track_setopt(tr, 'resume')
-			return tr
-		end
+	m.add = function ()
+		local tr = m.setopt('track.add')
 
 		tr.setvol = function (v)
 			v = v or 0.0
-			amixer_track_setopt(tr, 'setvol', roundvol(v))
+			tr.setopt('setvol', roundvol(v))
 			return tr
 		end
 
 		tr.getvol = function ()
-			return amixer_track_setopt(tr, 'getvol')
+			return tr.setopt('getvol')
 		end
 
-		return tr, tr_p
+		return tr
 	end
 
-	return out
+	return m
 end
 
 audio.pipe = function (...)

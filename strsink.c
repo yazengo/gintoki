@@ -32,8 +32,9 @@ static int indexn(char *s, int n, char ch) {
 
 static void grep_newline(strsink_t *ss) {
 	char *s = ss->sb->buf;
+	s[ss->sb->length] = 0;
 
-	debug("%s", s);
+	debug("s=%s grep=%s", s, ss->grep);
 	if (strstr(s, ss->grep) != NULL) {
 		lua_pushstring(luv_state(ss->p), s);
 		luv_callfield(ss->p, "grep_cb", 1, 0);

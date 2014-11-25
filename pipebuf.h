@@ -11,8 +11,7 @@ typedef struct pipebuf_s {
 	char buf[0];
 } pipebuf_t;
 
-#define PIPEBUF_ALLOCSIZE (4096 - sizeof(obj_t))
-#define PIPEBUF_SIZE (PIPEBUF_ALLOCSIZE - sizeof(pipebuf_t))
+extern int PIPEBUF_SIZE;
 
 pipebuf_t *pipebuf_new();
 void pipebuf_ref(pipebuf_t *pb);

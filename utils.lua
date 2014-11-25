@@ -174,6 +174,7 @@ isstr = function (s)
 	end
 	return true
 end
+isstring = isstr
 
 io.readstring = function (path)
 	local f = io.open(path, 'r')

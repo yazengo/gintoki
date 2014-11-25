@@ -16,24 +16,18 @@ static void libao_list_drivers() {
 
 static const char *libao_strerror(int e) {
 	switch (e) {
-		case AO_ENODRIVER:
-			return "no driver";
-
-		case AO_ENOTLIVE:
-			return "not alive";
-
-		case AO_EBADOPTION:
-			return "bad option";
-
-		case AO_EOPENDEVICE:
-			return "open device";
-
-		case AO_EFAIL:
-			return "efail";
-
-		default:
-			return "?";
+	case AO_ENODRIVER:
+		return "no driver";
+	case AO_ENOTLIVE:
+		return "not alive";
+	case AO_EBADOPTION:
+		return "bad option";
+	case AO_EOPENDEVICE:
+		return "open device";
+	case AO_EFAIL:
+		return "efail";
 	}
+	return "?";
 }
 
 void *aoutdev_new() {

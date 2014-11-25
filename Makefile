@@ -8,17 +8,18 @@ cobjs += utils.o luv.o strbuf.o timer.o os.o
 cobjs += prof.o mem.o
 cobjs += pipe.o uvwrite.o pstream.o pdirect.o pexec.o pcopy.o pipebuf.o
 cobjs += strsink.o
-cobjs += aout.o amixer.o pcm.o
+cobjs += asrc.o aout.o amixer.o pcm.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
 cobjs += curl.o http_parser.o zpnp.o
 
+luvmods += pipebuf
 luvmods += utils os timer
 luvmods += prof
 luvmods += blowfish base64 sha1 
 luvmods += pexec pcopy 
 luvmods += strsink
-luvmods += aout amixer pcm
+luvmods += asrc aout amixer pcm
 luvmods += curl zpnp 
 
 exe ?= server${objsuffix}
