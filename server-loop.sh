@@ -1,7 +1,7 @@
 #!/bin/sh
 
 while true; do
-	./server-mips $*
+	./server-mips -run main.lua
 	pkill avahi-daemon
 	sleep 1
 done

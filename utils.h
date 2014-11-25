@@ -6,6 +6,8 @@
 #include "queue.h"
 #include "luv.h"
 
+#include "immediate.h"
+
 enum {
 	LOG_DEBUG = 0,
 	LOG_INFO = 1,
@@ -52,13 +54,4 @@ void lua_setuserptr(lua_State *L, int index, void *p);
 void _lua_dumpstack_at(const char *at_func, const char *at_file, int at_lineno, lua_State *L);
 
 char *strndup(const char *s, size_t n);
-
-typedef struct immediate_s {
-	void *data;
-	void (*cb)(struct immediate_s *);
-	uv_async_t *a;
-	uv_check_t *t;
-} immediate_t;
-void set_immediate(uv_loop_t *loop, immediate_t *im);
-void cancel_immediate(immediate_t *im);
 

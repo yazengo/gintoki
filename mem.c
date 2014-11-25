@@ -19,7 +19,7 @@ void *objpool_get(objpool_t *p) {
 
 	if (p->objs.prev == NULL) {
 		queue_init(&p->objs);
-		info("init");
+		debug("init");
 	}
 
 	obj_t *o;

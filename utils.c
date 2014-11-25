@@ -223,6 +223,14 @@ static void fault(int sig) {
 	print_traceback_and_exit();
 }
 
+static void on_check(uv_check_t *c, int stat) {
+	run_immediate();
+}
+
+static void on_prepare(uv_prepare_t *p, int stat) {
+	run_immediate();
+}
+
 void utils_preinit(uv_loop_t *loop) {
 	g_loop = loop;
 
@@ -242,58 +250,18 @@ void utils_preinit(uv_loop_t *loop) {
 		sscanf(s, "%d", &v);
 		setloglevel(v);
 	}
-}
 
-static objpool_t op_async = {
-	.name = "uv_async_t",
-	.size = sizeof(uv_async_t),
-};
-prof_t pf_immediate = {"immediate"};
+	static uv_check_t c;
+	uv_check_init(loop, &c);
+	uv_check_start(&c, on_check);
 
-static void immediate_closed(uv_handle_t *h) {
-	objpool_put(&op_async, h);
-}
-
-static void immediate_cb(uv_async_t *a, int stat) {
-	prof_inc(&pf_immediate);
-	immediate_t *im = (immediate_t *)a->data;
-	uv_close((uv_handle_t *)a, immediate_closed);
-	im->a = NULL;
-	im->cb(im);
-}
-
-void cancel_immediate(immediate_t *im) {
-	uv_close((uv_handle_t *)im->a, immediate_closed);
-	im->a = NULL;
-}
-
-void set_immediate(uv_loop_t *loop, immediate_t *im) {
-	if (im->a)
-		panic("don't call twice");
-	uv_async_t *a = (uv_async_t *)objpool_get(&op_async);
-	a->data = im;
-	im->a = a;
-	uv_async_init(loop, a, immediate_cb);
-	uv_async_send(a);
-}
-
-static void luv_immediate_cb(immediate_t *im) {
-	luv_callfield(im, "done_cb", 0, 0);
-	luv_unref(im);
-}
-
-static int luv_set_immediate(lua_State *L, uv_loop_t *loop) {
-	immediate_t *im = (immediate_t *)luv_newctx(L, loop, sizeof(immediate_t));
-	im->cb = luv_immediate_cb;
-	lua_pushvalue(L, 1);
-	lua_setfield(L, -2, "done_cb");
-	set_immediate(loop, im);
-	return 1;
+	static uv_prepare_t p;
+	uv_prepare_init(loop, &p);
+	uv_prepare_start(&p, on_prepare);
 }
 
 void luv_utils_init(lua_State *L, uv_loop_t *loop) {
 	lua_register(L, "_log", lua_log);
 	lua_register(L, "setloglevel", lua_setloglevel);
-	luv_register(L, loop, "set_immediate", luv_set_immediate);
 }
 

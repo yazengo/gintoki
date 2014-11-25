@@ -53,12 +53,6 @@ static void test_blowfish() {
 	info("decode_out: %s", decode_out);
 }
 
-void run_test_c_pre(int i) {
-	info("run C pre test #%d", i);
-	if (i == 9)
-		test_blowfish();
-}
-
 static void luv_lobj_gc(uv_loop_t *loop, void *_p) {
 	info("called");
 }
@@ -105,9 +99,11 @@ static void test_luv(lua_State *L, uv_loop_t *loop) {
 	lua_dostring_or_die(L, "threadtest(function (r) info(r) end)");
 }
 
-void run_test_c_post(int i, lua_State *L, uv_loop_t *loop, char **argv) {
+void run_test(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 	info("i=%d", i);
-	if (i == 14)
+	if (i == 1)
 		test_luv(L, loop);
+	if (i == 2)
+		test_blowfish();
 }
 

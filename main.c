@@ -12,50 +12,39 @@
 #include "tests.h"
 
 static void usage(char *prog) {
-	fprintf(stderr, "Usage: %s\n", prog);
-	fprintf(stderr, "   -t 101                           run C test #101          \n");
-	fprintf(stderr, "   -run a.lua b.lua ...             run lua script one by one\n");
+	fprintf(stderr, "Usage: %s [lua files]\n", prog);
+	fprintf(stderr, "   -t 101        run test #101\n");
+	fprintf(stderr, "   -name=value   export name=value\n");
+	fprintf(stderr, "   -name         export name=1\n");
 	exit(-1);
 }
 
 int main(int argc, char *argv[]) {
 	uv_loop_t *loop = uv_default_loop();
 
-	utils_preinit(loop);
-
-	int test_c = -1;
-	char **run_lua = NULL;
-
 	int i;
 	for (i = 1; i < argc; i++) {
-		if (!strcmp(argv[i], "-h")) usage(argv[0]);
-		if (!strcmp(argv[i], "-v")) {
-			puts(GITVER);
+		char *a = argv[i];
+		if (!strcmp(a, "-h")) 
+			usage(argv[0]);
+		else if (!strcmp(a, "-v")) {
+			printf("build %s\n", BUILDDATE);
+			printf("version %s\n", GITVER);
 			return 0;
+		} else if (a[0] == '-') {
+			char *eq = strstr(a, "=");
+			char *env;
+			if (eq) {
+				env = strdup(a+1);
+			} else {
+				env = strcat(strdup(a+1), "=1");
+			}
+			putenv(env);
 		}
-		if (!strcmp(argv[i], "-t")) {
-			if (i+1 >= argc) usage(argv[0]);
-			sscanf(argv[i+1], "%d", &test_c);
-			i++;
-			continue;
-		}
-		if (!strcmp(argv[i], "-run")) {
-			if (i+1 >= argc) usage(argv[0]);
-			run_lua = &argv[i+1];
-			break;
-		}
-	}
-	if (test_c == -1 && run_lua == NULL) {
-		usage(argv[0]);
-		return -1;
 	}
 
+	utils_preinit(loop);
 	info("starts");
-
-	if (test_c >= 100 && test_c < 200) {
-		run_test_c_pre(test_c-100);
-		return 0;
-	}
 
 	lua_State *L = luaL_newstate();
 
@@ -69,21 +58,32 @@ int main(int argc, char *argv[]) {
 
 	lua_dofile_or_die(L, "utils.lua");
 
-	if (test_c >= 200 && test_c < 300) {
-		run_test_c_post(test_c-200, L, loop, argv);
-	}
-
 	float tm_start = now();
-	if (run_lua) {
-		while (*run_lua) {
-			char *cmd = *run_lua;
-			if (strlen(cmd) > 4 && !strcmp(cmd+strlen(cmd)-4, ".lua"))
-				lua_dofile_or_die(L, cmd);
-			else
-				lua_dostring_or_die(L, cmd);
-			run_lua++;
+	int n = 0;
+	for (i = 1; i < argc; i++) {
+		char *a = argv[i];
+		if (!strcmp(a, "-t")) {
+			int t = -1;
+			if (i+1 >= argc) usage(argv[0]);
+			sscanf(argv[i+1], "%d", &t);
+			if (t != -1) {
+				run_test(t, L, loop, &argv[i+2]);
+				n++;
+			}
+			i++;
+		} else if (a[0] == '-') {
+			// already handled
+		} else if (strlen(a) > 4 && !strcmp(a+strlen(a)-4, ".lua")) {
+			lua_dofile_or_die(L, a);
+			n++;
+		} else {
+			lua_dostring_or_die(L, a);
+			n++;
 		}
 	}
+	if (n == 0)
+		usage(argv[0]);
+
 	info("scripts loaded in %.f ms", (now()-tm_start)*1e3);
 	
 	uv_run(loop, UV_RUN_DEFAULT);
