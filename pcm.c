@@ -7,6 +7,7 @@
 #include <uv.h>
 #include <lua.h>
 
+#include "prof.h"
 #include "pcm.h"
 #include "utils.h"
 
@@ -15,14 +16,29 @@ static int32_t tblvals[101] = {
 };
 static int32_t tblbase = 4096;
 
+static prof_t pf_dovol = {"pcm.dovol"};
+static prof_t pf_domix = {"pcm.domix"};
+
+prof_t *pf_pcm[] = {
+	&pf_domix,
+	&pf_dovol,
+	NULL,
+};
+
 void pcm_do_volume(void *_out, int len, float fvol) {
 	int16_t *out = (int16_t *)_out;
 	len /= 2;
 
-	if (fvol > 1)
-		fvol = 1;
-	else if (fvol < 0)
-		fvol = 0;
+	if (fvol > 1) {
+		// pass through
+		return;
+	} else if (fvol < 0) {
+		// set zero
+		memset(out, 0, len);
+		return;
+	}
+
+	prof_inc(&pf_dovol);
 
 	int vi = (int)(fvol*100);
 	int32_t a = tblvals[vi];
@@ -36,6 +52,8 @@ void pcm_do_volume(void *_out, int len, float fvol) {
 }
 
 void pcm_do_mix(void *_out, void *_in, int len) {
+	prof_inc(&pf_domix);
+
 	int16_t *out = (int16_t *)_out;
 	int16_t *in = (int16_t *)_in;
 

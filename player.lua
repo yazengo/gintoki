@@ -6,35 +6,55 @@ player = function (sink)
 
 	p.sink = sink
 
+	p.stat = 'stopped' 
+	p.paused = false
+
+	-- fetching / fetching_paused 
+	-- playing / playing_paused 
+	-- buffering / buffering_paused
+	-- changing_src
+	-- stopped
+
 	-- return {stat='buffering/playing/paused', url=..., dur=33}
 	-- return {stat='fetching'}
 	p.info = function ()
 	end
 
-	p.on_change = function (st)
-		set_immediate(function ()
-			info(st)
-		end)
+	p.on_change = function ()
+		if p.changed_cb then p.changed_cb() end
+	end
+
+	p.changed = function (cb)
+		p.changed_cb = cb
 	end
 
 	p.pause = function ()
-		if p.copy and p.copy.pause() then
-			p.on_change{stat='paused'}
-		end
+		if p.paused then return end
 		p.paused = true
+
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			p.copy.pause()
+			p.on_change()
+		elseif p.stat == 'fetching' then
+			p.src.cancel_fetch()
+			p.on_change()
+		end
 	end
 
 	p.resume = function ()
+		if not p.paused then return end
 		p.paused = false
-		if p.copy and p.copy.resume() then
-			local stat = (p.buffering and 'buffering') or 'playing'
-			p.on_change{stat=stat}
+
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			p.copy.resume()
+			p.on_change()
+		elseif p.stat == 'fetching' then
+			p.src.fetch(p.src_fetch)
+			p.on_change()
 		end
 	end
 
 	p.src_fetch = function (song)
-		p.fetching = false
-
 		if not isstring(song.url) then
 			panic('url must be set')
 		end
@@ -42,50 +62,58 @@ player = function (sink)
 		p.url = song.url
 		p.dec = audio.decoder(p.url)
 
-		p.on_change{stat='buffering'}
+		p.stat = 'buffering'
+		p.on_change()
 
 		p.dec.probed(function (d)
-			p.on_change{stat='probed'}
+			p.dur = d.dur
 		end)
 
 		local c = pipe.copy(p.dec, p.sink, 'bw')
 
-		c.buffering(1500, function (b)
-			if p.paused then return end
-			p.buffering = p
-			if b then
-				p.on_change{stat='buffering'}
-			else
-				p.on_change{stat='playing'}
+		c.buffering(1500, function (buffering)
+			if buffering and p.stat == 'playing' then
+				p.stat = 'buffering'
+				p.on_change()
+			elseif not buffering and p.stat == 'buffering' then
+				p.stat = 'playing'
+				p.on_change()
 			end
 		end)
 		
 		c.done(function ()
-			p.on_change{stat='fetching'}
+			info('done')
 			p.copy = nil
-			p.fetching = true
-			p.src.fetch(p.src_fetch)
+			p.stat = 'fetching'
+			if not p.paused then
+				p.src.fetch(p.src_fetch)
+			end
 		end)
 
 		p.copy = c
 	end
 
 	p.src_skip = function ()
-		if p.copy then p.copy.close() end
+		if p.stat == 'playing' or p.stat == 'buffering' then 
+			p.copy.close()
+		end
 	end
 
 	p.setsrc = function (src)
-		if p.stat == 'stopped' then
+		src.skip = p.src_skip
+
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			p.stat = 'changing_src'
+			p.copy.close()
+		elseif p.stat == 'fetching' and not p.paused then
+			p.src.cancel_fetch()
+			src.fetch(p.src_fetch)
+		elseif p.stat == 'stopped' then
 			p.stat = 'fetching'
+			src.fetch(p.src_fetch)
 		end
 
-		src.skip = p.src_skip
-		src.stop = p.src_stop
-
-		p.on_change{stat='fetching'}
 		p.src = src
-		p.src.fetch(p.src_fetch)
-
 		return p
 	end
 

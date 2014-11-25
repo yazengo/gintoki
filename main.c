@@ -14,9 +14,28 @@
 static void usage(char *prog) {
 	fprintf(stderr, "Usage: %s [lua files]\n", prog);
 	fprintf(stderr, "   -t 101        run test #101\n");
+	fprintf(stderr, "   -v/V          show version\n");
 	fprintf(stderr, "   -name=value   export name=value\n");
 	fprintf(stderr, "   -name         export name=1\n");
 	exit(-1);
+}
+
+#define BANNER "Gintoki " BUILDDATE " (" GITVER ") @ github.com/nareix/gintoki"
+
+static void version() {
+	puts("");
+	puts("  ==== " BANNER " ====");
+	puts("");
+	puts("    +------------------------------------------------------------+ ");
+	puts("    |                                                            | ");
+	puts("    |                                                            | ");
+	puts("    |                                                            | ");
+	puts("    |  ギャンブルのない人生なんてわさび抜きの寿司みてぇなもんだ  | ");
+	puts("    |                                                            | ");
+	puts("    |                                                            | ");
+	puts("    |                                                            | ");
+	puts("    +------------------------------------------------------------+ ");
+	puts("");
 }
 
 int main(int argc, char *argv[]) {
@@ -25,11 +44,13 @@ int main(int argc, char *argv[]) {
 	int i;
 	for (i = 1; i < argc; i++) {
 		char *a = argv[i];
-		if (!strcmp(a, "-h")) 
+		if (!strcmp(a, "-h")) {
 			usage(argv[0]);
-		else if (!strcmp(a, "-v")) {
-			printf("build %s\n", BUILDDATE);
-			printf("version %s\n", GITVER);
+		} else if (!strcmp(a, "-v")) {
+			puts(BANNER);
+			return 0;
+		} else if (!strcmp(a, "-V")) {
+			version();
 			return 0;
 		} else if (a[0] == '-') {
 			char *eq = strstr(a, "=");
@@ -44,7 +65,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	utils_preinit(loop);
-	info("starts");
+
+	info(BANNER);
 
 	lua_State *L = luaL_newstate();
 
@@ -84,7 +106,7 @@ int main(int argc, char *argv[]) {
 	if (n == 0)
 		usage(argv[0]);
 
-	info("scripts loaded in %.f ms", (now()-tm_start)*1e3);
+	info("loaded in %.f ms", (now()-tm_start)*1e3);
 	
 	uv_run(loop, UV_RUN_DEFAULT);
 	lua_close(L);

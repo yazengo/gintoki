@@ -4,20 +4,24 @@
 #include "utils.h"
 
 extern prof_t *pf_luv[];
+extern prof_t *pf_pcm[];
 extern prof_t *pf_objpool[];
 extern prof_t pf_immediate;
 
-static void walk(void (*cb)(prof_t *, void *), void *data) {
-	int i;
+typedef void (*walk_cb)(prof_t *, void *);
 
-	for (i = 0; pf_luv[i]; i++) {
-		prof_t *p = pf_luv[i];
-		cb(p, data);
+static void walk_list(prof_t *list[], walk_cb cb, void *data) {
+	prof_t **p = list;
+	while (*p) {
+		cb(*p, data);
+		p++;
 	}
-	for (i = 0; pf_objpool[i]; i++) {
-		prof_t *p = pf_objpool[i];
-		cb(p, data);
-	}
+}
+
+static void walk(walk_cb cb, void *data) {
+	walk_list(pf_luv, cb, data);
+	walk_list(pf_pcm, cb, data);
+	walk_list(pf_objpool, cb, data);
 	cb(&pf_immediate, data);
 }
 

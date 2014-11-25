@@ -22,7 +22,7 @@ luvmods += strsink
 luvmods += asrc aout amixer pcm
 luvmods += curl zpnp 
 
-exe ?= server${objsuffix}
+exe ?= gintoki
 now = $(shell date +'%Y%m%d-%H%M')
 
 config-mk = config$(if ${arch},-${arch},).mk

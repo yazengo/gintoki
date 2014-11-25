@@ -1,35 +1,35 @@
 
 require('player')
 require('audio')
+require('radio')
 require('cmd')
 
-S = {}
-
-S.urls = {
+s1 = radio.urls_list {
 	'testaudios/2s-1.mp3',
 	'testaudios/2s-2.mp3',
 	'testaudios/2s-3.mp3',
+	loop = true,
 }
-S.at = 1
 
-S.fetch = function (done)
-	set_timeout(function ()
-		done{url=S.urls[S.at]}
-		S.at = S.at + 1
-		local n = table.maxn(S.urls) 
-		if S.at > n then
-			S.stopped_cb()
-		end
-	end, 1000)
-end
+s2 = radio.urls_list {
+	'testaudios/10s-1.mp3',
+	'testaudios/10s-2.mp3',
+	'testaudios/10s-3.mp3',
+	loop = true,
+}
 
-S.cancel_fetch = function ()
-end
-
-p = player(audio.out()).setsrc(S)
+p = player(audio.out())
+p.changed(function ()
+	info(p.stat)
+end)
+p.setsrc(s1)
 
 input.cmds = {
-	[[ S.skip() ]],
-	[[ S.stop() ]],
+	[[ s1.skip() ]],
+	[[ s2.skip() ]],
+	[[ p.setsrc(s1) ]],
+	[[ p.setsrc(s2) ]],
+	[[ p.pause() ]],
+	[[ p.resume() ]],
 }
 

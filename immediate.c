@@ -94,8 +94,15 @@ static int luv_set_immediate(lua_State *L, uv_loop_t *loop) {
 	return 1;
 }
 
+static int luv_cancel_immediate(lua_State *L, uv_loop_t *loop) {
+	immediate_t *im = (immediate_t *)luv_toctx(L, 1);
+	cancel_immediate(im);
+	return 0;
+}
+
 void luv_immediate_init(lua_State *L, uv_loop_t *loop) {
 	queue_init(&immque);
 	luv_register(L, loop, "set_immediate", luv_set_immediate);
+	luv_register(L, loop, "cancel_immediate", luv_cancel_immediate);
 }
 

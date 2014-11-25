@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "prof.h"
 #include "luv.h"
 #include "pipe.h"
 #include "pcm.h"
