@@ -11,16 +11,23 @@ enum {
 	INIT,
 	READING,
 	WRITING,
-	CLOSED_WRITE,
+	CLOSING_READ,
 	CLOSING_WRITE,
 	CLOSED_READ,
+	CLOSED_WRITE,
 	CLOSED,
 };
+
+#define debugstat(p) debug("p=%p stat=%d wrstat=%d type=%d", p, p->stat, p->wrstat, p->type)
+#define panicstat(p) panic("invalid: p=%p stat=%d wrstat=%d type=%d", p, p->stat, p->wrstat, p->type)
 
 static void do_read(immediate_t *im) {
 	pipe_t *p = (pipe_t *)im->data;
 
-	debug("read stat=%d type=%d", p->stat, p->type);
+	debugstat(p);
+	if (p->rdstat != READING)
+		panicstat(p);
+	p->rdstat = INIT;
 
 	switch (p->stat) {
 	case WRITING:
@@ -43,12 +50,16 @@ static void do_read(immediate_t *im) {
 		break;
 
 	default:
-		panic("stat=%d type=%d invalid", p->stat, p->type);
+		panicstat(p);
 	}
 }
 
 void pdirect_read(pipe_t *p) {
-	debug("read");
+	debugstat(p);
+	if (p->rdstat != INIT)
+		panicstat(p);
+	p->rdstat = READING;
+
 	p->read.im_direct.data = p;
 	p->read.im_direct.cb = do_read;
 	set_immediate(luv_loop(p), &p->read.im_direct);
@@ -56,7 +67,11 @@ void pdirect_read(pipe_t *p) {
 
 static void do_write(immediate_t *im) {
 	pipe_t *p = (pipe_t *)im->data;
-	debug("write stat=%d", p->stat);
+
+	debugstat(p);
+	if (p->wrstat != WRITING)
+		panicstat(p);
+	p->wrstat = INIT;
 
 	switch (p->stat) {
 	case READING:
@@ -75,12 +90,17 @@ static void do_write(immediate_t *im) {
 		break;
 
 	default:
-		panic("stat=%d invalid", p->stat);
+		panicstat(p);
 	}
 }
 
 void pdirect_write(pipe_t *p) {
-	debug("write");
+	debugstat(p);
+
+	if (p->wrstat != INIT)
+		panicstat(p);
+	p->wrstat = WRITING;
+
 	p->write.im_direct.data = p;
 	p->write.im_direct.cb = do_write;
 	set_immediate(luv_loop(p), &p->write.im_direct);
@@ -94,7 +114,10 @@ static void do_close(pipe_t *p) {
 static void close_read(immediate_t *im) {
 	pipe_t *p = (pipe_t *)im->data;
 
-	debug("close stat=%d", p->stat);
+	debugstat(p);
+	if (p->rdstat != CLOSING_READ)
+		panicstat(p);
+	p->rdstat = INIT;
 
 	switch (p->stat) {
 	case INIT:
@@ -103,7 +126,6 @@ static void close_read(immediate_t *im) {
 
 	case READING:
 		p->stat = CLOSED_READ;
-		// need not call read.done
 		break;
 
 	case WRITING:
@@ -122,12 +144,17 @@ static void close_read(immediate_t *im) {
 		break;
 
 	default:
-		panic("stat=%d invalid", p->stat);
+		panicstat(p);
 	}
 }
 
 void pdirect_close_read(pipe_t *p) {
-	debug("close");
+	pdirect_cancel_read(p);
+
+	if (p->rdstat != INIT)
+		panicstat(p);
+	p->rdstat = CLOSING_READ;
+
 	p->close_read.im.data = p;
 	p->close_read.im.cb = close_read;
 	set_immediate(luv_loop(p), &p->close_read.im);
@@ -135,6 +162,11 @@ void pdirect_close_read(pipe_t *p) {
 
 static void close_write(immediate_t *im) {
 	pipe_t *p = (pipe_t *)im->data;
+
+	debugstat(p);
+	if (p->wrstat != CLOSING_WRITE)
+		panicstat(p);
+	p->wrstat = INIT;
 
 	switch (p->stat) {
 	case INIT:
@@ -155,26 +187,49 @@ static void close_write(immediate_t *im) {
 		break;
 
 	default:
-		panic("stat=%d invalid", p->stat);
+		panicstat(p);
 	}
 }
 
 void pdirect_close_write(pipe_t *p) {
-	debug("close");
+	pdirect_cancel_write(p);
+
+	if (p->wrstat != INIT)
+		panicstat(p);
+	p->wrstat = CLOSING_WRITE;
+
 	p->close_write.im.data = p;
 	p->close_write.im.cb = close_write;
 	set_immediate(luv_loop(p), &p->close_write.im);
 }
 
 void pdirect_cancel_read(pipe_t *p) {
-	if (p->stat == READING)
-		p->stat = INIT;
+	debugstat(p);
+	if (p->rdstat == READING) {
+		cancel_immediate(&p->read.im_direct);
+		p->rdstat = INIT;
+	}
 }
 
 void pdirect_cancel_write(pipe_t *p) {
-	if (p->stat == WRITING) {
-		pipebuf_unref(p->direct.pool);
-		p->stat = INIT;
+	debugstat(p);
+	if (p->wrstat == WRITING) {
+		cancel_immediate(&p->write.im_direct);
+		p->wrstat = INIT;
 	}
+	if (p->stat == WRITING) {
+		p->stat = INIT;
+		pipebuf_unref(p->direct.pool);
+	}
+}
+
+static int luv_pdirect(lua_State *L, uv_loop_t *loop) {
+	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
+	p->type = PDIRECT_SINK;
+	return 1;
+}
+
+void luv_pdirect_init(lua_State *L, uv_loop_t *loop) {
+	luv_register(L, loop, "pdirect", luv_pdirect);
 }
 

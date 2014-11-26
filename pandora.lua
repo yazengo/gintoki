@@ -433,51 +433,57 @@ P.auto_auth = function (c, call, done, fail)
 end
 
 P.setopt_genres_choose = function (o, done, fail)
-	local task = P.restart()
+	local task = P.restart_and_fetch_songs()
 
 	local c = table.copy(P.cookie)
 	c.station_id = nil
 	c.genres_id = o.id
 
-	local fail = function (err)
+	task.on_fail = function (err)
 		done{result=1, msg=err}
-		task.fail(err)
 	end
 
 	task.on_done = function (r, c)
 		P.setcookie(c)
+		done{result=0}
+		task.finish(r)
+	end
+
+	task.on_cancelled = function ()
+		done{result=1, msg='cancelled'}
 	end
 
 	P.auto_auth(c, P.choose_genres, function (r)
 		c.station_id = r.stationId
 		P.auto_auth(c, P.songs_list, function (r)
-			done{result=0}
 			task.done(r, c)
-		end, fail)
-	end, fail)
+		end, task.fail)
+	end, task.fail)
 end
 
 P.setopt_station_choose = function (o, done)
-	local task = P.restart()
+	local task = P.restart_and_fetch_songs()
 
 	local c = table.copy(P.cookie)
 	c.station_id = o.id
 
+	task.on_fail = function (err)
+		done{result=1, msg=err}
+	end
+
 	task.on_done = function (r, c)
 		P.setcookie(c)
+		done{result=0}
+		task.finish(r)
 	end
 
 	P.auto_auth(c, P.songs_list, function (r)
-		done{result=0}
 		task.done(r, c)
-	end, function (err)
-		done{result=1, msg=err}
-		task.fail(err)
-	end)
+	end, task.fail)
 end
 
 P.setopt_login = function (o, done)
-	local task = P.restart()
+	local task = P.restart_and_fetch_songs()
 
 	local c = table.copy(P.cookie)
 	P.clean_user_cookie(c)
@@ -486,15 +492,17 @@ P.setopt_login = function (o, done)
 
 	task.on_done = function (r, c)
 		P.setcookie(c)
+		task.finish(r)
+		done{result=0}
+	end
+
+	task.on_fail = function (err)
+		done{result=1, msg=err}
 	end
 
 	P.auto_auth(c, P.songs_list, function (r)
-		done{result=0}
 		task.done(r, c)
-	end, function (err)
-		done{result=1, msg=err}
-		task.fail(err)
-	end)
+	end, task.fail)
 end
 
 P.setopt_genres_list = function (o, done)
@@ -565,21 +573,17 @@ P.info = function ()
 	return { type = 'pandora' }
 end
 
-P.fetch = function ()
+P.prefetch_songs = function (task)
 	local c = table.copy(P.cookie)
-	local task = radio.canceller()
 
 	task.on_done = function (r, c)
 		P.setcookie(c)
+		task.finish(r)
 	end
 
 	P.auto_auth(c, P.songs_list, function (r)
 		task.done(r, c)
-	end, function (err)
-		task.fail(err)
-	end)
-
-	return task
+	end, task.fail)
 end
 
 P.init = function ()

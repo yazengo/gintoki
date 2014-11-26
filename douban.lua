@@ -167,7 +167,6 @@ D.songs_list = function (c, done)
 			elseif r.msg then
 				done(nil, 'invalid_token')
 			elseif r.r == 1 then
-				D.debug(r)
 				done(nil, 'wrong_channel')
 			else
 				done(nil, 'server_error')
@@ -270,24 +269,19 @@ D.auto_auth = function (c, call, done, fail)
 	end
 end
 
-D.fetch = function ()
-	local task = radio.canceller()
-
+D.prefetch_songs = function (task)
 	task.on_done = function (r, c)
 		if c then D.setcookie(c) end
+		task.finish(r)
 	end
 
 	D.auto_auth(D.cookie, D.songs_list, function (c, r)
 		task.done(r, c)
-	end, function (err)
-		task.fail(err)
-	end)
-
-	return task
+	end, task.fail)
 end
 
 D.setopt_login = function (o, done)
-	local task = D.restart()
+	local task = D.restart_and_fetch_songs()
 
 	local c = table.copy(D.cookie)
 	c.username = o.username
@@ -298,37 +292,52 @@ D.setopt_login = function (o, done)
 
 	task.on_done = function (r, c)
 		if c then D.setcookie(c) end
+		done{result=0, icon=c.icon, name=c.name}
+		task.finish(r)
+	end
+
+	task.on_fail = function (err)
+		done{result=1, msg=err}
+	end
+
+	task.on_cancelled = function ()
+		done{result=1, msg='cancelled'}
 	end
 
 	D.auto_auth(c, D.songs_list, function (c, r)
 		if not c or not c.username then
-			fail('invalid password')
+			task.fail('invalid_password')
 			return
 		end
-
-		done{result=0, icon=c.icon, name=c.name}
 		task.done(r, c)
 	end, function (err)
-		done{result=1, msg=err}
 		task.fail(err)
 	end)
 end
 
 D.setopt_channel_choose = function (o, done) 
-	local task = D.restart()
+	local task = D.restart_and_fetch_songs()
 
 	local c = table.copy(D.cookie)
 	c.channel = o.id
 
-	task.on_done = function ()
+	task.on_done = function (r, c)
 		if c then D.setcookie(c) end
+		done{result=0}
+		task.finish(r)
+	end
+
+	task.on_fail = function (err)
+		done{result=1, msg=err}
+	end
+
+	task.on_cancelled = function ()
+		done{result=1, msg='cancelled'}
 	end
 
 	D.auto_auth(c, D.songs_list, function (c, r)
-		done{result=0}
 		task.done(r, c)
 	end, function (err)
-		done{result=1, msg=err}
 		task.fail(err)
 	end)
 end
@@ -346,7 +355,7 @@ D.setopt_channels_list = function (o, done)
 end
 
 D.setopt_logout = function (o, done)
-	local task = D.restart()
+	local task = D.restart_and_fetch_songs()
 
 	local c = D.cookie
 	c.username = nil
@@ -355,15 +364,23 @@ D.setopt_logout = function (o, done)
 	c.name = nil
 	c.icon = nil
 
-	task.on_done = function ()
+	task.on_done = function (r, c)
 		D.setcookie(c)
+		done{result=0}
+		task.finish(r)
+	end
+
+	task.on_fail = function (err)
+		done{result=1, msg=err}
+	end
+
+	task.on_cancelled = function ()
+		done{result=1, msg='cancelled'}
 	end
 
 	D.auto_auth(c, D.songs_list, function (c, r)
-		done{result=0}
 		task.done(r, c)
 	end, function (err)
-		done{result=1, msg=err}
 		task.fail(err)
 	end)
 end
@@ -414,10 +431,6 @@ end
 
 D.info = function ()
 	return { type = 'douban' }
-end
-
-D.debug = function (...)
-	if D.verbose then info(...) end
 end
 
 D.init = function ()

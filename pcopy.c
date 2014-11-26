@@ -25,49 +25,53 @@ enum {
 };
 
 enum {
-	DONT_CLOSE_WRITE = (1<<0),
-	FIRST_CB         = (1<<1),
+	NEED_CLOSE_WRITE = (1<<0),
+	NEED_CLOSE_READ  = (1<<1),
+	FIRST_CB         = (3<<2),
 };
 
 static void copy(pcopy_t *c);
 
-static void close_all(pcopy_t *c) {
-	debug("close");
+static void close_all(pcopy_t *c, const char *reason) {
+	debug("c=%p", c);
 
 	c->stat = CLOSED;
 
-	if (!(c->flags & DONT_CLOSE_WRITE))
+	if (c->flags & NEED_CLOSE_WRITE)
 		pipe_close_write(c->sink);
-	pipe_close_read(c->src);
+	if (c->flags & NEED_CLOSE_READ)
+		pipe_close_read(c->src);
 
-	luv_callfield(c, "done_cb", 0, 0);
+	debug("c=%p reason=%s", c, reason);
+	lua_pushstring(luv_state(c), reason);
+	luv_callfield(c, "done_cb", 1, 0);
 	luv_unref(c);
 }
 
 static void write_done(pipe_t *sink, int stat) {
-	pcopy_t *c = sink->copy;
+	pcopy_t *c = (pcopy_t *)sink->write.data;
 
 	if (stat < 0) {
-		debug("write eof");
-		close_all(c);
+		debug("eof c=%p", c);
+		close_all(c, "w");
 		return;
 	}
 
 	c->tx += PIPEBUF_SIZE;
 
 	if (c->stat != WRITING)
-		panic("stat=%d invalid", c->stat);
+		panic("c=%p c.stat=%d p=%p invalid", c, c->stat, sink);
 	c->stat = INIT;
 
 	copy(c);
 }
 
 static void read_done(pipe_t *src, pipebuf_t *pb) {
-	pcopy_t *c = src->copy;
+	pcopy_t *c = (pcopy_t *)src->read.data;
 
 	if (pb == NULL) {
-		debug("read eof");
-		close_all(c);
+		debug("eof c=%p", c);
+		close_all(c, "r");
 		return;
 	}
 
@@ -81,7 +85,7 @@ static void read_done(pipe_t *src, pipebuf_t *pb) {
 		panic("stat=%d invalid", c->stat);
 	c->stat = WRITING;
 
-	debug("done");
+	debug("write c=%p p=%p", c->sink);
 	pipe_write(c->sink, pb, write_done);
 }
 
@@ -90,15 +94,14 @@ static void copy(pcopy_t *c) {
 		panic("stat=%d invalid", c->stat);
 	c->stat = READING;
 
-	debug("read");
+	debug("read c=%p p=%p", c, c->src);
 	pipe_read(c->src, read_done);
 }
 
 static void im_close(immediate_t *im) {
 	pcopy_t *c = (pcopy_t *)im->data;
 
-	debug("close");
-	close_all(c);
+	close_all(c, "c");
 }
 
 static void pcopy_close(pcopy_t *c) {
@@ -199,8 +202,9 @@ static int luv_pcopy(lua_State *L, uv_loop_t *loop) {
 
 	c->src = src;
 	c->sink = sink;
-	src->copy = c;
-	sink->copy = c;
+
+	src->read.data = c;
+	sink->write.data = c;
 
 	luv_pushcclosure(L, pcopy_setopt, c);
 	lua_setfield(L, -2, "setopt");
@@ -212,12 +216,16 @@ static int luv_pcopy(lua_State *L, uv_loop_t *loop) {
 			src->read.mode = PREAD_BLOCK;
 			break;
 		case 'w':
-			c->flags |= DONT_CLOSE_WRITE;
+			c->flags |= NEED_CLOSE_WRITE;
+			break;
+		case 'r':
+			c->flags |= NEED_CLOSE_READ;
 			break;
 		}
 		m++;
 	}
 
+	debug("new c=%p src=%p sink=%p", c, src, sink);
 	copy(c);
 
 	return 1;

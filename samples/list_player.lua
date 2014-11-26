@@ -18,18 +18,29 @@ s2 = radio.urls_list {
 	loop = true,
 }
 
-p = player(audio.out())
-p.changed(function ()
-	info(p.stat)
+p = player.new()
+c = pipe.copy(p, audio.out(), 'br')
+
+p.closed(function ()
+	info('closed')
 end)
+
+p.changed(function (r)
+	info(r)
+end)
+
 p.setsrc(s1)
 
 input.cmds = {
 	[[ s1.skip() ]],
 	[[ s2.skip() ]],
+	[[ s1.close() ]],
+	[[ s2.close() ]],
 	[[ p.setsrc(s1) ]],
 	[[ p.setsrc(s2) ]],
 	[[ p.pause() ]],
 	[[ p.resume() ]],
+	[[ c.close() ]],
+	[[ info(p.pos()) ]],
 }
 

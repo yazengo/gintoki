@@ -13,7 +13,7 @@ cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
 cobjs += curl.o http_parser.o zpnp.o
 
-luvmods += pipebuf
+luvmods += pipebuf pdirect pipe
 luvmods += utils os timer immediate
 luvmods += prof
 luvmods += blowfish base64 sha1 

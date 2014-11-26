@@ -28,8 +28,6 @@ typedef struct {
 
 	int stat;
 	float vol;
-
-	immediate_t im_close;
 } track_t;
 
 enum {

@@ -8,12 +8,16 @@ pipe.copy = function (src, sink, mode)
 	local r = pcopy(src, sink, mode)
 
 	r.done = function (cb)
-		r.done_cb = function ()
+		r.done_cb = function (...)
 			if r.bufing then clear_interval(r.bufing.timer) end
-			cb()
+			cb(...)
 		end
 		return r
 	end 
+
+	r.rx = function ()
+		return r.setopt('get.rx')
+	end
 
 	r.pause = function ()
 		return r.setopt('pause')
@@ -31,7 +35,7 @@ pipe.copy = function (src, sink, mode)
 		local bufing = {}
 
 		bufing.check = function ()
-			local rx = r.setopt('get.rx')
+			local rx = r.rx()
 			local delta = rx - bufing.rx
 
 			if delta == 0 and bufing.delta > 0 then

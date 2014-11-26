@@ -5,6 +5,10 @@ audio = {}
 
 audio.out = aout
 
+audio.noise = function ()
+	return asrc('noise')
+end
+
 audio.decoder = function (url)
 	local p = pexec(string.format('avconv -i %s -f s16le -ar 44100 -ac 2 -', url), 're')
 	local d = {p[1]}
@@ -106,7 +110,7 @@ audio.pipe = function (...)
 
 	local c
 	for i = 1, n-1 do 
-		c = pipe.copy(a[i][2], a[i+1][1], 'b')
+		c = pipe.copy(a[i][2], a[i+1][1], 'brw')
 	end
 
 	r.done = c.done

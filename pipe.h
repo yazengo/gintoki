@@ -7,7 +7,6 @@
 #include "queue.h"
 
 struct pipe_s;
-struct pcopy_s;
 
 typedef void (*pipe_read_cb)(struct pipe_s *p, pipebuf_t *pb);
 typedef void (*pipe_write_cb)(struct pipe_s *p, int stat);
@@ -25,8 +24,6 @@ typedef struct pipe_s {
 	int stat;
 	int rdstat;
 	int wrstat;
-
-	struct pcopy_s *copy;
 
 	struct {
 		pipebuf_t *pb;

@@ -117,3 +117,20 @@ void pipe_cancel_write(pipe_t *p) {
 	}
 }
 
+static int pclose_read(lua_State *L, uv_loop_t *loop) {
+	pipe_t *p = (pipe_t *)luv_toctx(L, 1);
+	pipe_close_read(p);
+	return 0;
+}
+
+static int pclose_write(lua_State *L, uv_loop_t *loop) {
+	pipe_t *p = (pipe_t *)luv_toctx(L, 1);
+	pipe_close_write(p);
+	return 0;
+}
+
+void luv_pipe_init(lua_State *L, uv_loop_t *loop) {
+	luv_register(L, loop, "pclose_read", pclose_read);
+	luv_register(L, loop, "pclose_write", pclose_write);
+}
+
