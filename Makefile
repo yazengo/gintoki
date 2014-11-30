@@ -39,7 +39,7 @@ cflags-main += -DGITVER=\"${gitver}\" -DLUVINIT="${luvinit}" -DBUILDDATE=\"${now
 
 main.o: ${config-mk} Makefile
 
-%${objsuffix}.o: %.c $(hsrcs)
+%.o: %.c $(hsrcs)
 	$(CC) $(cflags) $(cflags-$*) -c -o $@ $<
 
 ${exe}: ${cobjs}

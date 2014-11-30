@@ -47,8 +47,16 @@ void *aoutdev_new() {
 	info("done");
 }
 
+void aoutdev_write(void *_dev, void *buf, int len) {
+	jzcodec_t *jz = (jzcodec_t *)_dev;
+	write(jz->fd, buf, len);
+}
+
 void aoutdev_close(void *_dev) {
 	jzcodec_t *jz = (jzcodec_t *)_dev;
 	close(jz->fd);
+}
+
+void aoutdev_init() {
 }
 

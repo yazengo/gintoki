@@ -30,7 +30,7 @@ static const char *libao_strerror(int e) {
 	return "?";
 }
 
-void aoutdev_play(void *_dev, void *buf, int len) {
+void aoutdev_write(void *_dev, void *buf, int len) {
 	ao_device *dev = (ao_device *)_dev;
 	ao_play(dev, buf, len);
 }
@@ -60,5 +60,9 @@ void *aoutdev_new() {
 void aoutdev_close(void *_dev) {
 	ao_device *dev = (ao_device *)_dev;
 	ao_close(dev);
+}
+
+void aoutdev_init() {
+	ao_initialize();
 }
 

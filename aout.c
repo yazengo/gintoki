@@ -31,9 +31,9 @@ static void play_thread(uv_work_t *w) {
 	aout_t *ao = (aout_t *)p->read.data;
 	pipebuf_t *pb = ao->pb;
 
-	debug("n=%d", PIPEBUF_SIZE);
-	aoutdev_play(ao->dev, pb->base, PIPEBUF_SIZE);
-	debug("n=%d", PIPEBUF_SIZE);
+	debug("start n=%d", PIPEBUF_SIZE);
+	aoutdev_write(ao->dev, pb->base, PIPEBUF_SIZE);
+	debug("end   n=%d", PIPEBUF_SIZE);
 }
 
 static void play_done(uv_work_t *w, int stat) {
@@ -76,8 +76,7 @@ int luv_aout(lua_State *L, uv_loop_t *loop) {
 }
 
 void luv_aout_init(lua_State *L, uv_loop_t *loop) {
-	ao_initialize();
-
+	aoutdev_init();
 	luv_register(L, loop, "aout", luv_aout);
 }
 

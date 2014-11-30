@@ -99,11 +99,25 @@ static void test_luv(lua_State *L, uv_loop_t *loop) {
 	lua_dostring_or_die(L, "threadtest(function (r) info(r) end)");
 }
 
+static void fsopen_done(uv_fs_t *req) {
+	uv_fs_req_cleanup(req);
+	free(req);
+}
+
+static void test_fsopen(uv_loop_t *loop) {
+	uv_fs_t *req = (uv_fs_t *)zalloc(sizeof(uv_fs_t));
+	char *path = "/dev/null";
+	debug("open %s", path);
+	uv_fs_open(loop, req, path, O_RDONLY, 0644, fsopen_done);
+}
+
 void run_test(int i, lua_State *L, uv_loop_t *loop, char **argv) {
 	info("i=%d", i);
 	if (i == 1)
 		test_luv(L, loop);
 	if (i == 2)
 		test_blowfish();
+	if (i == 3)
+		test_fsopen(loop);
 }
 
