@@ -34,6 +34,9 @@ static int __gc(lua_State *L) {
 	lua_getfield(L, 1, "_ctx");
 	luv_t *l = (luv_t *)lua_touserptr(L, -1);
 
+	lua_pushnil(L);
+	lua_setfield(L, 1, "_ctx");
+
 	if (l->gc)
 		l->gc(l->loop, (void *)l + sizeof(luv_t));
 
@@ -174,12 +177,15 @@ void luv_pushctx(lua_State *L, void *_l) {
 void *luv_toctx(lua_State *L, int i) {
 	prof_inc(&pf_toctx);
 
+	
 	lua_getfield(L, i, "_ctx");
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return NULL;
+	} 
+
 	luv_t *l = (luv_t *)lua_touserptr(L, -1);
 	lua_pop(L, 1);
-
-	if (l == NULL)
-		return NULL;
 	return (void *)l + sizeof(luv_t);
 }
 

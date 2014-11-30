@@ -44,8 +44,12 @@ static int set_interval(lua_State *L, uv_loop_t *loop) {
 
 static int clear_timer(lua_State *L, uv_loop_t *loop) {
 	uv_timer_t *t = (uv_timer_t *)luv_toctx(L, 1);
-	uv_timer_stop(t);
-	timer_close(t);
+
+	if (t && !uv_is_closing((uv_handle_t *)t)) {
+		uv_timer_stop(t);
+		timer_close(t);
+	}
+
 	return 0;
 }
 

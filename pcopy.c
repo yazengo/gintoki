@@ -12,7 +12,8 @@ typedef struct pcopy_s {
 	unsigned flags;
 	int stat;
 	int tx, rx;
-	immediate_t im;
+	immediate_t im_close;
+	immediate_t im_first_cb;
 } pcopy_t;
 
 enum {
@@ -66,6 +67,12 @@ static void write_done(pipe_t *sink, int stat) {
 	copy(c);
 }
 
+static void im_first_cb(immediate_t *im) {
+	pcopy_t *c = (pcopy_t *)im->data;
+
+	luv_callfield(c, "first_cb", 0, 0);
+}
+
 static void read_done(pipe_t *src, pipebuf_t *pb) {
 	pcopy_t *c = (pcopy_t *)src->read.data;
 
@@ -76,7 +83,9 @@ static void read_done(pipe_t *src, pipebuf_t *pb) {
 	}
 
 	if (c->rx == 0 && (c->flags & FIRST_CB)) {
-		luv_callfield(c, "first_cb", 0, 0);
+		c->im_first_cb.data = c;
+		c->im_first_cb.cb = im_first_cb;
+		set_immediate(luv_loop(c), &c->im_first_cb);
 	}
 
 	c->rx += PIPEBUF_SIZE;
@@ -120,9 +129,9 @@ static void pcopy_close(pcopy_t *c) {
 	}
 
 	c->stat = CLOSING;
-	c->im.data = c;
-	c->im.cb = im_close;
-	set_immediate(luv_loop(c), &c->im);
+	c->im_close.data = c;
+	c->im_close.cb = im_close;
+	set_immediate(luv_loop(c), &c->im_close);
 }
 
 static int pcopy_pause(pcopy_t *c) {

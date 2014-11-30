@@ -14,14 +14,13 @@ p1 = player.new().setsrc(radio.urls_list{
 	loop=true,
 })
 
-p2 = player.new().setstr(radio.urls_list{
-	'testaudios/2s-1.mp3',
+p2 = player.new().setsrc(radio.urls_list{
 	'testaudios/2s-2.mp3',
 	'testaudios/2s-3.mp3',
-	loop=true,
 })
 
-mc = pipe.copy(p1, ao)
+c = pipe.copy(p1, ao, 'b')
+n = 0
 
 breakin = function (src)
 	if c then
@@ -29,15 +28,19 @@ breakin = function (src)
 	end
 
 	if type(src) == 'string' then src = audio.decoder(src) end
-	mc.pause()
-	c = pipe.copy(src, ao, 'b').done(function ()
-		mc.resume()
+	n = n + 1
+
+	c = pipe.copy(src, ao, 'br').done(function ()
+		n = n - 1
+		if n == 0 then
+			c = pipe.copy(p1, ao, 'b')
+		end
 	end)
 end
 
 input.cmds = {
 	[[ breakin('testaudios/2s-1.mp3') ]],
-	[[ breakin('testaudios/10s-1.mp3') ]],
-	[[ breakin(p2) ]],
+	[[ breakin('testaudios/10s-2.mp3') ]],
+	[[ breakin(p2); p2 = nil ]],
 }
 

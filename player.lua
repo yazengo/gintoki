@@ -16,11 +16,6 @@ player.new = function ()
 	-- stopped
 	-- closed
 
-	-- return {stat='buffering/playing/paused', url=..., dur=33}
-	-- return {stat='fetching'}
-	p.info = function ()
-	end
-
 	p.pos = function ()
 		if p.stat == 'playing' or p.stat == 'buffering' then
 			return p.copy.rx() / (44100*4)
@@ -31,13 +26,13 @@ player.new = function ()
 		local r = {stat=p.stat}
 		if p.paused and r.stat == 'playing' then r.stat = 'paused' end
 		set_immediate(function ()
-			if r.stat == 'closed' and p.closed_cb then p.closed_cb() end
+			if r.stat == 'closed' and p.done_cb then p.done_cb() end
 			if p.changed_cb then p.changed_cb(r) end
 		end)
 	end
 
-	p.closed = function (cb)
-		p.closed_cb = cb
+	p.done = function (cb)
+		p.done_cb = cb
 	end
 
 	p.changed = function (cb)
@@ -136,6 +131,8 @@ player.new = function ()
 			p.copy.close()
 			p.stat = 'closing'
 		elseif p.stat == 'fetching' then
+			info('close write')
+			pclose_write(p)
 			p.src.cancel_fetch()
 			p.stat = 'closed'
 			p.on_change()

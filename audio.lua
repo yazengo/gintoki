@@ -10,8 +10,15 @@ audio.noise = function ()
 end
 
 audio.decoder = function (url)
-	local p = pexec(string.format('avconv -i %s -f s16le -ar 44100 -ac 2 -', url), 're')
-	local d = {p[1]}
+	local mode = 're'
+
+	if not url then
+		url = '-'
+		mode = 'wer'
+	end
+
+	local p = pexec(string.format('avconv -i %s -f s16le -ar 44100 -ac 2 -', url), mode)
+	local d = {p[1], p[3]}
 
 	d.probed = function (cb)
 		d.probed_cb = cb

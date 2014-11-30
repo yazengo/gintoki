@@ -16,14 +16,16 @@ prof_t pf_immediate = {"immediate"};
 static queue_t immque;
 
 void run_immediate() {
+	debug("start");
 	queue_t *q;
 	queue_foreach(q, &immque) {
 		immediate_t *im = queue_data(q, immediate_t, q);
-		queue_remove(&im->q);
 
 		im->cb(im);
 		im->cb = NULL;
 	}
+	debug("end");
+	queue_init(&immque);
 }
 
 static void immediate_closed_async(uv_handle_t *h) {

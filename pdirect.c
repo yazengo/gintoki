@@ -198,6 +198,7 @@ void pdirect_close_write(pipe_t *p) {
 		panicstat(p);
 	p->wrstat = CLOSING_WRITE;
 
+	debug("p=%p", p);
 	p->close_write.im.data = p;
 	p->close_write.im.cb = close_write;
 	set_immediate(luv_loop(p), &p->close_write.im);

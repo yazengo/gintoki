@@ -381,15 +381,18 @@ P.stations_list = function (c, done)
 	}
 end
 
-P.auto_auth = function (c, call, done, fail)
+P.auto_auth = function (c, call, done, fail, log)
+	log = log or function () end
+
 	local choose_default_station = function ()
+		log('getting default station')
 		P.stations_list(c, function (r, err)
 			if err then
 				fail(err)
 			end
 			c.station_id = r[1].id
-			info('station_id', c.station_id)
 
+			log('fetching songs')
 			call(c, function (r, err)
 				if err then fail(err) else done(r) end
 			end)
@@ -397,6 +400,7 @@ P.auto_auth = function (c, call, done, fail)
 	end
 
 	local login = function ()
+		log('login')
 		P.login(c, function (r, err)
 			if err then
 				fail(err)
@@ -409,18 +413,16 @@ P.auto_auth = function (c, call, done, fail)
 	end
 	
 	if not c.username or not c.password then
-		set_timeout(function ()
-			fail('need_auth')
-		end, 0)
+		set_immediate(function () fail('need_auth') end)
 		return
 	end
 
 	if not P.has_all_user_cookie(c) then
-		info('try login', c)
 		login()
 		return
 	end
 
+	log('fetching songs')
 	call(c, function (r, err)
 		if not err then
 			done(r)
@@ -446,7 +448,6 @@ P.setopt_genres_choose = function (o, done, fail)
 	task.on_done = function (r, c)
 		P.setcookie(c)
 		done{result=0}
-		task.finish(r)
 	end
 
 	task.on_cancelled = function ()
@@ -474,7 +475,6 @@ P.setopt_station_choose = function (o, done)
 	task.on_done = function (r, c)
 		P.setcookie(c)
 		done{result=0}
-		task.finish(r)
 	end
 
 	P.auto_auth(c, P.songs_list, function (r)
@@ -492,7 +492,6 @@ P.setopt_login = function (o, done)
 
 	task.on_done = function (r, c)
 		P.setcookie(c)
-		task.finish(r)
 		done{result=0}
 	end
 
@@ -502,7 +501,7 @@ P.setopt_login = function (o, done)
 
 	P.auto_auth(c, P.songs_list, function (r)
 		task.done(r, c)
-	end, task.fail)
+	end, task.fail, task.log)
 end
 
 P.setopt_genres_list = function (o, done)
@@ -569,21 +568,18 @@ P.info_login = function ()
 	return {login=true, username=D.cookie.username, password=D.cookie.password}
 end
 
-P.info = function ()
-	return { type = 'pandora' }
-end
+P.name = 'pandora'
 
 P.prefetch_songs = function (task)
 	local c = table.copy(P.cookie)
 
 	task.on_done = function (r, c)
 		P.setcookie(c)
-		task.finish(r)
 	end
 
 	P.auto_auth(c, P.songs_list, function (r)
 		task.done(r, c)
-	end, task.fail)
+	end, task.fail, task.log)
 end
 
 P.init = function ()

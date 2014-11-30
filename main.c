@@ -7,6 +7,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
+#include "strbuf.h"
 #include "utils.h"
 #include "cjson.h"
 #include "tests.h"
@@ -16,6 +17,7 @@ static void usage(char *prog) {
 	fprintf(stderr, "   -t 101        run test #101\n");
 	fprintf(stderr, "   -v/V          show version\n");
 	fprintf(stderr, "   -name=value   export name=value\n");
+	fprintf(stderr, "   +name=value   export name=$name:value\n");
 	fprintf(stderr, "   -name         export name=1\n");
 	exit(-1);
 }
@@ -39,6 +41,34 @@ static void version() {
 	puts("");
 }
 
+static void append_env(char *k) {
+	char *v = strstr(k, "=");
+	if (v == NULL)
+		return;
+	*v++ = 0;
+
+	strbuf_t *sb = strbuf_new(128);
+	char *old = getenv(k);
+	if (old == NULL) {
+		strbuf_append_fmt_retry(sb, "%s=%s", k, v);
+	} else {
+		strbuf_append_fmt_retry(sb, "%s=%s:%s", k, old, v);
+	}
+	putenv(sb->buf);
+}
+
+static void assign_env(char *k) {
+	char *eq = strstr(k, "=");
+
+	strbuf_t *sb = strbuf_new(128);
+	if (eq == NULL) {
+		strbuf_append_fmt_retry(sb, "%s=1", k);
+	} else {
+		strbuf_append_fmt_retry(sb, "%s", k);
+	}
+	putenv(sb->buf);
+}
+
 int main(int argc, char *argv[]) {
 	uv_loop_t *loop = uv_default_loop();
 
@@ -54,14 +84,9 @@ int main(int argc, char *argv[]) {
 			version();
 			return 0;
 		} else if (a[0] == '-') {
-			char *eq = strstr(a, "=");
-			char *env;
-			if (eq) {
-				env = strdup(a+1);
-			} else {
-				env = strcat(strdup(a+1), "=1");
-			}
-			putenv(env);
+			assign_env(a+1);
+		} else if (a[0] == '+') {
+			append_env(a+1);
 		}
 	}
 
@@ -94,7 +119,7 @@ int main(int argc, char *argv[]) {
 				n++;
 			}
 			i++;
-		} else if (a[0] == '-') {
+		} else if (a[0] == '-' || a[0] == '+') {
 			// already handled
 		} else if (strlen(a) > 4 && !strcmp(a+strlen(a)-4, ".lua")) {
 			lua_dofile_or_die(L, a);

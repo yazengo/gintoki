@@ -63,7 +63,6 @@ D.setcookie = function (c)
 end
 
 D.curl = function (p)
-	p.retry = 1000
 	if p.access_token then
 		p.headers = {
 			Authorization = 'Bearer ' .. p.access_token,
@@ -220,7 +219,9 @@ D.rate = function (c, type, sid, done)
 	D.report(table.add({id=sid, type=type}, D.cookie), done)
 end
 
-D.auto_auth = function (c, call, done, fail) 
+D.auto_auth = function (c, call, done, fail, log) 
+	log = log or function () end
+
 	local do_call = function ()
 		call(c, function (r, err)
 			if err then fail(err) else done(c, r) end
@@ -228,6 +229,7 @@ D.auto_auth = function (c, call, done, fail)
 	end
 
 	local login = function ()
+		log('login')
 		D.user_login(c, function (r, err)
 			if not err then
 				c.name = r.name
@@ -248,6 +250,7 @@ D.auto_auth = function (c, call, done, fail)
 	end
 
 	local change_default_channel = function ()
+		log('fetching songs in default channel')
 		c.channel = 0
 		do_call()
 	end
@@ -255,6 +258,7 @@ D.auto_auth = function (c, call, done, fail)
 	if c.username and not c.access_token then
 		login()
 	else
+		log('fetching songs')
 		call(c, function (r, err)
 			if not err then
 				done(nil, r)
@@ -272,12 +276,11 @@ end
 D.prefetch_songs = function (task)
 	task.on_done = function (r, c)
 		if c then D.setcookie(c) end
-		task.finish(r)
 	end
 
 	D.auto_auth(D.cookie, D.songs_list, function (c, r)
 		task.done(r, c)
-	end, task.fail)
+	end, task.fail, task.log)
 end
 
 D.setopt_login = function (o, done)
@@ -293,7 +296,6 @@ D.setopt_login = function (o, done)
 	task.on_done = function (r, c)
 		if c then D.setcookie(c) end
 		done{result=0, icon=c.icon, name=c.name}
-		task.finish(r)
 	end
 
 	task.on_fail = function (err)
@@ -310,9 +312,7 @@ D.setopt_login = function (o, done)
 			return
 		end
 		task.done(r, c)
-	end, function (err)
-		task.fail(err)
-	end)
+	end, task.fail)
 end
 
 D.setopt_channel_choose = function (o, done) 
@@ -324,7 +324,6 @@ D.setopt_channel_choose = function (o, done)
 	task.on_done = function (r, c)
 		if c then D.setcookie(c) end
 		done{result=0}
-		task.finish(r)
 	end
 
 	task.on_fail = function (err)
@@ -337,9 +336,7 @@ D.setopt_channel_choose = function (o, done)
 
 	D.auto_auth(c, D.songs_list, function (c, r)
 		task.done(r, c)
-	end, function (err)
-		task.fail(err)
-	end)
+	end, task.fail)
 end
 
 D.setopt_channels_list = function (o, done) 
@@ -367,7 +364,6 @@ D.setopt_logout = function (o, done)
 	task.on_done = function (r, c)
 		D.setcookie(c)
 		done{result=0}
-		task.finish(r)
 	end
 
 	task.on_fail = function (err)
@@ -380,9 +376,7 @@ D.setopt_logout = function (o, done)
 
 	D.auto_auth(c, D.songs_list, function (c, r)
 		task.done(r, c)
-	end, function (err)
-		task.fail(err)
-	end)
+	end, task.fail)
 end
 
 D.setopt = function (o, done)
@@ -429,9 +423,7 @@ D.info_login = function ()
 	end
 end
 
-D.info = function ()
-	return { type = 'douban' }
-end
+D.name = 'douban'
 
 D.init = function ()
 	D.cookie = D.loadcookie()

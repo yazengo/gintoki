@@ -1,10 +1,9 @@
 
-airplay_start('Muji')
+require('audio')
 
-airplay_on_start = function ()
-	info('airplay starts')
-	audio.play {
-		url = 'airplay://',
-	}
+loop = function ()
+	audio.pipe(pexec('cat ~/shairport/audio', 'r'), audio.out())
 end
+
+loop()
 
