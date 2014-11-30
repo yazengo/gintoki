@@ -32,7 +32,7 @@ static void play_thread(uv_work_t *w) {
 	pipebuf_t *pb = ao->pb;
 
 	debug("n=%d", PIPEBUF_SIZE);
-	ao_play(ao->dev, pb->base, PIPEBUF_SIZE);
+	aoutdev_play(ao->dev, pb->base, PIPEBUF_SIZE);
 	debug("n=%d", PIPEBUF_SIZE);
 }
 

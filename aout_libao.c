@@ -30,6 +30,11 @@ static const char *libao_strerror(int e) {
 	return "?";
 }
 
+void aoutdev_play(void *_dev, void *buf, int len) {
+	ao_device *dev = (ao_device *)_dev;
+	ao_play(dev, buf, len);
+}
+
 void *aoutdev_new() {
 	ao_sample_format fmt = {};
 	fmt.bits = 16;
