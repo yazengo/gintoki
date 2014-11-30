@@ -5,12 +5,12 @@
 #include "pipe.h"
 
 static void opened(uv_fs_t *req) {
+	pipe_t *p = (pipe_t *)req->data;
+	debug("p=%p");
+
 	uv_fs_req_cleanup(req);
 	int fd = req->result;
-	pipe_t *p = (pipe_t *)req->data;
 	free(req);
-
-	debug("p=%p");
 
 	uv_pipe_init(luv_loop(p), &p->p, 0);
 	uv_pipe_open(&p->p, fd);
