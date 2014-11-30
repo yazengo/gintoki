@@ -28,7 +28,7 @@ enum {
 enum {
 	NEED_CLOSE_WRITE = (1<<0),
 	NEED_CLOSE_READ  = (1<<1),
-	FIRST_CB         = (3<<2),
+	FIRST_CB         = (1<<2),
 };
 
 static void copy(pcopy_t *c);

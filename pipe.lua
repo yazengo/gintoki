@@ -82,7 +82,7 @@ end
 
 pipe.readall = function (p, done) 
 	if p[1] then p = p[1] end
-	local ss = strsink()
+	local ss = pstrsink()
 
 	ss.done_cb = function (str)
 		done(str)
@@ -93,7 +93,7 @@ end
 
 pipe.grep = function (p, word, done)
 	if p[1] then p = p[1] end
-	local ss = strsink('grep', word)
+	local ss = pstrsink('grep', word)
 
 	ss.grep_cb = function (str)
 		done(str)
