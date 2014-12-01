@@ -23,7 +23,7 @@ pipe_t *pipe_new(lua_State *L, uv_loop_t *loop) {
 void pipe_read(pipe_t *p, pipe_read_cb done) {
 	p->read.done = done;
 
-	debug("read type=%d", p->type);
+	debug("p=%p type=%d", p, p->type);
 
 	switch (p->type) {
 	case PSTREAM_SRC:
@@ -36,7 +36,7 @@ void pipe_read(pipe_t *p, pipe_read_cb done) {
 		break;
 
 	default:
-		panic("type=%d invalid", p->type);
+		panic("p=%p type=%d invalid", p, p->type);
 	}
 }
 

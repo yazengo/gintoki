@@ -79,7 +79,7 @@ newpipe(lua_State *L, uv_loop_t *loop, int type) {
 		.data.stream = p->st,
 	};
 
-	debug("p=%p", p);
+	debug("p=%p type=%d", p, type);
 
 	return c;
 }
