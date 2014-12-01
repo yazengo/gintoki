@@ -52,5 +52,6 @@ ${exe}: ${arch-cobjs}
 	$(CC) -o $@ ${arch-cobjs} ${ldflags}
 
 clean:
-	rm -rf *.o ${exe} config.h
+	find -maxdepth 2 -name '*.o' | xargs rm -rf
+	rm -rf ${exe}
 

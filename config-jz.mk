@@ -1,7 +1,7 @@
 
 sysroot = ../system/fs_compile
 
-cobjs += aout_jz.o inputdev.o alarm.o
+cobjs += jz/aout_jz.o jz/inputdev.o jz/alarm.o
 
 luvmods += inputdev alarm
 
@@ -17,7 +17,7 @@ exe = server-mips
 
 all: ${exe}
 
-inst-files := tests samples *.lua testaudios bbcradio.json server-loop.sh
+inst-files := tests samples *.lua testaudios bbcradio.json server-loop.sh jz/*.lua
 
 pack: ${exe}
 	tar cf pack.tar ${exe} $(inst-files)
