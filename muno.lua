@@ -90,7 +90,7 @@ M.version = function ()
 	if arch_version then
 		return arch_version.revision
 	else
-		return builddate
+		return BUILDDATE
 	end
 end
 

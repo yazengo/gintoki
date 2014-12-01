@@ -3,7 +3,7 @@ require('fwupdate')
 require('cmd')
 
 fwupdate.curversion = function ()
-	return 'NightlyBuild-' .. builddate
+	return 'NightlyBuild-' .. BUILDDATE
 end
 fwupdate.notify = info
 fwupdate_recovery = function ()
