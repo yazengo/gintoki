@@ -9,7 +9,7 @@ cobjs += prof.o mem.o
 cobjs += pipe.o uvwrite.o pstream.o pdirect.o 
 cobjs += pexec.o pcopy.o pipebuf.o pfilebuf.o pfifo.o
 cobjs += pstrsink.o
-cobjs += asrc.o aout.o amixer.o pcm.o
+cobjs += asrc.o aout.o amixer.o pcm.o aeffect.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
 cobjs += curl.o http_parser.o zpnp.o
@@ -21,7 +21,7 @@ luvmods += prof
 luvmods += blowfish base64 sha1 
 luvmods += pexec pcopy pfifo
 luvmods += pstrsink
-luvmods += asrc aout amixer pcm
+luvmods += asrc aout amixer pcm aeffect
 luvmods += curl zpnp 
 luvmods += tcp
 

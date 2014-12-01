@@ -93,7 +93,7 @@ static void generate(asrc_t *a) {
 	pipe_write(a->p, a->pb, write_done);
 }
 
-static int asrc(lua_State *L, uv_loop_t *loop) {
+static int asrc_new(lua_State *L, uv_loop_t *loop) {
 	asrc_t *a = (asrc_t *)zalloc(sizeof(asrc_t));
 	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
 
@@ -116,6 +116,6 @@ static int asrc(lua_State *L, uv_loop_t *loop) {
 }
 
 void luv_asrc_init(lua_State *L, uv_loop_t *loop) {
-	luv_register(L, loop, "asrc", asrc);
+	luv_register(L, loop, "asrc_new", asrc_new);
 }
 

@@ -77,5 +77,5 @@ void pipe_close_read(pipe_t *p);
 void pipe_close_write(pipe_t *p);
 void pipe_cancel_read(pipe_t *p);
 void pipe_cancel_write(pipe_t *p);
-pipe_t *pipe_new();
+pipe_t *pipe_new(lua_State *L, uv_loop_t *loop);
 

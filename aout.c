@@ -14,8 +14,7 @@ typedef struct {
 	pipebuf_t *pb;
 } aout_t;
 
-static void deinit(uv_loop_t *loop, void *_p) {
-	pipe_t *p = (pipe_t *)_p;
+static void deinit(pipe_t *p) {
 	aout_t *ao = (aout_t *)p->read.data;
 
 	info("closed");
@@ -61,7 +60,7 @@ static void read_done(pipe_t *p, pipebuf_t *pb) {
 }
 
 int luv_aout(lua_State *L, uv_loop_t *loop) {
-	pipe_t *p = pipe_new();
+	pipe_t *p = pipe_new(L, loop);
 
 	aout_t *ao = (aout_t *)zalloc(sizeof(aout_t));
 	ao->dev = aoutdev_new();

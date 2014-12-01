@@ -15,7 +15,6 @@ typedef struct {
 	queue_t tracks;
 
 	int rdstat, wrstat;
-	float vol;
 } amixer_t;
 
 typedef struct {
@@ -27,7 +26,6 @@ typedef struct {
 	pipe_t *p;
 
 	int stat;
-	float vol;
 } track_t;
 
 enum {
@@ -79,7 +77,6 @@ static void track_add(amixer_t *am, pipe_t *p, track_t *tr) {
 
 	tr->am = am;
 	tr->p = p;
-	tr->vol = 1.0;
 	p->read.data = tr;
 	queue_insert_tail(&am->tracks, &tr->q);
 
@@ -130,7 +127,6 @@ static void amixer_mix(amixer_t *am) {
 		track_t *tr = queue_data(q, track_t, q);
 
 		if (tr->stat == READDONE) {
-			pcm_do_volume(tr->pb->base, PIPEBUF_SIZE, tr->vol * am->vol);
 			pcm_do_mix(am->pb->base, tr->pb->base, PIPEBUF_SIZE);
 			pipebuf_unref(tr->pb);
 
@@ -139,75 +135,43 @@ static void amixer_mix(amixer_t *am) {
 	}
 
 	debug("write am=%p am.p.data=%p", am, am->p->write.data);
+
 	am->rdstat = INIT;
 	am->wrstat = WRITING;
 	pipe_write(am->p, am->pb, amixer_write_done);
 }
 
-static int track_setopt(lua_State *L, uv_loop_t *loop, void *_p) {
-	pipe_t *p = (pipe_t *)_p;
-	char *op = (char *)lua_tostring(L, 1);
-	track_t *tr = (track_t *)p->read.data;
-
-	if (op && !strcmp(op, "getvol")) {
-		lua_pushnumber(L, tr->vol);
-		return 1;
-	}
-
-	if (op && !strcmp(op, "setvol")) {
-		tr->vol = lua_tonumber(L, 2);
-		return 0;
-	}
-
-	return 0;
-}
-
-static void track_gc(uv_loop_t *loop, void *_p) {
-	pipe_t *p = (pipe_t *)_p;
+static void track_gc(pipe_t *p) {
 	track_t *tr = (track_t *)p->read.data;
 
 	free(tr);
 }
 
 static int amixer_track_add(lua_State *L, uv_loop_t *loop, amixer_t *am) {
-	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
+	pipe_t *p = pipe_new(L, loop);
 
 	p->type = PDIRECT_SINK;
-	luv_setgc(p, track_gc);
+	p->gc = track_gc;
 
 	track_t *tr = (track_t *)zalloc(sizeof(track_t));
 	track_add(am, p, tr);
 
-	luv_pushcclosure(L, track_setopt, p);
-	lua_setfield(L, -2, "setopt");
-
 	return 1;
 }
 
-static int amixer_setopt(lua_State *L, uv_loop_t *loop, void *_p) {
-	pipe_t *p = (pipe_t *)_p;
+static int amixer_setopt(lua_State *L, uv_loop_t *loop) {
+	pipe_t *p = (pipe_t *)luv_toctx(L, 1);
 	amixer_t *am = (amixer_t *)p->write.data;
-	char *op = (char *)lua_tostring(L, 1);
+	char *op = (char *)lua_tostring(L, 2);
 
 	if (op && !strcmp(op, "track.add")) {
 		return amixer_track_add(L, loop, am);
 	}
 
-	if (op && !strcmp(op, "setvol")) {
-		am->vol = lua_tonumber(L, 2);
-		return 0;
-	}
-
-	if (op && !strcmp(op, "getvol")) {
-		lua_pushnumber(L, am->vol);
-		return 1;
-	}
-
 	return 0;
 }
 
-static void amixer_gc(uv_loop_t *loop, void *_p) {
-	pipe_t *p = (pipe_t *)_p;
+static void amixer_gc(pipe_t *p) {
 	amixer_t *am = (amixer_t *)p->write.data;
 
 	free(am);
@@ -215,25 +179,22 @@ static void amixer_gc(uv_loop_t *loop, void *_p) {
 
 static int amixer_new(lua_State *L, uv_loop_t *loop) {
 	amixer_t *am = (amixer_t *)zalloc(sizeof(amixer_t));
-	pipe_t *p = luv_newctx(L, loop, sizeof(pipe_t));
+	pipe_t *p = pipe_new(L, loop);
 
 	p->type = PDIRECT_SRC;
 	p->write.data = am;
 	am->p = p;
-	am->vol = 1.0;
 	queue_init(&am->tracks);
 
-	luv_setgc(p, amixer_gc);
+	p->gc = amixer_gc;
 	
-	luv_pushcclosure(L, amixer_setopt, p);
-	lua_setfield(L, -2, "setopt");
-
 	debug("am=%p p=%p", am, p);
 
 	return 1;
 }
 
 void luv_amixer_init(lua_State *L, uv_loop_t *loop) {
-	luv_register(L, loop, "amixer", amixer_new);
+	luv_register(L, loop, "amixer_new", amixer_new);
+	luv_register(L, loop, "amixer_setopt", amixer_setopt);
 }
 

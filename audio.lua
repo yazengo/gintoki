@@ -6,7 +6,7 @@ audio = {}
 audio.out = aout
 
 audio.noise = function ()
-	return asrc('noise')
+	return asrc_new('noise')
 end
 
 audio.decoder = function (url)
@@ -39,41 +39,10 @@ audio.decoder = function (url)
 end
 
 audio.mixer = function ()
-	local m = amixer()
-
-	local roundvol = function (v)
-		if v > 1.0 then 
-			return 1.0 
-		elseif v < 0.0 then 
-			return 0.0
-		else
-			return v
-		end
-	end
-
-	m.setvol = function (v)
-		v = v or 0.0
-		m.setopt('setvol', roundvol(v))
-	end
-
-	m.getvol = function ()
-		return m.setopt('getvol')
-	end
+	local m = amixer_new()
 
 	m.add = function ()
-		local tr = m.setopt('track.add')
-
-		tr.setvol = function (v)
-			v = v or 0.0
-			tr.setopt('setvol', roundvol(v))
-			return tr
-		end
-
-		tr.getvol = function ()
-			return tr.setopt('getvol')
-		end
-
-		return tr
+		return amixer_setopt(m, 'track.add')
 	end
 
 	return m
@@ -123,5 +92,46 @@ audio.pipe = function (...)
 	r.done = c.done
 
 	return r
+end
+
+local roundvol = function (v)
+	if v > 1.0 then 
+		return 1.0 
+	elseif v < 0.0 then 
+		return 0.0
+	else
+		return v
+	end
+end
+
+audio.effect = function ()
+	local e, w, r = aeffect_new()
+	local o = {w, r}
+
+	o.fadein = function (time)
+		aeffect_setopt(e, 'fadein', time)
+		return o
+	end
+
+	o.fadeout = function (time)
+		aeffect_setopt(e, 'fadeout', time)
+		return o
+	end
+
+	o.getvol = function ()
+		return aeffect_setopt(e, 'getvol')
+	end
+
+	o.setvol = function (vol)
+		aeffect_setopt(e, 'setvol', roundvol(vol))
+		return o
+	end
+
+	o.cancel_fade = function ()
+		aeffect_setopt(e, 'cancel_fade')
+		return o
+	end
+
+	return o
 end
 
