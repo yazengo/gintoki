@@ -19,6 +19,7 @@ typedef struct pipe_s {
 	uv_stream_t *st;
 	uv_pipe_t p;
 	pipe_gc_cb gc;
+	void *data;
 
 	queue_t q;
 

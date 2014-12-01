@@ -61,14 +61,14 @@ static void read_done(pipe_t *p, pipebuf_t *pb) {
 }
 
 int luv_aout(lua_State *L, uv_loop_t *loop) {
-	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
+	pipe_t *p = pipe_new();
+
 	aout_t *ao = (aout_t *)zalloc(sizeof(aout_t));
+	ao->dev = aoutdev_new();
 
 	p->read.data = ao;
 	p->type = PDIRECT_SINK;
-
-	ao->dev = aoutdev_new();
-	luv_setgc(p, deinit);
+	p->gc = deinit;
 
 	pipe_read(p, read_done);
 

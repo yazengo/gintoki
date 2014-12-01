@@ -202,7 +202,7 @@ static int pcopy_setopt(lua_State *L, uv_loop_t *loop, void *_c) {
 	return 0;
 }
 
-// pcopy(src, sink, 'b')
+// pcopy(src, sink, 'brw')
 static int luv_pcopy(lua_State *L, uv_loop_t *loop) {
 	pipe_t *src = (pipe_t *)luv_toctx(L, 1);
 	pipe_t *sink = (pipe_t *)luv_toctx(L, 2);
