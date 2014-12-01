@@ -30,9 +30,9 @@ static void play_thread(uv_work_t *w) {
 	aout_t *ao = (aout_t *)p->read.data;
 	pipebuf_t *pb = ao->pb;
 
-	debug("start n=%d", PIPEBUF_SIZE);
-	aoutdev_write(ao->dev, pb->base, PIPEBUF_SIZE);
-	debug("end   n=%d", PIPEBUF_SIZE);
+	debug("start n=%d", pb->len);
+	aoutdev_write(ao->dev, pb->base, pb->len);
+	debug("end   n=%d", pb->len);
 }
 
 static void play_done(uv_work_t *w, int stat) {
@@ -50,8 +50,8 @@ static void read_done(pipe_t *p, pipebuf_t *pb) {
 		return;
 	}
 
-	int n = PIPEBUF_SIZE;
-	debug("n=%d", n);
+	if (pb->len & 0x3)
+		panic("pb.len=%d invalid. must align 4", pb->len);
 
 	aout_t *ao = (aout_t *)p->read.data;
 	ao->pb = pb;

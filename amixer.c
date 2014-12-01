@@ -10,21 +10,15 @@
 
 typedef struct {
 	pipe_t *p;
-	pipebuf_t *pb;
-
 	queue_t tracks;
-
 	int rdstat, wrstat;
 } amixer_t;
 
 typedef struct {
 	queue_t q;
-
 	amixer_t *am;
-
-	pipebuf_t *pb;
 	pipe_t *p;
-
+	pipebuf_t *pb;
 	int stat;
 } track_t;
 
@@ -117,18 +111,23 @@ static void amixer_write_done(pipe_t *p, int stat) {
 }
 
 static void amixer_mix(amixer_t *am) {
-	am->pb = pipebuf_new();
-	debug("mixbuf p=%p", am->pb);
-
-	memset(am->pb->base, 0, PIPEBUF_SIZE);
+	pipebuf_t *pb = NULL;
 
 	queue_t *q;
 	queue_foreach(q, &am->tracks) {
 		track_t *tr = queue_data(q, track_t, q);
 
 		if (tr->stat == READDONE) {
-			pcm_do_mix(am->pb->base, tr->pb->base, PIPEBUF_SIZE);
-			pipebuf_unref(tr->pb);
+			if (tr->pb->len != PIPEBUF_SIZE)
+				panic("pb.len must be PIPEBUF_SIZE");
+
+			if (pb == NULL) {
+				// use first track buf as mixbuf
+				pb = tr->pb;
+			} else {
+				pcm_do_mix(pb->base, tr->pb->base, PIPEBUF_SIZE);
+				pipebuf_unref(tr->pb);
+			}
 
 			track_read(tr);
 		}
@@ -138,7 +137,7 @@ static void amixer_mix(amixer_t *am) {
 
 	am->rdstat = INIT;
 	am->wrstat = WRITING;
-	pipe_write(am->p, am->pb, amixer_write_done);
+	pipe_write(am->p, pb, amixer_write_done);
 }
 
 static void track_gc(pipe_t *p) {

@@ -25,7 +25,7 @@ static void write_done(uv_write_t *w, int stat) {
 		wa->pb = wa->pb_pending;
 
 		wa->ub.base = wa->pb->base;
-		wa->ub.len = PIPEBUF_SIZE;
+		wa->ub.len = wa->pb->len;
 		uv_write(&wa->w, wa->st, &wa->ub, 1, write_done);
 	}
 }
@@ -48,7 +48,7 @@ void uv_write_adv(uv_write_adv_t *wa, pipebuf_t *pb, uv_write_adv_cb done) {
 		wa->pb = pb;
 
 		wa->ub.base = wa->pb->base;
-		wa->ub.len = PIPEBUF_SIZE;
+		wa->ub.len = wa->pb->len;
 		uv_write(&wa->w, wa->st, &wa->ub, 1, write_done);
 	} else if (wa->stat == WRITING_CANCEL) {
 		// pending

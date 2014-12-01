@@ -11,7 +11,7 @@ typedef struct pcopy_s {
 	pipe_t *sink;
 	unsigned flags;
 	int stat;
-	int tx, rx;
+	int rx;
 	immediate_t im_close;
 	immediate_t im_first_cb;
 } pcopy_t;
@@ -58,8 +58,6 @@ static void write_done(pipe_t *sink, int stat) {
 		return;
 	}
 
-	c->tx += PIPEBUF_SIZE;
-
 	if (c->stat != WRITING)
 		panic("c=%p c.stat=%d p=%p invalid", c, c->stat, sink);
 	c->stat = INIT;
@@ -88,7 +86,7 @@ static void read_done(pipe_t *src, pipebuf_t *pb) {
 		set_immediate(luv_loop(c), &c->im_first_cb);
 	}
 
-	c->rx += PIPEBUF_SIZE;
+	c->rx += pb->len;
 
 	if (c->stat != READING)
 		panic("stat=%d invalid", c->stat);
@@ -186,11 +184,6 @@ static int pcopy_setopt(lua_State *L, uv_loop_t *loop, void *_c) {
 		return 1;
 	}
 
-	if (op && !strcmp(op, "get.tx")) {
-		lua_pushnumber(L, c->tx);
-		return 1;
-	}
-
 	if (op && !strcmp(op, "first_cb")) {
 		luv_pushctx(L, c);
 		lua_pushvalue(L, 2);
@@ -202,7 +195,7 @@ static int pcopy_setopt(lua_State *L, uv_loop_t *loop, void *_c) {
 	return 0;
 }
 
-// pcopy(src, sink, 'brw')
+// pcopy(src, sink, 'rw')
 static int luv_pcopy(lua_State *L, uv_loop_t *loop) {
 	pipe_t *src = (pipe_t *)luv_toctx(L, 1);
 	pipe_t *sink = (pipe_t *)luv_toctx(L, 2);
@@ -221,9 +214,6 @@ static int luv_pcopy(lua_State *L, uv_loop_t *loop) {
 	char *m = mode;
 	while (m && *m) {
 		switch (*m) {
-		case 'b':
-			src->read.mode = PREAD_BLOCK;
-			break;
 		case 'w':
 			c->flags |= NEED_CLOSE_WRITE;
 			break;

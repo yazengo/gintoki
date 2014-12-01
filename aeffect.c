@@ -25,7 +25,7 @@ static void process(aeffect_t *a, void *buf, int len) {
 	case FADEOUT:
 	case FADEIN: 
 	{
-		float dur = PIPEBUF_SIZE / (44100*4.0);
+		float dur = (float)len / (44100*4.0);
 
 		if (a->fadepos > a->fadedur) {
 			if (a->stat == FADEIN)
@@ -83,7 +83,7 @@ static void read_done(pipe_t *p, pipebuf_t *pb) {
 		return;
 	}
 
-	process(a, pb->base, PIPEBUF_SIZE);
+	process(a, pb->base, pb->len);
 
 	pipe_write(a->sink, pb, write_done);
 }

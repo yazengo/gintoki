@@ -18,6 +18,10 @@ audio.decoder = function (url)
 	end
 
 	local p = pexec(string.format('avconv -i %s -f s16le -ar 44100 -ac 2 -', url), mode)
+	if p[3] then
+		pipe_setopt(p[3], 'read_mode', 'block')
+	end
+
 	local d = {p[1], p[3]}
 
 	d.probed = function (cb)

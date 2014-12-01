@@ -137,8 +137,23 @@ static int pclose_write(lua_State *L, uv_loop_t *loop) {
 	return 0;
 }
 
+static int pipe_setopt(lua_State *L, uv_loop_t *loop) {
+	pipe_t *p = (pipe_t *)luv_toctx(L, 1);
+	char *op = (char *)lua_tostring(L, 2);
+
+	if (op && !strcmp(op, "read_mode")) {
+		char *mode = (char *)lua_tostring(L, 3);
+		if (mode && !strcmp(mode, "block"))
+			p->read.mode = PREAD_BLOCK;
+		return 0;
+	}
+
+	return 0;
+}
+
 void luv_pipe_init(lua_State *L, uv_loop_t *loop) {
 	luv_register(L, loop, "pclose_read", pclose_read);
 	luv_register(L, loop, "pclose_write", pclose_write);
+	luv_register(L, loop, "pipe_setopt", pipe_setopt);
 }
 

@@ -7,20 +7,12 @@
 
 typedef struct {
 	int mode;
-	int stat;
 	pipebuf_t *pb;
 	pipe_t *p;
 } asrc_t;
 
 enum {
 	NOISE,
-};
-
-enum {
-	INIT,
-	WRITING,
-	PAUSED,
-	CLOSED,
 };
 
 static void generate(asrc_t *a);
@@ -32,42 +24,10 @@ static void gc(uv_loop_t *loop, void *_p) {
 	free(a);
 }
 
-static void pause(asrc_t *a) {
-	if (a->stat == WRITING)
-		pipe_cancel_write(a->p);
-	a->stat = PAUSED;
-}
-
-static void resume(asrc_t *a) {
-	if (a->stat != PAUSED)
-		return;
-	generate(a);
-}
-
-
-static int asrc_setopt(lua_State *L, uv_loop_t *loop, void *_p) {
-	pipe_t *p = (pipe_t *)_p;
-	asrc_t *a = (asrc_t *)p->write.data;
-	char *op = (char *)lua_tostring(L, 1);
-
-	if (op && !strcmp(op, "pause")) {
-		pause(a);
-		return 0;
-	}
-
-	if (op && !strcmp(op, "resume")) {
-		resume(a);
-		return 0;
-	}
-
-	return 0;
-}
-
 static void write_done(pipe_t *p, int stat) {
 	asrc_t *a = (asrc_t *)p->write.data;
 	
 	if (stat < 0) {
-		a->stat = CLOSED;
 		pipe_close_write(p);
 		return;
 	}
@@ -89,16 +49,12 @@ static void generate(asrc_t *a) {
 		}
 	}
 
-	a->stat = WRITING;
 	pipe_write(a->p, a->pb, write_done);
 }
 
 static int asrc_new(lua_State *L, uv_loop_t *loop) {
 	asrc_t *a = (asrc_t *)zalloc(sizeof(asrc_t));
 	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
-
-	luv_pushcclosure(L, asrc_setopt, p);
-	lua_setfield(L, -2, "setopt");
 
 	luv_setgc(p, gc);
 
@@ -108,6 +64,7 @@ static int asrc_new(lua_State *L, uv_loop_t *loop) {
 	a->p = p;
 
 	p->type = PDIRECT_SRC;
+	p->read.mode = PREAD_BLOCK;
 	p->write.data = a;
 
 	generate(a);
