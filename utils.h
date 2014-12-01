@@ -55,3 +55,14 @@ void _lua_dumpstack_at(const char *at_func, const char *at_file, int at_lineno, 
 
 char *strndup(const char *s, size_t n);
 
+struct fs_req_s;
+typedef void (*fs_req_cb)(struct fs_req_s *req);
+
+typedef struct fs_req_s {
+	uv_work_t w;
+	int fd;
+	char *path;
+	fs_req_cb done;
+	void *data;
+} fs_req_t;
+

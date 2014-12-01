@@ -32,18 +32,21 @@ static int __gc(lua_State *L) {
 	prof_inc(&pf_gc);
 
 	lua_getfield(L, 1, "_ctx");
-	luv_t *l = (luv_t *)lua_touserptr(L, -1);
+	luv_t *_l = (luv_t *)lua_touserptr(L, -1);
+	void *l = (void *)_l + sizeof(luv_t);
 
 	lua_pushnil(L);
 	lua_setfield(L, 1, "_ctx");
+	
+	debug("l=%p", (void *)l);
 
-	if (l->gc)
-		l->gc(l->loop, (void *)l + sizeof(luv_t));
+	if (_l->gc)
+		_l->gc(_l->loop, l);
 
-	if (l->Lt)
-		lua_close(l->Lt);
+	if (_l->Lt)
+		lua_close(_l->Lt);
 
-	free(l);
+	free(_l);
 
 	return 0;
 }
@@ -208,6 +211,8 @@ void luv_unref(void *_l) {
 	lua_pushnil(L);
 	lua_settable(L, -3);
 	lua_pop(L, 1);
+
+	debug("l=%p", _l);
 
 	lua_gc(L, LUA_GCCOLLECT, 0);
 }

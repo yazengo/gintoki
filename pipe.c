@@ -7,8 +7,16 @@
 #include "pipe.h"
 #include "pdirect.h"
 
+static void gc(uv_loop_t *loop, void *_p) {
+	pipe_t *p = (pipe_t *)_p;
+	debug("p=%p", p);
+	if (p->gc)
+		p->gc(p);
+}
+
 pipe_t *pipe_new(lua_State *L, uv_loop_t *loop) {
 	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
+	luv_setgc(p, gc);
 	return p;
 }
 

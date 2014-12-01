@@ -163,6 +163,7 @@ void pstream_cancel_write(pipe_t *p) {
 
 static void uv_closed(uv_handle_t *h) {
 	pipe_t *p = (pipe_t *)h->data;
+	debug("p=%p", p);
 	p->stat = CLOSED;
 	luv_unref(p);
 }

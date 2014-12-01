@@ -1,15 +1,20 @@
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "luv.h"
 #include "pipe.h"
+#include "utils.h"
 
-static void opened(uv_fs_t *req) {
+static void open_done(fs_req_t *req) {
+	int fd = req->fd;
+	if (fd == -1) 
+		panic("open %s failed", req->path);
+
 	pipe_t *p = (pipe_t *)req->data;
 	debug("p=%p");
 
-	uv_fs_req_cleanup(req);
-	int fd = req->result;
+	fs_req_cleanup(req);
 	free(req);
 
 	uv_pipe_init(luv_loop(p), &p->p, 0);
@@ -27,14 +32,18 @@ static int pfifo_open(lua_State *L, uv_loop_t *loop) {
 	pipe_t *p = (pipe_t *)luv_newctx(L, loop, sizeof(pipe_t));
 	char *path = (char *)lua_tostring(L, 1);
 
+	if (path == NULL)
+		panic("path must be set");
+
 	debug("p=%p path=%s", p, path);
 
 	lua_pushvalue(L, 2);
 	lua_setfield(L, -2, "open_cb");
 
-	uv_fs_t *req = (uv_fs_t *)zalloc(sizeof(uv_fs_t));
+	fs_req_t *req = (fs_req_t *)zalloc(sizeof(fs_req_t));
 	req->data = p;
-	uv_fs_open(loop, req, path, O_RDONLY, 0644, opened);
+	req->path = strdup(path);
+	fs_open(loop, req, open_done);
 
 	return 0;
 }

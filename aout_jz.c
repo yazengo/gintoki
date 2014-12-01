@@ -45,11 +45,15 @@ void *aoutdev_new() {
 		panic("driver sample_rate changes: orig=%d ret=%d", rate, v);
 
 	info("done");
+
+	return jz;
 }
 
 void aoutdev_write(void *_dev, void *buf, int len) {
 	jzcodec_t *jz = (jzcodec_t *)_dev;
+	debug("start n=%d fd=%d", len, jz->fd);
 	write(jz->fd, buf, len);
+	debug("end   n=%d", len);
 }
 
 void aoutdev_close(void *_dev) {

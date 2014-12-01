@@ -208,6 +208,30 @@ static void print_traceback_and_exit() {
 	exit(-1);
 }
 
+void fs_req_cleanup(fs_req_t *req) {
+	if (req->path)
+		free(req->path);
+	req->path = NULL;
+}
+
+static void fs_open_done(uv_work_t *w, int stat) {
+	fs_req_t *req = (fs_req_t *)w->data;
+
+	req->done(req);
+}
+
+static void fs_open_thread(uv_work_t *w) {
+	fs_req_t *req = (fs_req_t *)w->data;
+
+	req->fd = open(req->path, O_RDONLY);
+}
+
+void fs_open(uv_loop_t *loop, fs_req_t *req, fs_req_cb done) {
+	req->done = done;
+	req->w.data = req;
+	uv_queue_work(loop, &req->w, fs_open_thread, fs_open_done);
+}
+
 static void term(int sig) {
 	signal(SIGTERM, SIG_IGN);
 	error("sig=%d", sig);

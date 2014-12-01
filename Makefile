@@ -13,6 +13,7 @@ cobjs += asrc.o aout.o amixer.o pcm.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
 cobjs += curl.o http_parser.o zpnp.o
+cobjs += tcp.o
 
 luvmods += pipebuf pdirect pipe pfilebuf
 luvmods += utils os timer immediate
@@ -22,9 +23,12 @@ luvmods += pexec pcopy pfifo
 luvmods += pstrsink
 luvmods += asrc aout amixer pcm
 luvmods += curl zpnp 
+luvmods += tcp
 
 exe ?= gintoki
 now = $(shell date +'%Y%m%d-%H%M')
+
+arch ?= $(shell uname -s | tr A-Z a-z)
 
 config-mk = config$(if ${arch},-${arch},).mk
 include ${config-mk}
@@ -37,13 +41,15 @@ luvinit = $(foreach m,${luvmods}, extern void luv_${m}_init(lua_State *L, uv_loo
 
 cflags-main += -DGITVER=\"${gitver}\" -DLUVINIT="${luvinit}" -DBUILDDATE=\"${now}\"
 
+arch-cobjs := $(patsubst %.o,%_${arch}.o,${cobjs})
+
 main.o: ${config-mk} Makefile
 
-%.o: %.c $(hsrcs)
+%_${arch}.o: %.c $(hsrcs)
 	$(CC) $(cflags) $(cflags-$*) -c -o $@ $<
 
-${exe}: ${cobjs}
-	$(CC) -o $@ ${cobjs} ${ldflags}
+${exe}: ${arch-cobjs}
+	$(CC) -o $@ ${arch-cobjs} ${ldflags}
 
 clean:
 	rm -rf *.o ${exe} config.h

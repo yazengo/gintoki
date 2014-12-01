@@ -11,13 +11,14 @@ struct pipe_s;
 typedef void (*pipe_read_cb)(struct pipe_s *p, pipebuf_t *pb);
 typedef void (*pipe_write_cb)(struct pipe_s *p, int stat);
 typedef void (*pipe_close_cb)(struct pipe_s *p);
+typedef void (*pipe_gc_cb)(struct pipe_s *p);
 
 typedef struct pipe_s {
 	int type;
 
 	uv_stream_t *st;
 	uv_pipe_t p;
-	uv_file fd;
+	pipe_gc_cb gc;
 
 	queue_t q;
 
@@ -75,4 +76,5 @@ void pipe_close_read(pipe_t *p);
 void pipe_close_write(pipe_t *p);
 void pipe_cancel_read(pipe_t *p);
 void pipe_cancel_write(pipe_t *p);
+pipe_t *pipe_new();
 
