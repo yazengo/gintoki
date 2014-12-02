@@ -17,7 +17,7 @@ exe = server-mips
 
 all: ${exe}
 
-inst-files := tests samples *.lua testaudios bbcradio.json server-loop.sh jz/*.lua
+inst-files := tests samples *.lua testaudios bbcradio.json server-loop.sh jz/*.lua sugrcube/*.lua
 
 pack: ${exe}
 	tar cf pack.tar ${exe} $(inst-files)
