@@ -8,8 +8,18 @@ table.add = function (a, ...)
 	return a
 end
 
-table.copy = function (a) 
-	return table.add({}, a)
+table.copy = function (t, filter)
+	if filter == nil then
+		return table.add({}, a)
+	else
+		local r = {}
+		for k, v in pairs(t) do
+			if filter(k, v) then
+				r[k] = v
+			end
+		end
+		return r
+	end
 end
 
 table.append = function (a, ...)
@@ -106,7 +116,7 @@ debug = function (...) _log_at(0, 3, ...) end
 info = function (...) _log_at(1, 3, ...) end
 panic = function (...) _log_at(4, 3, ...) end
 
-os.basename = function (s)
+basename = function (s)
 	local x = string.gsub(s, '%.[^%.]*$', '')
     x = string.gsub(x, '^.*%/', '')
 	return x
