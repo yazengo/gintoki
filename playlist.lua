@@ -1,28 +1,59 @@
 
 local P = {}
 
-P.urls_list = function (urls)
+P.urls = function (urls)
 	local r = {}
-	local o = urls
 
-	r.urls = urls
-	r.at = 1
+	r.seturls = function (urls)
+		r.urls = urls
+		r.at = 1
+		return r
+	end
+	
+	r.mode = urls.mode
+	r.seturls(urls)
 
-	r.fetch = function (done)
-		r.fetch_imm = set_immediate(function ()
-			local n = table.maxn(r.urls) 
+	r.setmode = function (m)
+		r.mode = m
+	end
 
-			if r.at > n then 
-				if o and o.loop then
-					r.at = 1
-				else
-					r.close()
-					return 
-				end
+	local function fetch(o)
+		local url = r.urls[r.at]
+		local n = table.maxn(r.urls)
+
+		if r.mode ~= 'random' then
+			r.at = math.random(n)
+		else
+			if o and o.prev then
+				r.at = r.at - 1
+			else
+				r.at = r.at + 1
 			end
+		end
 
-			done{url=r.urls[r.at]}
-			r.at = r.at + 1
+		if r.at > n then
+			if r.mode == 'repeat_all' then
+				r.at = 1
+			elseif r.mode == nil then
+				r.close()
+			end
+		elseif r.at < 1 then
+			if r.mode == 'repeat_all' then
+				r.at = n
+			elseif r.mode == nil then
+				r.at = 1
+			end
+		end
+
+		return url
+	end
+
+	r.fetch = function (done, o)
+		r.fetch_imm = set_immediate(function ()
+			local url = fetch(o)
+			if url then 
+				done{url=url, title=basename(url)}
+			end
 			r.fetch_imm = nil
 		end)
 	end
@@ -41,7 +72,7 @@ P.urls_list = function (urls)
 	return r
 end
 
-P.new_station = function (S)
+P.station = function (S)
 	local task
 	local songs = {}
 	local songs_i = 1
@@ -219,6 +250,11 @@ P.player = function ()
 		p.changed_cb = cb
 	end
 
+	p.fetch = function ()
+		p.src.fetch(p.src_fetch, p.fetch_o)
+		p.fetch_o = nil
+	end
+
 	p.pause = function ()
 		if p.paused then return end
 		p.paused = true
@@ -240,8 +276,27 @@ P.player = function ()
 			p.copy.resume()
 			p.on_change()
 		elseif p.stat == 'fetching' then
-			p.src.fetch(p.src_fetch)
+			p.fetch()
 			p.on_change()
+		end
+	end
+
+	p.next = function ()
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			p.copy.close()
+		end
+	end
+
+	p.prev = function ()
+		p.fetch_o = {prev=true}
+
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			p.copy.close()
+		elseif p.stat == 'fetching' then
+			if not p.paused then
+				p.src.cancel_fetch()
+				p.fetch()
+			end
 		end
 	end
 
@@ -296,7 +351,7 @@ P.player = function ()
 			if p.stat == 'playing' or p.stat == 'buffering' or p.stat == 'changing_src' then
 				p.stat = 'fetching'
 				p.on_change()
-				if not p.paused then p.src.fetch(p.src_fetch) end
+				if not p.paused then p.fetch() end
 			elseif p.stat == 'closing' then
 				p.stat = 'closed'
 				p.on_change()
@@ -337,18 +392,20 @@ P.player = function ()
 		if p.stat == 'playing' or p.stat == 'buffering' then
 			p.stat = 'changing_src'
 			p.copy.close()
+			p.src = src
 		elseif p.stat == 'fetching' and not p.paused then
 			p.src.cancel_fetch()
-			src.fetch(p.src_fetch)
+			p.src = src
+			p.fetch()
 		elseif p.stat == 'stopped' then
 			p.stat = 'fetching'
-			src.fetch(p.src_fetch)
 			p.on_change()
+			p.src = src
+			p.fetch()
 		elseif p.stat == 'closed' then
 			panic('aleady closed')
 		end
 
-		p.src = src
 		return p
 	end
 
