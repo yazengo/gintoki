@@ -139,3 +139,95 @@ audio.effect = function ()
 	return o
 end
 
+audio.switcher = function ()
+	local sw = pdirect()
+	local src, p_cur, c_cur
+
+	local function copy(p)
+		local mode = 'r'
+		if p == src then
+			mode = ''
+		end
+
+		p_cur = p
+		c_cur = pipe.copy(p, sw, mode).done(function (reason)
+			if p_cur == p then
+				c_cur = nil
+			end
+
+			if reason == 'w' then
+				pclose_write(sw)
+				sw = nil
+				return
+			end
+
+			if src and c_cur == nil then
+				copy(src)
+			end
+		end)
+	end
+
+	local function play(p)
+		if sw == nil then 
+			panic('already closed')
+		end
+
+		if c_cur then
+			c_cur.close()
+			c_cur = nil
+		end
+
+		copy(p)
+	end
+
+	-- Situation 1:
+
+	-- sw.breakin(p)
+	--               ->  [breaking]
+	--        [src]  ->       [src]
+
+	-- breakin closed
+	--        [src]
+
+	-- Situation 2:
+
+	-- sw.breakin(p)
+	--               ->  [breaking]
+
+	-- sw.setsrc(p)     (just change)
+	--   [breaking]  ->  [breaking]
+	--        [src]  ->       [src]
+
+	-- sw.setsrc(nil)   (just clear)
+	--   [breaking]  ->  [breaking]
+	--        [src]  ->            
+
+	sw.setsrc = function (p)
+		if p == nil then
+			if src then 
+				src = nil
+			end
+		elseif src then
+			if c_cur and p_cur == src then
+				c_cur.close()
+				c_cur = nil
+			end
+			src = p
+		else
+			src = p
+			if c_cur == nil then
+				play(p)
+			end
+		end
+
+		return sw
+	end
+
+	sw.breakin = function (p)
+		play(p)
+		return sw
+	end
+
+	return sw
+end
+
