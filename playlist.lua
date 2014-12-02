@@ -1,182 +1,359 @@
 
-playlist = function (popt)
-
 local P = {}
 
-P.mode = 'repeat_all'
+P.urls_list = function (urls)
+	local r = {}
+	local o = urls
 
-P.loadlist = function (dir) 
-	local list = {}
-	local files = os.readdir(dir)
-	for i,fname in ipairs(files) do
-		list[i] = {
-			url = dir..'/'..fname, 
-			title = os.basename(fname),
-			id = tostring(i),
-			cover_url = '',
-		}
+	r.urls = urls
+	r.at = 1
+
+	r.fetch = function (done)
+		r.fetch_imm = set_immediate(function ()
+			local n = table.maxn(r.urls) 
+
+			if r.at > n then 
+				if o and o.loop then
+					r.at = 1
+				else
+					r.close()
+					return 
+				end
+			end
+
+			done{url=r.urls[r.at]}
+			r.at = r.at + 1
+			r.fetch_imm = nil
+		end)
 	end
-	return list
+
+	r.cancel_fetch = function ()
+		if r.fetch_imm then
+			cancel_immediate(r.fetch_imm)
+			r.fetch_imm = nil
+		end
+	end
+
+	r.done = function (cb)
+		r.done_cb = cb
+	end
+
+	return r
 end
 
-P.loadlist_fromdirs = function (dirs) 
-	for i,dir in ipairs(dirs) do
-		local l = P.loadlist(dir)
-		if table.maxn(l) > 0 then
-			return l
+P.new_station = function (S)
+	local task
+	local songs = {}
+	local songs_i = 1
+	local fetch_imm
+	local fetch_done
+	local fetching = false
+
+	local task_done
+	local task_fail
+	local task_new
+	local task_is_running
+	local task_cancel
+	local task_retry_timer
+
+	task_done = function (t, r) 
+		if not r or table.maxn(r) == 0 then panic('must have songs') end
+		table.append(songs, r)
+
+		if fetching then 
+			fetching = false
+			local s = songs[songs_i]
+			songs_i = songs_i + 1
+			fetch_done(s)
 		end
 	end
-	return {}
-end
 
-P.log_list = {}
-P.log_max = 40
-P.log_i = 1
-
-P.list = P.loadlist_fromdirs(popt.dirs)
-P.i = 1
-
-P.addlist = function (newfile)
-    for _, file in ipairs(P.list) do
-        if file.url == newfile then return end
-    end
-    index = table.maxn(P.list)
-    table.insert(P.list, {
-        url = newfile,
-        title = os.basename(newfile),
-        id = index + 1,
-        cover_url = '',
-    })
-end
-
-P.setopt = function (o, done)
-	done = done or function () end
-
-	if o.op == 'audio.prev' then
-		P.do_prev()
-		done{result=0}
-		return true
+	task_fail = function (t, err)
+		local wait = 3000
+		info('fail', err)
+		if t.type == 'fetch' then
+			info('retry fetch in', wait, 'ms')
+			task_retry_timer = set_timeout(function ()
+				task_retry_timer = nil
+				task = task_new{type='fetch'}
+				S.prefetch_songs(task)
+			end, wait)
+		end
 	end
 
-	if o.op == 'audio.play' and o.id then
-		local i = tonumber(o.id)
-		if i > 0 and i <= table.maxn(P.list) then
-			P.i = i-1
-			P.skip()
-		end
-
-		done{result=0}
-		return true
+	task_is_running = function ()
+		return (task and not task.finished) or task_retry_timer
 	end
 
-	if o.op == 'audio.toggle_repeat_mode' then
-		if P.mode == 'repeat_all' then
-			P.mode = 'repeat_one'
-		elseif P.mode == 'repeat_one' then
-			P.mode = 'repeat_all'
+	task_cancel = function ()
+		if task and not task.finished then
+			task.cancel()
+		elseif task_retry_timer then
+			info('retry cancelled')
+			clear_timeout(task_retry_timer)
+			task_retry_timer = nil
+		end
+	end
+	
+	task_new = function(o)
+		o.timeout = o.timeout or 60*1000
+
+		local t = {type=o.type}
+
+		t.done = function (r, ...)
+			if t.finished then return end
+			t.finished = true
+			if t.on_done then t.on_done(r, ...) end
+			clear_timeout(t.timer)
+			task_done(t, r)
 		end
 
-		done{result=0, mode=P.mode}
-		return true
+		t.fail = function (err)
+			if t.finished then return end
+			t.finished = true
+			t.err = err
+			if t.on_fail then t.on_fail(err) end
+			clear_timeout(t.timer)
+			task_fail(t, err)
+		end
+
+		t.cancel = function ()
+			if t.finished then return end
+			t.log('cancelled')
+			t.finished = true
+			if t.on_cancelled then t.on_cancelled() end
+			clear_timeout(t.timer)
+		end
+
+		t.log = function (...)
+			if t.finished then return end
+			if t then info(S.name, 'task:', ...) end
+		end
+
+		t.timer = set_timeout(t.cancel, o.timeout)
+		return t
 	end
 
-	if o.op == popt.type .. '.set_play_mode' then
-		if o.mode == 'repeat_all' then
-			P.mode = o.mode
-		elseif o.mode == 'repeat_one' then
-			P.mode = o.mode
-		elseif o.mode == 'normal' then
-			P.mode = o.mode
-		elseif o.mode == 'shuffle' then
-			P.mode = o.mode
-		end
-
-		done{result=0, mode=P.mode}
-		return true
+	S.restart_and_fetch_songs = function ()
+		task_cancel()
+		songs = {}
+		songs_i = 1
+		task = task_new{type='restart'}
+		return task
 	end
 
-	if o.op == popt.type .. '.songs_list' then
-		done{result=0, songs_list=P.list}
-		return true
-	end
-end
-
-P.skip = function ()
-	if P.on_skip then P.on_skip() end
-end
-
-P.stop = function () end
-
-P.next = function (o, done)
-	if table.maxn(P.list) == 0 then return end
-
-	if P.next_song then
-		done(P.next_song)
-		P.next_song = nil
-		return
-	end
-
-	if P.mode == 'repeat_one' and o and o.normal_end then
-		done(P.list[P.i])
-	end
-
-	if P.mode == 'repeat_all' then
-		P.i = P.i+1
-		if P.i > table.maxn(P.list) then
-			P.i = 1
+	S.fetch = function (done)
+		if fetching then
+			panic('call fetch() before last ends')
 		end
-		done(P.list[P.i])
-	elseif P.mode == 'normal' or P.mode == 'repeat_one' then
-		P.i = P.i+1
-		if P.i > table.maxn(P.list) then
-			return 
-		end
-		done(P.list[P.i])
-	elseif P.mode == 'shuffle' then
-		P.i = math.random(1, table.maxn(P.list))
+		fetching = true
+		fetch_done = done
 
-		P.log_list[P.log_i] = P.list[P.i]
-		P.log_i = P.log_i+1
-		if table.maxn(P.log_list) > P.log_max then
-			P.log_list[P.log_i-P.log_max] = nil
-		end
+		local s = songs[songs_i]
 
-		done(P.list[P.i])
-	end
-end
-
-P.do_prev = function ()
-	if table.maxn(P.list) == 0 then return end
-
-	if P.mode == 'repeat_all' then
-		P.i = P.i-1
-		if P.i <= 0 then
-			P.i = table.maxn(P.list)
-		end
-		P.next_song = P.list[P.i]
-	elseif P.mode == 'normal' or P.mode == 'repeat_one' then
-		P.i = P.i-1
-		if P.i <= 0 then
-			return
-		end
-		P.next_song = P.list[P.i]
-	elseif P.mode == 'shuffle' then
-		if not P.log_list[P.log_i] then
-			P.i = math.random(1, table.maxn(P.list))
-			P.next_song = P.list[P.i]
+		if s then
+			-- just return
+			songs_i = songs_i + 1
+			fetch_imm = set_immediate(function () 
+				fetch_imm = nil
+				fetching = false
+				fetch_done(s)
+			end)
+			if songs_i + 1 > table.maxn(songs) and not task then
+				task = task_new{type='fetch'}
+				S.prefetch_songs(task)
+			end
+		elseif task_is_running() then
+			-- wait for end
 		else
-			P.log_i = P.log_i-1
-			P.next_song = P.log_list[P.log_i]
+			-- new task
+			task = task_new{type='fetch'}
+			S.prefetch_songs(task)
 		end
 	end
 
-	if P.on_skip then P.on_skip() end
+	S.cancel_fetch = function ()
+		if fetching then fetching = nil end
+		if fetch_imm then cancel_immediate(fetch_imm) end
+	end
+
+	return S
 end
 
-P.info = function ()
-	return {type=popt.type, play_mode=P.mode}
+P.player = function ()
+	local p = pdirect()
+
+	p.stat = 'stopped' 
+	p.paused = false
+
+	-- fetching
+	-- playing
+	-- buffering
+	-- changing_src
+	-- stopped
+	-- closed
+
+	p.pos = function ()
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			return p.copy.rx() / (44100*4)
+		end
+	end
+
+	p.on_change = function ()
+		local r = {stat=p.stat}
+
+		if p.paused and r.stat == 'playing' then r.stat = 'paused' end
+		if p.song then r.song = table.copy(p.song) end
+
+		set_immediate(function ()
+			if r.stat == 'closed' and p.done_cb then p.done_cb() end
+			if p.changed_cb then p.changed_cb(r) end
+		end)
+	end
+
+	p.done = function (cb)
+		p.done_cb = cb
+	end
+
+	p.changed = function (cb)
+		p.changed_cb = cb
+	end
+
+	p.pause = function ()
+		if p.paused then return end
+		p.paused = true
+
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			p.copy.pause()
+			p.on_change()
+		elseif p.stat == 'fetching' then
+			p.src.cancel_fetch()
+			p.on_change()
+		end
+	end
+
+	p.resume = function ()
+		if not p.paused then return end
+		p.paused = false
+
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			p.copy.resume()
+			p.on_change()
+		elseif p.stat == 'fetching' then
+			p.src.fetch(p.src_fetch)
+			p.on_change()
+		end
+	end
+
+	p.pause_resume = function ()
+		if p.paused then
+			p.resume()
+		else
+			p.pause()
+		end
+	end
+
+	p.src_fetch = function (song)
+		if not isstring(song.url) then
+			panic('url must be set')
+		end
+
+		p.song = song
+		p.url = song.url
+		p.dec = audio.decoder(p.url)
+
+		p.stat = 'buffering'
+		p.on_change()
+
+		p.dec.probed(function (d)
+			p.dur = d.dur
+		end)
+
+		local c = pipe.copy(p.dec, p, 'r')
+
+		c.buffering(1500, function (buffering)
+			if buffering and p.stat == 'playing' then
+				p.stat = 'buffering'
+				if not p.paused then p.on_change() end
+			elseif not buffering and p.stat == 'buffering' then
+				p.stat = 'playing'
+				if not p.paused then p.on_change() end
+			end
+		end)
+		
+		c.done(function (reason)
+			info('done', 'stat=', p.stat, 'reason=', reason)
+			p.copy = nil
+
+			if reason == 'w' then
+				-- EOF
+				pclose_write(p)
+				p.stat = 'closed'
+				p.on_change()
+				return
+			end
+
+			if p.stat == 'playing' or p.stat == 'buffering' or p.stat == 'changing_src' then
+				p.stat = 'fetching'
+				p.on_change()
+				if not p.paused then p.src.fetch(p.src_fetch) end
+			elseif p.stat == 'closing' then
+				p.stat = 'closed'
+				p.on_change()
+			end
+		end)
+
+		p.copy = c
+	end
+
+	p.src_skip = function ()
+		if p.stat == 'playing' or p.stat == 'buffering' then 
+			p.copy.close()
+		end
+	end
+
+	p.src_close = function ()
+		p.src.close = nil
+		p.src.skip = nil
+
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			p.copy.close()
+			p.stat = 'closing'
+		elseif p.stat == 'fetching' then
+			info('close write')
+			pclose_write(p)
+			p.src.cancel_fetch()
+			p.stat = 'closed'
+			p.on_change()
+		end
+
+		p.src = nil
+	end
+
+	p.setsrc = function (src)
+		src.skip = p.src_skip
+		src.close = p.src_close
+
+		if p.stat == 'playing' or p.stat == 'buffering' then
+			p.stat = 'changing_src'
+			p.copy.close()
+		elseif p.stat == 'fetching' and not p.paused then
+			p.src.cancel_fetch()
+			src.fetch(p.src_fetch)
+		elseif p.stat == 'stopped' then
+			p.stat = 'fetching'
+			src.fetch(p.src_fetch)
+			p.on_change()
+		elseif p.stat == 'closed' then
+			panic('aleady closed')
+		end
+
+		p.src = src
+		return p
+	end
+
+	return p
 end
 
-return P
-end
+playlist = P
 
