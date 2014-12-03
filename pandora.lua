@@ -1,6 +1,6 @@
 
 require('prop')
-require('radio')
+require('playlist')
 
 local P = {}
 
@@ -588,5 +588,5 @@ end
 
 P.init()
 
-pandora = radio.new_station(P)
+pandora = playlist.station(P)
 

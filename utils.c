@@ -41,18 +41,27 @@ void _log(
 	vsnprintf(buf, sizeof(buf)-2, fmt, ap);
 	va_end(ap);
 
-	fprintf(stderr, "[%8.3f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
+	fprintf(stderr, "[%10.6f] [%s:%d:%s] %s\n", now(), file, line, func, buf);
 
 	if (level == LOG_PANIC)
 		print_traceback_and_exit();
 }
 
+#if 0
 float now() {
 	static uint64_t tm;
 	if (tm == 0)
 		tm = uv_now(g_loop);
 	return (float)(uv_now(g_loop) - tm)/1e3;
 }
+#else
+float now() {
+	static uint64_t tm;
+	if (tm == 0)
+		tm = uv_hrtime();
+	return (float)(uv_hrtime() - tm)/1e9;
+}
+#endif
 
 void *zalloc(int len) {
 	void *p = malloc(len);
@@ -248,11 +257,22 @@ static void fault(int sig) {
 }
 
 static void on_check(uv_check_t *c, int stat) {
+	debug("check");
 	run_immediate();
 }
 
+static void on_walk(uv_handle_t *h, void *arg) {
+	debug("h=%p", h);
+}
+
 static void on_prepare(uv_prepare_t *p, int stat) {
+	uv_walk(p->loop, on_walk, NULL);
+	debug("prepare");
 	run_immediate();
+}
+
+static void on_idle(uv_idle_t *i, int stat) {
+	debug("idle");
 }
 
 void utils_preinit(uv_loop_t *loop) {
@@ -282,6 +302,12 @@ void utils_preinit(uv_loop_t *loop) {
 	static uv_prepare_t p;
 	uv_prepare_init(loop, &p);
 	uv_prepare_start(&p, on_prepare);
+
+/*
+	static uv_idle_t i;
+	uv_idle_init(loop, &i);
+	uv_idle_start(&i, on_idle);
+*/
 }
 
 void luv_utils_init(lua_State *L, uv_loop_t *loop) {

@@ -10,7 +10,7 @@ local function spawn ()
 	local p = pexec(string.format('./shairport_jz -o tcp %s %d', host, port), 'c')
 
 	p[1].exit_cb = function (code)
-		pexec('pkill -f avahi-publish-service')
+		pexec('pkill avahi-daemon')
 		set_timeout(spawn, 1000)
 	end
 
@@ -23,11 +23,7 @@ end
 S.start = function (handler)
 	spawn()
 	tcpsrv(host, port, function (r)
-		local p = pdirect()
-		pipe.copy(r, p, 'rw').done(function (reason)
-			if reason == 'w' then S.kill() end
-		end)
-		handler(p)
+		handler(r)
 	end)
 end
 

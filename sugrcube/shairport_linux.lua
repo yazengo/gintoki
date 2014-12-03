@@ -7,7 +7,7 @@ local host = '127.0.0.1'
 local port = 3389
 
 local function spawn ()
-	local p = pexec(string.format('shairport_linux -o tcp %s %d', host, port), 'c')
+	local p = pexec(string.format('shairport_linux -o tcp %s %d >/tmp/shairport.log', host, port), 'c')
 
 	p[1].exit_cb = function (code)
 		pexec('pkill -f avahi-publish-service')
@@ -23,11 +23,7 @@ end
 S.start = function (handler)
 	spawn()
 	tcpsrv(host, port, function (r)
-		local p = pdirect()
-		pipe.copy(r, p, 'rw').done(function (reason)
-			if reason == 'w' then S.kill() end
-		end)
-		handler(p)
+		handler(r)
 	end)
 end
 

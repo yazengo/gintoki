@@ -17,63 +17,48 @@ pipe.copy = function (src, sink, mode)
 		return r
 	end 
 
-	r.first_cb = function ()
-		if r.start_first_cb then r.start_first_cb() end
-		if r.bufing_first_cb then r.bufing_first_cb() end
-	end
-
-	r.started = function (cb)
-		r.start_first_cb = cb
-		r.setopt('first_cb', r.first_cb)
-		return r
-	end
-
 	r.rx = function ()
 		return r.setopt('get.rx')
 	end
 
 	r.pause = function ()
-		return r.setopt('pause')
+		local b = r.setopt('pause')
+		if b then
+			set_immediate(function ()
+				if r.statchanged_cb then
+					r.statchanged_cb{stat='paused'}
+				end
+			end)
+		end
+		return b
 	end
 
 	r.resume = function ()
-		return r.setopt('resume')
+		local b = r.setopt('resume')
+		set_immediate(function ()
+			if r.statchanged_cb then
+				r.statchanged_cb{stat='playing'}
+			end
+		end)
+		return b
 	end
 
 	r.close = function ()
 		r.setopt('close')
 	end
 
-	r.buffering = function (timeout, cb)
-		local bufing = {}
+	r.statchanged = function (cb)
+		r.statchanged_cb = cb
 
-		bufing.check = function ()
-			local rx = r.rx()
-			local delta = rx - bufing.rx
-
-			if delta == 0 and bufing.delta > 0 then
-				bufing.cb(true)
-			elseif delta > 0 and bufing.delta == 0 then
-				bufing.cb(false)
-			end
-
-			--info('rx=', rx, bufing.rx, 'delta=', delta, bufing.delta)
-
-			bufing.rx = rx
-			bufing.delta = delta
+		if not r.setopt('is_paused') then
+			set_immediate(function ()
+				cb{stat='buffering'}
+			end)
+			r.setopt('first_cb', function ()
+				cb{stat='playing'}
+			end)
 		end
 
-		bufing.cb = cb
-
-		r.bufing_first_cb = function ()
-			bufing.rx = 0
-			bufing.delta = 1
-			bufing.timer = set_interval(bufing.check, timeout)
-			bufing.cb(false)
-			r.bufing = bufing
-		end
-
-		r.setopt('first_cb', r.first_cb)
 		return r
 	end
 
@@ -111,7 +96,7 @@ pipe.curl = function (...)
 	o.done = o.done or function () end
 	o.timeout = (o.timeout and '-m ' .. o.timeout) or ''
 
-	local r = pexec(string.format('curl %s %s', o.timeout, o.url), 'rc')
+	local r = pexec(string.format('curl %s "%s"', o.timeout, o.url), 'rc')
 	r[2].exit_cb = function (code)
 		o.done(code)
 	end

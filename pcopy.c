@@ -92,7 +92,7 @@ static void read_done(pipe_t *src, pipebuf_t *pb) {
 		panic("stat=%d invalid", c->stat);
 	c->stat = WRITING;
 
-	debug("write c=%p p=%p", c->sink);
+	debug("write p=%p pb=%p", c->sink, pb);
 	pipe_write(c->sink, pb, write_done);
 }
 
@@ -101,7 +101,7 @@ static void copy(pcopy_t *c) {
 		panic("stat=%d invalid", c->stat);
 	c->stat = READING;
 
-	debug("read c=%p p=%p", c, c->src);
+	debug("read p=%p", c->src);
 	pipe_read(c->src, read_done);
 }
 
@@ -184,10 +184,16 @@ static int pcopy_setopt(lua_State *L, uv_loop_t *loop, void *_c) {
 		return 1;
 	}
 
+	if (op && !strcmp(op, "is_paused")) {
+		lua_pushboolean(L, c->stat == PAUSED);
+		return 1;
+	}
+
 	if (op && !strcmp(op, "first_cb")) {
 		luv_pushctx(L, c);
 		lua_pushvalue(L, 2);
 		lua_setfield(L, -2, "first_cb");
+		c->rx = 0;
 		c->flags |= FIRST_CB;
 		return 0;
 	}

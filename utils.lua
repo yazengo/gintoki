@@ -10,7 +10,7 @@ end
 
 table.copy = function (t, filter)
 	if filter == nil then
-		return table.add({}, a)
+		return table.add({}, t)
 	else
 		local r = {}
 		for k, v in pairs(t) do

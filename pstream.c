@@ -25,7 +25,7 @@ static uv_buf_t uv_allocbuf(uv_handle_t *h, size_t n) {
 		pb = pipebuf_new();
 	
 	p->read.pb = pb;
-	debug("pb=%p len=%d", pb, len);
+	debug("pb=%p n=%d len=%d", pb, n, len);
 
 	uv_buf_t ub = {
 		.base = pb->base + len,
@@ -92,6 +92,8 @@ static void block_readdone(pipe_t *p, ssize_t n) {
 static void uv_readdone(uv_stream_t *st, ssize_t n, uv_buf_t ub) {
 	pipe_t *p = (pipe_t *)st->data;
 
+	debug("p=%p n=%d", p, n);
+
 	uv_read_stop(st);
 
 	if (p->stat != READING) 
@@ -108,6 +110,7 @@ void pstream_read(pipe_t *p) {
 		panic("stat=%d invalid", p->stat);
 	p->stat = READING;
 
+	debug("p=%p", p);
 	p->st->data = p;
 	uv_read_start(p->st, uv_allocbuf, uv_readdone);
 }

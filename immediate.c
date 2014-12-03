@@ -16,6 +16,7 @@ prof_t pf_immediate = {"immediate"};
 static queue_t immque;
 
 void run_immediate() {
+	float tm = now();
 	debug("start");
 	queue_t *q;
 	queue_foreach(q, &immque) {
@@ -24,7 +25,7 @@ void run_immediate() {
 		im->cb(im);
 		im->cb = NULL;
 	}
-	debug("end");
+	debug("end tm=%f", (now() - tm) * 1000);
 	queue_init(&immque);
 }
 

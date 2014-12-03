@@ -214,7 +214,7 @@ void luv_unref(void *_l) {
 
 	debug("l=%p", _l);
 
-	lua_gc(L, LUA_GCCOLLECT, 0);
+	//lua_gc(L, LUA_GCCOLLECT, 0);
 }
 
 uv_loop_t *luv_loop(void *_l) {

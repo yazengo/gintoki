@@ -33,11 +33,14 @@ init({init_localmusic, shairport.init}, function ()
 	info('server starts')
 
 	S.sw = audio.switcher()
-	S.player = playlist.player().changed(function (r)
-		info(r)
+	S.player = playlist.player().statchanged(function (r)
+		info(r, S.player.song, S.player.pos(), S.player.dur)
 	end)
 
-	audio.pipe(S.sw, audio.out())
+	S.eff = audio.effect()
+	S.eff.setvol(0.5)
+
+	audio.pipe(S.sw, S.eff, audio.out())
 	S.player.setsrc(S.localmusic)
 	S.sw.setsrc(S.player)
 
@@ -54,6 +57,11 @@ input.cmds = {
 	[[ S.player.next() ]],
 	[[ S.player.prev() ]],
 	[[ S.sw.stop_breakin() ]],
+	[[ S.eff.setvol(0.2) ]],
+	[[ S.eff.setvol(0.5) ]],
+	[[ S.eff.setvol(1.0) ]],
+	[[ S.sw.breakin(audio.noise()) ]],
+	[[ info('blocks') ]],
 }
 end
 

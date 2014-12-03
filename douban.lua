@@ -1,6 +1,6 @@
 
 require('prop')
-require('radio')
+require('playlist')
 
 --[[
 
@@ -431,5 +431,5 @@ end
 
 D.init()
 
-douban = radio.new_station(D)
+douban = playlist.station(D)
 

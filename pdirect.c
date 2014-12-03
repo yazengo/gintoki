@@ -210,6 +210,9 @@ void pdirect_cancel_read(pipe_t *p) {
 		cancel_immediate(&p->read.im_direct);
 		p->rdstat = INIT;
 	}
+	if (p->stat == READING) {
+		p->stat = INIT;
+	}
 }
 
 void pdirect_cancel_write(pipe_t *p) {

@@ -17,9 +17,11 @@ audio.decoder = function (url)
 		mode = 'wer'
 	end
 
-	local p = pexec(string.format('avconv -i %s -f s16le -ar 44100 -ac 2 -', url), mode)
+	local p = pexec(string.format('avconv -i "%s" -f s16le -ar 44100 -ac 2 -', url), mode)
 	if p[3] then
 		pipe_setopt(p[3], 'read_mode', 'block')
+	elseif p[1] then
+		pipe_setopt(p[1], 'read_mode', 'block')
 	end
 
 	local d = {p[1], p[3]}
@@ -141,7 +143,7 @@ end
 
 audio.switcher = function ()
 	local sw = pdirect()
-	local src, p_cur, c_cur
+	local src, p_cur, c_cur, p_breakin
 
 	local function copy(p)
 		local mode = 'r'
@@ -180,28 +182,6 @@ audio.switcher = function ()
 		copy(p)
 	end
 
-	-- Situation 1:
-
-	-- sw.breakin(p)
-	--               ->  [breaking]
-	--        [src]  ->       [src]
-
-	-- breakin closed
-	--        [src]
-
-	-- Situation 2:
-
-	-- sw.breakin(p)
-	--               ->  [breaking]
-
-	-- sw.setsrc(p)     (just change)
-	--   [breaking]  ->  [breaking]
-	--        [src]  ->       [src]
-
-	-- sw.setsrc(nil)   (just clear)
-	--   [breaking]  ->  [breaking]
-	--        [src]  ->            
-
 	sw.setsrc = function (p)
 		if p == nil then
 			if src then 
@@ -223,7 +203,15 @@ audio.switcher = function ()
 		return sw
 	end
 
+	sw.stop_breakin = function ()
+		if c_cur and p_breakin == p_cur then
+			c_cur.close()
+			c_cur = nil
+		end
+	end
+
 	sw.breakin = function (p)
+		p_breakin = p
 		play(p)
 		return sw
 	end

@@ -23,7 +23,7 @@ pipebuf_t *pipebuf_new() {
 	pb->len = PIPEBUF_SIZE;
 	pb->refcnt = 1;
 	pb->gc = gc;
-	debug("new p=%p", pb);
+	debug("new pb=%p", pb);
 	return pb;
 }
 

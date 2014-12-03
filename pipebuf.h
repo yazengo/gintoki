@@ -2,6 +2,7 @@
 #pragma once
 
 #include "mem.h"
+#include "queue.h"
 
 typedef struct pipebuf_s {
 	void *base;
@@ -9,6 +10,7 @@ typedef struct pipebuf_s {
 	int refcnt;
 	void (*gc)(struct pipebuf_s *pb);
 	char buf[0];
+	queue_t q;
 } pipebuf_t;
 
 extern int PIPEBUF_SIZE;

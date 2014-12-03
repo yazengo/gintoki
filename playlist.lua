@@ -15,36 +15,40 @@ P.urls = function (urls)
 
 	r.setmode = function (m)
 		r.mode = m
+		return r
 	end
 
 	local function fetch(o)
 		local url = r.urls[r.at]
 		local n = table.maxn(r.urls)
+		local at
 
-		if r.mode ~= 'random' then
-			r.at = math.random(n)
+		if r.mode == 'random' then
+			at = math.random(n)
 		else
 			if o and o.prev then
-				r.at = r.at - 1
+				at = r.at - 1
 			else
-				r.at = r.at + 1
+				at = r.at + 1
 			end
 		end
 
-		if r.at > n then
+		if at > n then
 			if r.mode == 'repeat_all' then
-				r.at = 1
+				at = 1
 			elseif r.mode == nil then
 				r.close()
 			end
-		elseif r.at < 1 then
+		elseif at < 1 then
 			if r.mode == 'repeat_all' then
-				r.at = n
+				at = n
 			elseif r.mode == nil then
-				r.at = 1
+				at = 1
 			end
 		end
 
+		info('pos', r.at, '->', at)
+		r.at = at
 		return url
 	end
 
@@ -212,204 +216,85 @@ P.station = function (S)
 end
 
 P.player = function ()
-	local p = pdirect()
+	local fetching
+	local fetcher
+	local fetch_opt
 
-	p.stat = 'stopped' 
-	p.paused = false
+	local closed
 
-	-- fetching
-	-- playing
-	-- buffering
-	-- changing_src
-	-- stopped
-	-- closed
+	local p0 = pdirect()
+	local p1 = pdirect()
 
-	p.pos = function ()
-		if p.stat == 'playing' or p.stat == 'buffering' then
-			return p.copy.rx() / (44100*4)
-		end
+	local c0
+	local c1 = pipe.copy(p0, p1, 'rw').done(function (reason)
+		info('closed')
+		closed = true
+	end)
+
+	local statchanged_cb
+	local function statchanged (st)
+		if statchanged_cb then statchanged_cb(st) end
 	end
 
-	p.on_change = function ()
-		local r = {stat=p.stat}
-
-		if p.paused and r.stat == 'playing' then r.stat = 'paused' end
-		if p.song then r.song = table.copy(p.song) end
-
-		set_immediate(function ()
-			if r.stat == 'closed' and p.done_cb then p.done_cb() end
-			if p.changed_cb then p.changed_cb(r) end
-		end)
+	p1.pos = function ()
+		return c1.rx() / (44100.0*4)
 	end
 
-	p.done = function (cb)
-		p.done_cb = cb
+	p1.statchanged = function (cb)
+		statchanged_cb = cb
+		return p1
+	end
+	
+	p1.pause  = c1.pause
+	p1.resume = c1.resume
+
+	local function fetch ()
+		fetching = true
+		fetcher.fetch(function (song)
+			p1.song = song
+			fetching = nil
+			local dec = audio.decoder(song.url).probed(function (d)
+				p1.dur = d.dur
+			end)
+			c0 = pipe.copy(dec, p0, 'r').done(function ()
+				c0 = nil
+				fetch()
+			end)
+			c1.statchanged(statchanged)
+		end, fetch_opt)
+		fetch_opt = nil
 	end
 
-	p.changed = function (cb)
-		p.changed_cb = cb
-	end
-
-	p.fetch = function ()
-		p.src.fetch(p.src_fetch, p.fetch_o)
-		p.fetch_o = nil
-	end
-
-	p.pause = function ()
-		if p.paused then return end
-		p.paused = true
-
-		if p.stat == 'playing' or p.stat == 'buffering' then
-			p.copy.pause()
-			p.on_change()
-		elseif p.stat == 'fetching' then
-			p.src.cancel_fetch()
-			p.on_change()
-		end
-	end
-
-	p.resume = function ()
-		if not p.paused then return end
-		p.paused = false
-
-		if p.stat == 'playing' or p.stat == 'buffering' then
-			p.copy.resume()
-			p.on_change()
-		elseif p.stat == 'fetching' then
-			p.fetch()
-			p.on_change()
-		end
-	end
-
-	p.next = function ()
-		if p.stat == 'playing' or p.stat == 'buffering' then
-			p.copy.close()
-		end
-	end
-
-	p.prev = function ()
-		p.fetch_o = {prev=true}
-
-		if p.stat == 'playing' or p.stat == 'buffering' then
-			p.copy.close()
-		elseif p.stat == 'fetching' then
-			if not p.paused then
-				p.src.cancel_fetch()
-				p.fetch()
-			end
-		end
-	end
-
-	p.pause_resume = function ()
-		if p.paused then
-			p.resume()
-		else
-			p.pause()
-		end
-	end
-
-	p.src_fetch = function (song)
-		if not isstring(song.url) then
-			panic('url must be set')
+	p1.setsrc = function (src)
+		if closed then
+			panic('already closed')
 		end
 
-		p.song = song
-		p.url = song.url
-		p.dec = audio.decoder(p.url)
+		if fetching then
+			fetcher.cancel_fetch()
+		end
+		if c0 then
+			c0.close()
+		end
+		fetcher = src
 
-		p.stat = 'buffering'
-		p.on_change()
-
-		p.dec.probed(function (d)
-			p.dur = d.dur
-		end)
-
-		local c = pipe.copy(p.dec, p, 'r')
-
-		c.buffering(1500, function (buffering)
-			if buffering and p.stat == 'playing' then
-				p.stat = 'buffering'
-				if not p.paused then p.on_change() end
-			elseif not buffering and p.stat == 'buffering' then
-				p.stat = 'playing'
-				if not p.paused then p.on_change() end
-			end
-		end)
+		if not fetcher then
+			return
+		end
 		
-		c.done(function (reason)
-			info('done', 'stat=', p.stat, 'reason=', reason)
-			p.copy = nil
-
-			if reason == 'w' then
-				-- EOF
-				pclose_write(p)
-				p.stat = 'closed'
-				p.on_change()
-				return
-			end
-
-			if p.stat == 'playing' or p.stat == 'buffering' or p.stat == 'changing_src' then
-				p.stat = 'fetching'
-				p.on_change()
-				if not p.paused then p.fetch() end
-			elseif p.stat == 'closing' then
-				p.stat = 'closed'
-				p.on_change()
-			end
-		end)
-
-		p.copy = c
+		fetch()
 	end
 
-	p.src_skip = function ()
-		if p.stat == 'playing' or p.stat == 'buffering' then 
-			p.copy.close()
-		end
+	p1.next = function ()
+		if c0 then c0.close() end
+	end
+	
+	p1.prev = function ()
+		if c0 then c0.close() end
+		fetch_opt = {prev=true}
 	end
 
-	p.src_close = function ()
-		p.src.close = nil
-		p.src.skip = nil
-
-		if p.stat == 'playing' or p.stat == 'buffering' then
-			p.copy.close()
-			p.stat = 'closing'
-		elseif p.stat == 'fetching' then
-			info('close write')
-			pclose_write(p)
-			p.src.cancel_fetch()
-			p.stat = 'closed'
-			p.on_change()
-		end
-
-		p.src = nil
-	end
-
-	p.setsrc = function (src)
-		src.skip = p.src_skip
-		src.close = p.src_close
-
-		if p.stat == 'playing' or p.stat == 'buffering' then
-			p.stat = 'changing_src'
-			p.copy.close()
-			p.src = src
-		elseif p.stat == 'fetching' and not p.paused then
-			p.src.cancel_fetch()
-			p.src = src
-			p.fetch()
-		elseif p.stat == 'stopped' then
-			p.stat = 'fetching'
-			p.on_change()
-			p.src = src
-			p.fetch()
-		elseif p.stat == 'closed' then
-			panic('aleady closed')
-		end
-
-		return p
-	end
-
-	return p
+	return p1
 end
 
 playlist = P

@@ -27,8 +27,10 @@ static int ctrl_kill(lua_State *L, uv_loop_t *loop, void *_c) {
 	if (sig == 0)
 		sig = 15;
 
-	if (c->p) 
+	if (c->p) {
+		info("pid=%d sig=%d", c->p->pid, sig);
 		uv_process_kill(c->p, sig);
+	}
 
 	return 0;
 }

@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "strbuf.h"
 #include "luv.h"
 #include "utils.h"
 
@@ -116,18 +117,30 @@ static int luv_readdir(lua_State *L, uv_loop_t *loop) {
 	return 0;
 }
 
-static int luv_pathexists(lua_State *L, uv_loop_t *loop) {
+static int lua_pathexists(lua_State *L) {
 	char *path = (char *)lua_tostring(L, 1);
 	struct stat st;
 	lua_pushboolean(L, (stat(path, &st) == 0));
 	return 1;
 }
 
+static int lua_putenv(lua_State *L) {
+	strbuf_t *sb = strbuf_new(128);
+
+	if (lua_isnil(L, 1) || lua_isnil(L, 2))
+		panic("must not be nil");
+
+	strbuf_append_fmt_retry(sb, "%s=%s", lua_tostring(L, 1), lua_tostring(L, 2));
+	putenv(sb->buf);
+	return 0;
+}
+
 void luv_os_init(lua_State *L, uv_loop_t *loop) {
 	luv_register(L, loop, "readdir", luv_readdir);
 	luv_register(L, loop, "readline", luv_readline);
 	luv_register(L, loop, "hostname", luv_hostname);
-	luv_register(L, loop, "pathexists", luv_pathexists);
 	luv_register(L, loop, "now", luv_now);
+	lua_register(L, "pathexists", lua_pathexists);
+	lua_register(L, "putenv", lua_putenv);
 }
 

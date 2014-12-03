@@ -63,6 +63,7 @@ void aoutdev_close(void *_dev) {
 }
 
 void aoutdev_init() {
+	//ao_append_global_option("buffer_time", "10000");
 	ao_initialize();
 }
 
