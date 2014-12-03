@@ -19,7 +19,7 @@ p2 = player.new().setsrc(radio.urls_list{
 	'testaudios/2s-3.mp3',
 })
 
-c = pipe.copy(p1, ao, 'b')
+c = pipe.copy(p1, ao, '')
 n = 0
 
 breakin = function (src)
@@ -30,10 +30,10 @@ breakin = function (src)
 	if type(src) == 'string' then src = audio.decoder(src) end
 	n = n + 1
 
-	c = pipe.copy(src, ao, 'br').done(function ()
+	c = pipe.copy(src, ao, 'r').done(function ()
 		n = n - 1
 		if n == 0 then
-			c = pipe.copy(p1, ao, 'b')
+			c = pipe.copy(p1, ao, '')
 		end
 	end)
 end
@@ -41,6 +41,6 @@ end
 input.cmds = {
 	[[ breakin('testaudios/2s-1.mp3') ]],
 	[[ breakin('testaudios/10s-2.mp3') ]],
-	[[ breakin(p2); p2 = nil ]],
+	[[ if p2 then breakin(p2); p2 = nil end ]],
 }
 
