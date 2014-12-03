@@ -1,4 +1,5 @@
 SugrCube ChangeLog
 ----
 
-* Basic playing
+* Sample: simple player interrupted by airplay
+	* manualy close airplay 

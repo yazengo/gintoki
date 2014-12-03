@@ -10,7 +10,7 @@ ChangeLog
 * Add pipe_setgc
 * Rename PDIRECT_SRC/PDIRECT_SINK -> PDIRECT
 * Replace every luv_newctx with pipe_new(type);
-* Improve pcopy.buffering
+* Improve pcopy buffering
   * enter buffering state when read blocks more than 1s
   * quit buffering state as soon as read starts
 
@@ -19,7 +19,7 @@ ChangeLog
 * Change luv_gc_cb to void gc(void *_p);
 * Find out the quickest way to do luv_newctx/luv_toctx. 
 
-# Audio Nodes
+# Audio streaming
 
 * Add aeffect() API [141202][DONE]
   * aeffect_setopt(o, 'setvol', 33) 
@@ -31,6 +31,7 @@ ChangeLog
 * Add amixer_setopt instead of amixer.setopt [141202][DONE]
 * Add aeffect test cases [141202][DONE]
 * amixer do mix using first pipebuf as mixbuf instead of pipebuf_new [141202][DONE]
+* Add audio.switcher() API [141203]
 
 # SystemStat
 
@@ -61,8 +62,9 @@ ChangeLog
 
 * WhiteNoise Generator [DONE]
 
-# Radios
+# Playlist
 
+* rename playlist.station
 * BBC
 * LocalMusic
 * Test Pandora/Douban/BBC/LocalMusic
