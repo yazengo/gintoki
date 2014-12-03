@@ -1,62 +1,76 @@
 
 local P = {}
 
-P.urls = function (urls)
+P.songs = function (songs)
+	songs = songs or {}
+
 	local r = {}
 
-	r.seturls = function (urls)
-		r.urls = urls
-		r.at = 1
+	r.setsongs = function (songs)
+		r.songs = songs
+		r.at = 0
 		return r
 	end
-	
-	r.mode = urls.mode
-	r.seturls(urls)
+
+	r.mode = songs.mode
+	r.setsongs(songs)
+
+	local modes = { 'repeat_all', 'shuffle' }
 
 	r.setmode = function (m)
-		r.mode = m
+		if table.contains(modes, m) then
+			r.mode = m
+		end
 		return r
 	end
 
-	local function fetch(o)
-		local url = r.urls[r.at]
-		local n = table.maxn(r.urls)
-		local at
+	local function fetch (o)
+		local n = table.maxn(r.songs)
+
+		if r.mode == 'random' then
+			r.at = math.random(n)
+		else
+			if o and o.prev then
+				r.at = r.at - 1
+			else
+				r.at = r.at + 1
+			end
+		end
+
+		if r.at > n then
+			if r.mode == 'repeat_all' then
+				r.at = 1
+			elseif r.mode == nil then
+				r.close()
+				return
+			end
+		elseif r.at < 1 then
+			if r.mode == 'repeat_all' then
+				r.at = n
+			elseif r.mode == nil then
+				r.close()
+				return
+			end
+		end
+
+		local song = r.songs[r.at]
 
 		if r.mode == 'random' then
 			at = math.random(n)
 		else
-			if o and o.prev then
-				at = r.at - 1
-			else
-				at = r.at + 1
-			end
-		end
-
-		if at > n then
-			if r.mode == 'repeat_all' then
-				at = 1
-			elseif r.mode == nil then
-				r.close()
-			end
-		elseif at < 1 then
-			if r.mode == 'repeat_all' then
-				at = n
-			elseif r.mode == nil then
-				at = 1
-			end
 		end
 
 		info('pos', r.at, '->', at)
 		r.at = at
-		return url
+
+		return song
 	end
 
 	r.fetch = function (done, o)
 		r.fetch_imm = set_immediate(function ()
-			local url = fetch(o)
-			if url then 
-				done{url=url, title=basename(url)}
+			local song = fetch(o)
+			if song then 
+				done(song)
 			end
 			r.fetch_imm = nil
 		end)
@@ -69,9 +83,35 @@ P.urls = function (urls)
 		end
 	end
 
-	r.done = function (cb)
-		r.done_cb = cb
+	r.jump_to = function (i)
+		local n = table.maxn(r.songs)
+
+		if i < 1 or i > n then 
+			return
+		end
+
+		r.at = i
+		if r.skip then r.skip() end
 	end
+
+	return r
+end
+
+P.urls = function (urls)
+	urls = urls or {}
+
+	local r = P.songs(songs)
+	
+	r.seturls = function (urls)
+		local songs = {}
+		for _, url in pairs(urls) do
+			table.insert(songs, {title=basename(url), url=url})
+		end
+		r.setsongs(songs)
+		return r
+	end
+
+	r.seturls(urls)
 
 	return r
 end
@@ -82,7 +122,7 @@ P.station = function (S)
 	local songs_i = 1
 	local fetch_imm
 	local fetch_done
-	local fetching = false
+	local fetching
 
 	local task_done
 	local task_fail
@@ -194,7 +234,7 @@ P.station = function (S)
 				fetching = false
 				fetch_done(s)
 			end)
-			if songs_i + 1 > table.maxn(songs) and not task then
+			if songs_i + 2 > table.maxn(songs) and not task then
 				task = task_new{type='fetch'}
 				S.prefetch_songs(task)
 			end
@@ -232,8 +272,18 @@ P.player = function ()
 	end)
 
 	local statchanged_cb
-	local function statchanged (st)
-		if statchanged_cb then statchanged_cb(st) end
+	local function statchanged (r)
+		if statchanged_cb then statchanged_cb(r) end
+	end
+
+	p1.close = function ()
+		c1.close()
+	end
+
+	p1.stat = function ()
+		if closed then return 'closed' end
+		if fetching then return 'fetching' end
+		return c1.stat
 	end
 
 	p1.pos = function ()
@@ -247,42 +297,85 @@ P.player = function ()
 	
 	p1.pause  = c1.pause
 	p1.resume = c1.resume
+	p1.pause_resume = c1.pause_resume
 
 	local function fetch ()
+		if fetcher == nil then return end
+
 		fetching = true
 		fetcher.fetch(function (song)
 			p1.song = song
 			fetching = nil
+
 			local dec = audio.decoder(song.url).probed(function (d)
 				p1.dur = d.dur
 			end)
-			c0 = pipe.copy(dec, p0, 'r').done(function ()
+
+			c0 = pipe.copy(dec, p0, 'r').done(function (reason)
 				c0 = nil
+
+				if reason == 'w' then 
+					pclose_write(p0)
+					return
+				end
+
 				fetch()
 			end)
+
 			c1.statchanged(statchanged)
 		end, fetch_opt)
 		fetch_opt = nil
 	end
 
+	local function skip ()
+		if c0 then c0.close() end
+	end
+
 	p1.setsrc = function (src)
-		if closed then
-			panic('already closed')
+		if closed then panic('already closed') end
+
+		if src then
+
+			if fetcher then
+
+				if fetching then
+					fetcher.cancel_fetch()
+					fetcher = src
+					fetch()
+				else
+					fetcher = src
+					c0.close()
+				end
+
+			else
+
+				fetcher = src
+				fetch()
+
+			end
+
+		else
+
+			if fetcher then
+
+				if fetching then
+					fetcher.cancel_fetch()
+					fetcher = nil
+				else
+					fetcher = nil
+					c0.close()
+				end
+
+			else
+
+				-- do nothing
+
+			end
 		end
 
-		if fetching then
-			fetcher.cancel_fetch()
+		if fetcher then
+			fetcher.skip = skip
 		end
-		if c0 then
-			c0.close()
-		end
-		fetcher = src
-
-		if not fetcher then
-			return
-		end
-		
-		fetch()
 	end
 
 	p1.next = function ()
@@ -292,6 +385,10 @@ P.player = function ()
 	p1.prev = function ()
 		if c0 then c0.close() end
 		fetch_opt = {prev=true}
+	end
+
+	p1.src = function ()
+		return fetcher
 	end
 
 	return p1

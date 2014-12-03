@@ -114,7 +114,10 @@ end
 
 debug = function (...) _log_at(0, 3, ...) end
 info = function (...) _log_at(1, 3, ...) end
-panic = function (...) _log_at(4, 3, ...) end
+panic = function (...) 
+	print(ldebug.traceback())
+	_log_at(4, 3, ...) 
+end
 
 basename = function (s)
 	local x = string.gsub(s, '%.[^%.]*$', '')

@@ -284,6 +284,11 @@ D.prefetch_songs = function (task)
 end
 
 D.setopt_login = function (o, done)
+	if type(o.username) ~= 'string' or type(o.password) ~= 'string' then
+		done(1, 'username or password invalid')
+		return
+	end
+
 	local task = D.restart_and_fetch_songs()
 
 	local c = table.copy(D.cookie)
@@ -295,15 +300,15 @@ D.setopt_login = function (o, done)
 
 	task.on_done = function (r, c)
 		if c then D.setcookie(c) end
-		done{result=0, icon=c.icon, name=c.name}
+		done{icon=c.icon, name=c.name}
 	end
 
 	task.on_fail = function (err)
-		done{result=1, msg=err}
+		done(1, err)
 	end
 
 	task.on_cancelled = function ()
-		done{result=1, msg='cancelled'}
+		done(1, 'cancelled')
 	end
 
 	D.auto_auth(c, D.songs_list, function (c, r)
@@ -316,6 +321,11 @@ D.setopt_login = function (o, done)
 end
 
 D.setopt_channel_choose = function (o, done) 
+	if type(o.id) ~= 'string' then
+		done(1, 'id must be set')
+		return
+	end
+
 	local task = D.restart_and_fetch_songs()
 
 	local c = table.copy(D.cookie)
@@ -323,15 +333,15 @@ D.setopt_channel_choose = function (o, done)
 
 	task.on_done = function (r, c)
 		if c then D.setcookie(c) end
-		done{result=0}
+		done()
 	end
 
 	task.on_fail = function (err)
-		done{result=1, msg=err}
+		done(1, err)
 	end
 
 	task.on_cancelled = function ()
-		done{result=1, msg='cancelled'}
+		done(1, 'cancelled')
 	end
 
 	D.auto_auth(c, D.songs_list, function (c, r)
@@ -344,10 +354,9 @@ D.setopt_channels_list = function (o, done)
 
 	D.auto_auth(c, D.channels_list, function (c, r) 
 		if c then D.setcookie(c) end
-		r.result = 0
 		done(r)
 	end, function (err)
-		done{result=1, msg=err}
+		done(1, err)
 	end)
 end
 
@@ -363,15 +372,15 @@ D.setopt_logout = function (o, done)
 
 	task.on_done = function (r, c)
 		D.setcookie(c)
-		done{result=0}
+		done()
 	end
 
 	task.on_fail = function (err)
-		done{result=1, msg=err}
+		done(1, err)
 	end
 
 	task.on_cancelled = function ()
-		done{result=1, msg='cancelled'}
+		done(1, 'cancelled')
 	end
 
 	D.auto_auth(c, D.songs_list, function (c, r)
@@ -379,40 +388,33 @@ D.setopt_logout = function (o, done)
 	end, task.fail)
 end
 
-D.setopt = function (o, done)
-	done = done or function (r) end
+D.setopt_stat = function (o, done)
+	done(table.add({result=0}, D.info_login()))
+end
 
-	if o.op == 'douban.login' and isstr(o.username) and isstr(o.password) then
-		D.setopt_login(o, done)
-		return true
-	elseif o.op == 'douban.logout' then
-		D.setopt_logout(o, done)
-		return true
-	elseif o.op == 'douban.channel_choose' and o.id then
-		D.setopt_channel_choose(o, done)
-		return true
-	elseif o.op == 'douban.channels_list' then
-		D.setopt_channels_list(o, done)
-		return true
-	elseif o.op == 'douban.stat' then
-		done(table.add({result=0}, D.info_login()))
-		return true
-	elseif o.op == 'douban.rate_like' then
-		D.rate(D.cookie, 'r', o.id, function () done{result=0} end)
-		return true
-	elseif o.op == 'douban.rate_unlike' then
-		D.rate(D.cookie, 'u', o.id, function () done{result=0} end)
-		return true
-	elseif o.op == 'douban.rate_ban' then
-		D.rate(D.cookie, 'b', o.id, function () 
-			done{result=0} 
-			D.skip()
-		end)
-		return true
-	elseif o.op == 'douban.rate_toggle_like' then
-		D.rate(D.cookie, 't', o.id, function () done{result=0} end)
-		return true
+D.setopt_rate = function (o, op, done)
+	if type(o.id) ~= 'string' then
+		done(1, 'id must be set')
+		return
 	end
+	D.rate(D.cookie, op, o.id, function () done{result=0} end)
+end
+
+D.setopt_rate_like = function (o, done)
+	D.setopt_rate(o, 'r', done)
+end
+
+D.setopt_rate_unlike = function (o, done)
+	D.setopt_rate(o, 'u', done)
+end
+
+D.setopt_rate_ban = function (o, done)
+	D.setopt_rate(o, 'b', done)
+	if D.skip then D.skip() end
+end
+
+D.setopt_rate_toggle_like = function (o, done)
+	D.setopt_rate(o, 't', done)
 end
 
 D.info_login = function ()

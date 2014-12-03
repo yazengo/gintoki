@@ -1,7 +1,7 @@
 
 sysroot = ../system/fs_compile
 
-cobjs += jz/aout_jz.o jz/inputdev.o jz/alarm.o
+cobjs += jz/aout.o jz/inputdev.o jz/alarm.o
 
 luvmods += inputdev alarm
 

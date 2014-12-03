@@ -1,6 +1,4 @@
 
-putenv('MUSICDIR', '/mnt/sdcard/musics')
-
-require('sugrcube/shairport_jz')
+require('jz/arch')
 require('sugrcube/server')
 

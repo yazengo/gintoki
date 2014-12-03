@@ -434,7 +434,12 @@ P.auto_auth = function (c, call, done, fail, log)
 	end)
 end
 
-P.setopt_genres_choose = function (o, done, fail)
+P.setopt_genres_choose = function (o, done)
+	if type(o.id) == 'string' then
+		done(1, 'invalid id')
+		return
+	end
+
 	local task = P.restart_and_fetch_songs()
 
 	local c = table.copy(P.cookie)
@@ -442,16 +447,16 @@ P.setopt_genres_choose = function (o, done, fail)
 	c.genres_id = o.id
 
 	task.on_fail = function (err)
-		done{result=1, msg=err}
+		done(1, err)
 	end
 
 	task.on_done = function (r, c)
 		P.setcookie(c)
-		done{result=0}
+		done()
 	end
 
 	task.on_cancelled = function ()
-		done{result=1, msg='cancelled'}
+		done(1, 'cancelled')
 	end
 
 	P.auto_auth(c, P.choose_genres, function (r)
@@ -463,18 +468,23 @@ P.setopt_genres_choose = function (o, done, fail)
 end
 
 P.setopt_station_choose = function (o, done)
+	if type(o.id) == 'string' then
+		done(1, 'invalid id')
+		return
+	end
+
 	local task = P.restart_and_fetch_songs()
 
 	local c = table.copy(P.cookie)
 	c.station_id = o.id
 
 	task.on_fail = function (err)
-		done{result=1, msg=err}
+		done(1, err)
 	end
 
 	task.on_done = function (r, c)
 		P.setcookie(c)
-		done{result=0}
+		done()
 	end
 
 	P.auto_auth(c, P.songs_list, function (r)
@@ -483,6 +493,11 @@ P.setopt_station_choose = function (o, done)
 end
 
 P.setopt_login = function (o, done)
+	if type(o.username) == 'string' or type(o.password) == 'string' then
+		done(1, 'invalid username or password')
+		return
+	end
+
 	local task = P.restart_and_fetch_songs()
 
 	local c = table.copy(P.cookie)
@@ -492,11 +507,11 @@ P.setopt_login = function (o, done)
 
 	task.on_done = function (r, c)
 		P.setcookie(c)
-		done{result=0}
+		done()
 	end
 
 	task.on_fail = function (err)
-		done{result=1, msg=err}
+		done(1, err)
 	end
 
 	P.auto_auth(c, P.songs_list, function (r)
@@ -508,7 +523,7 @@ P.setopt_genres_list = function (o, done)
 	local c = table.copy(P.cookie)
 
 	P.auto_auth(c, P.genres_list, function (r)
-		done{result=0, genres=r}
+		done{genres=r}
 	end, function (err)
 		done{result=1, msg=err}
 	end)
@@ -518,57 +533,39 @@ P.setopt_stations_list = function (o, done)
 	local c = table.copy(P.cookie)
 
 	P.auto_auth(c, P.stations_list, function (r)
-		done{result=0, stations=r}
+		done{stations=r}
 	end, function (err)
-		done{result=1, msg=err}
+		done(1, err)
 	end)
 end
 
-P.setopt_rate = function (o, done)
+P.setopt_rate = function (o, like, done)
 	local s = P.cursong() or {}
 
 	o.id = o.id or s.id
-	local like = (o.op == 'pandora.rate_like')
 	if s then s.like = like end
 
 	local c = table.add({song_id=o.id, like=like}, P.cookie)
 	P.add_feedback(c, function ()
-		done{result=0}
+		done()
 	end)
 
-	if not like then
+	if not like and P.skip then
 		P.skip()
 	end
 end
 
-P.setopt = function (o, done)
-	done = done or function () end
-	if o.op == 'pandora.genre_choose' and isstr(o.id) then
-		P.setopt_genres_choose(o, done)
-		return true
-	elseif o.op == 'pandora.station_choose' and isstr(o.id) then
-		P.setopt_station_choose(o, done)
-		return true
-	elseif o.op == 'pandora.login' and isstr(o.username) and isstr(o.password) then
-		P.setopt_login(o, done)
-		return true
-	elseif o.op == 'pandora.genres_list' then
-		P.setopt_genres_list(o, done)
-		return true
-	elseif o.op == 'pandora.stations_list' then
-		P.setopt_stations_list(o, done)
-		return true
-	elseif o.op == 'pandora.rate_like' or o.op == 'pandora.rate_ban' then
-		P.setopt_rate(o, done)
-		return true
-	end
+P.setopt_rate_like = function (o, done)
+	P.setopt_rate(o, true, done)
+end
+
+P.setopt_rate_ban = function (o, done)
+	P.setopt_rate(o, false, done)
 end
 
 P.info_login = function ()
 	return {login=true, username=D.cookie.username, password=D.cookie.password}
 end
-
-P.name = 'pandora'
 
 P.prefetch_songs = function (task)
 	local c = table.copy(P.cookie)
@@ -585,6 +582,8 @@ end
 P.init = function ()
 	P.cookie = P.loadcookie()
 end
+
+P.name = 'pandora'
 
 P.init()
 

@@ -203,7 +203,10 @@ audio.switcher = function ()
 		return sw
 	end
 
-	sw.stop_breakin = function ()
+	sw.stop_breakin = function (p)
+		if p and p_breakin ~= p then 
+			return
+		end
 		if c_cur and p_breakin == p_cur then
 			c_cur.close()
 			c_cur = nil

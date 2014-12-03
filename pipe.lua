@@ -10,10 +10,7 @@ pipe.copy = function (src, sink, mode)
 	local r = pcopy(src, sink, mode)
 
 	r.done = function (cb)
-		r.done_cb = function (...)
-			if r.bufing then clear_interval(r.bufing.timer) end
-			cb(...)
-		end
+		r.done_cb = cb
 		return r
 	end 
 
@@ -21,25 +18,33 @@ pipe.copy = function (src, sink, mode)
 		return r.setopt('get.rx')
 	end
 
-	r.pause = function ()
-		local b = r.setopt('pause')
-		if b then
+	local function changeto (stat, now)
+		r.stat = stat
+		if r.statchanged_cb == nil then return end
+		if now then 
+			r.statchanged_cb(stat)
+		else 
 			set_immediate(function ()
-				if r.statchanged_cb then
-					r.statchanged_cb{stat='paused'}
-				end
+				r.statchanged_cb(stat)
 			end)
 		end
+	end
+
+	r.pause = function ()
+		local b = r.setopt('pause')
+		if b then changeto('paused') end
 		return b
 	end
 
 	r.resume = function ()
 		local b = r.setopt('resume')
-		set_immediate(function ()
-			if r.statchanged_cb then
-				r.statchanged_cb{stat='playing'}
-			end
-		end)
+		if b then changeto('playing') end
+		return b
+	end
+
+	r.pause_resume = function ()
+		local b = r.setopt('is_paused')
+		if b then r.resume() else r.pause() end
 		return b
 	end
 
@@ -51,11 +56,11 @@ pipe.copy = function (src, sink, mode)
 		r.statchanged_cb = cb
 
 		if not r.setopt('is_paused') then
-			set_immediate(function ()
-				cb{stat='buffering'}
-			end)
+			changeto('buffering')
+			buffering = true
 			r.setopt('first_cb', function ()
-				cb{stat='playing'}
+				buffering = false
+				changeto('playing', true)
 			end)
 		end
 

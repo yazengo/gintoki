@@ -42,7 +42,9 @@ pnp.init = function ()
 	pnp.online = function () end
 	pnp.stop = function () end
 end
+
 pnp.init()
+
 pnp.start = function ()
 	zpnp.start()
 	zpnp.on_action = function (...)
@@ -57,6 +59,7 @@ pnp.start = function ()
 		pnp.init()
 	end
 end
+
 pnp.notify_event = function (r) pnp.notify(table.add(r, {type='event'})) end
 pnp.notify_sync  = function (r) pnp.notify(table.add(r, {type='sync'})) end
 
