@@ -1,0 +1,4 @@
+SugrCube ChangeLog
+----
+
+* Basic playing

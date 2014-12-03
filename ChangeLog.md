@@ -60,3 +60,9 @@ ChangeLog
 # Noise Generater
 
 * WhiteNoise Generator [DONE]
+
+# Radios
+
+* BBC
+* LocalMusic
+* Test Pandora/Douban/BBC/LocalMusic
