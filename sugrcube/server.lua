@@ -42,13 +42,14 @@ S.setopt_radio_change = function (o, done)
 		return
 	end
 
-	if src == S.player.src() then
+	if src == S.list.sw.src then
 		done()
 		return
 	end
 
-	S.player.setsrc(src)
-	S.sw.setsrc(S.player)
+	S.list.sw.setsrc(src)
+	S.audio.sw.setsrc(S.player)
+	S.player.next()
 	S.player.resume()
 
 	done()
@@ -77,23 +78,23 @@ local actions = {
 
 	['audio.resume'] = function (o, done)
 		S.player.resume()
+		S.stop_breakin()
 		done()
 	end,
 
-	['audio.pause_play_toggle'] = function (o, done)
-		S.player.pause_resume()
+	['audio.play_pause_toggle'] = function (o, done)
+		if not S.player.pause_resume() then
+			S.stop_breakin()
+		end
 		done()
 	end,
 
 	['burnin.start'] = function (o, done)
-		S.burnin = burnin.src()
-		S.sw.breakin(S.burnin)
-		burnin.start()
+		S.breakin(burnin.start())
 		done()
 	end,
 
 	['burnin.stop'] = function (o, done)
-		S.sw.stop_breakin(S.burnin)
 		burnin.stop()
 		done()
 	end,
@@ -103,7 +104,7 @@ local actions = {
 	end,
 
 	['audio.play'] = function (o, done)
-		local src = S.player.src()
+		local src = S.list.sw.src
 		if src and src.jump_to then
 			src.jump_to(tonumber(o.id))
 			done()
@@ -167,7 +168,7 @@ S.audio_info = function ()
 
 	r.stat = S.player.stat()
 
-	local src = S.player.src()
+	local src = S.list.sw.src
 	if src then r.type = src.name end
 
 	if S.player.song then table.add(r, S.player.song) end
@@ -212,7 +213,8 @@ init({
 }, function ()
 	info('server starts')
 
-	S.sw = audio.switcher()
+	S.audio = {}
+	S.audio.sw = audio.switcher()
 
 	S.vol = {}
 	S.vol.sw = audio.effect()
@@ -221,19 +223,25 @@ init({
 	S.vol.alarm = audio.effect()
 
 	S.mix = audio.mixer()
-	audio.pipe(S.sw, S.vol.sw, S.mix.add())
+	audio.pipe(S.audio.sw, S.vol.sw, S.mix.add())
 
-	S.player = playlist.player().statchanged(S.audio_statchanged)
+	S.list = {}
+	S.list.sw = playlist.switcher()
+
+	S.player = playlist.player(S.list.sw).statchanged(S.audio_statchanged)
 
 	audio.pipe(S.mix, audio.out())
 
-	S.player.setsrc(localmusic)
+	S.list.sw.setsrc(localmusic)
+	S.audio.sw.setsrc(S.player)
 
-	S.sw.setsrc(S.player)
+	S.breakin = function (r)
+		S.audio.sw.breakin(r)
+	end
 
 	shairport.start(function (r)
 		S.player.pause()
-		S.sw.breakin(r)
+		S.breakin(r)
 	end)
 
 	muno.audio_info = S.audio_info
@@ -249,7 +257,7 @@ if input then input.cmds = {
 	[[ server.handle({op='audio.resume'}, info) ]],
 	[[ server.handle({op='audio.next'}, info) ]],
 	[[ server.handle({op='audio.prev'}, info) ]],
-	[[ server.handle({op='audio.pause_play_toggle'}, info) ]],
+	[[ server.handle({op='audio.play_pause_toggle'}, info) ]],
 
 	[[ server.handle({op='radio.change_type', type='douban'}, info) ]],
 

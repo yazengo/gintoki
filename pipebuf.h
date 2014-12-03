@@ -9,8 +9,10 @@ typedef struct pipebuf_s {
 	int len;
 	int refcnt;
 	void (*gc)(struct pipebuf_s *pb);
-	char buf[0];
 	queue_t q;
+	unsigned flags;
+
+	char buf[0];
 } pipebuf_t;
 
 extern int PIPEBUF_SIZE;

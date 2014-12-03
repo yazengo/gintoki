@@ -70,6 +70,18 @@ pipe.copy = function (src, sink, mode)
 	return r
 end
 
+pipe.new = function ()
+	return pdirect()
+end
+
+pipe.close_read = function (p)
+	pclose_read(p)
+end
+
+pipe.close_write = function (p)
+	pclose_write(p)
+end
+
 pipe.readall = function (p, done) 
 	if p[1] then p = p[1] end
 	local ss = pstrsink()

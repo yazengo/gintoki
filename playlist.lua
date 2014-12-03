@@ -1,4 +1,6 @@
 
+require('pipe')
+
 local P = {}
 
 P.songs = function (songs)
@@ -41,28 +43,17 @@ P.songs = function (songs)
 			if r.mode == 'repeat_all' then
 				r.at = 1
 			elseif r.mode == nil then
-				r.close()
 				return
 			end
 		elseif r.at < 1 then
 			if r.mode == 'repeat_all' then
 				r.at = n
 			elseif r.mode == nil then
-				r.close()
 				return
 			end
 		end
 
 		local song = r.songs[r.at]
-
-		if r.mode == 'random' then
-			at = math.random(n)
-		else
-		end
-
-		info('pos', r.at, '->', at)
-		r.at = at
-
 		return song
 	end
 
@@ -255,39 +246,120 @@ P.station = function (S)
 	return S
 end
 
-P.player = function ()
-	local fetching
-	local fetcher
-	local fetch_opt
+P.switcher = function ()
+	local sw = {}
+	local fetch_cb
+	local stat = 'closed' -- 'closed / stopped / fetching / prefetch'
 
-	local closed
+	local function fetch_done (...)
+		stat = 'stopped'
+		fetch_cb(...)
+	end
 
-	local p0 = pdirect()
-	local p1 = pdirect()
+	sw.setsrc = function (src)
+		local old_stat = stat
+		if stat == 'closed' then
+			if src then
+				sw.src = src
+				stat = 'stopped'
+			end
+		elseif stat == 'stopped' then
+			if src then
+				sw.src = src
+			else
+				sw.src = nil
+				stat = 'closed'
+			end
+		elseif stat == 'fetching' then
+			if src then
+				sw.src.cancel_fetch()
+				sw.src = src
+				sw.src.fetch(fetch_done)
+			else
+				sw.src.cancel_fetch()
+				sw.src = nil
+				stat = 'closed'
+			end
+		elseif stat == 'prefetch' then
+			if src then
+				sw.src = src
+				sw.src.fetch(fetch_done)
+				stat = 'fetching'
+			end
+		end
+		info(old_stat, '->', stat)
+	end
 
+	sw.fetch = function (done)
+		if stat == 'stopped' then
+			fetch_cb = done
+			sw.src.fetch(fetch_done)
+			stat = 'fetching'
+		elseif stat == 'closed' then
+			fetch_cb = done
+			stat = 'prefetch'
+		else
+			panic('stat', stat, 'invalid')
+		end
+	end
+
+	sw.cancel_fetch = function ()
+		if stat == 'fetching' then
+			sw.src.cancel_fetch()
+			stat = 'stopped'
+		elseif stat == 'prefetch' then
+			stat = 'closed'
+		end
+	end
+	
+	return sw
+end
+
+P.player = function (src)
+	local stat = 'fetching' -- 'fetching / probing / playing / closing / closed'
+
+	local p0 = pipe.new()
+	local p1 = pipe.new()
 	local c0
-	local c1 = pipe.copy(p0, p1, 'rw').done(function (reason)
-		info('closed')
-		closed = true
+	local c1
+	local dec
+	local fetch
+	local fetch_o
+	local fetch_done
+	local play_done
+	local play_failed
+	local statchanged_cb
+
+	c1 = pipe.copy(p0, p1, 'rw').done(function (reason)
+		stat = 'closed'
+		if p1.done_cb then p1.done_cb(reason) end
 	end)
 
-	local statchanged_cb
-	local function statchanged (r)
-		if statchanged_cb then statchanged_cb(r) end
+	p1.stat = function ()
+		if stat == 'playing' then
+			return c1.stat
+		else
+			return stat
+		end
 	end
 
 	p1.close = function ()
-		c1.close()
+		if stat ~= 'closing' and stat ~= 'closed' then
+			c1.close()
+		end
 	end
 
-	p1.stat = function ()
-		if closed then return 'closed' end
-		if fetching then return 'fetching' end
-		return c1.stat
+	p1.done = function (cb)
+		p1.done_cb = cb
+		return p1
 	end
 
 	p1.pos = function ()
 		return c1.rx() / (44100.0*4)
+	end
+
+	local function statchanged (r)
+		if statchanged_cb then statchanged_cb(r) end
 	end
 
 	p1.statchanged = function (cb)
@@ -299,97 +371,59 @@ P.player = function ()
 	p1.resume = c1.resume
 	p1.pause_resume = c1.pause_resume
 
-	local function fetch ()
-		if fetcher == nil then return end
+	play_done = function (reason)
+		if reason == 'w' then 
+			pipe.close_write(p0)
+			return
+		end
+		fetch()
+	end
 
-		fetching = true
-		fetcher.fetch(function (song)
-			p1.song = song
-			fetching = nil
+	play_failed = function ()
+		set_timeout(fetch, 500)
+	end
 
-			local dec = audio.decoder(song.url).probed(function (d)
-				p1.dur = d.dur
-			end)
+	fetch_done = function (song)
+		p1.song = song
 
-			c0 = pipe.copy(dec, p0, 'r').done(function (reason)
-				c0 = nil
+		if song == nil then
+			stat = 'closing'
+			pipe.close_write(p0)
+			return
+		end
+		
+		stat = 'probing'
 
-				if reason == 'w' then 
-					pclose_write(p0)
-					return
-				end
-
-				fetch()
-			end)
-
+		dec = audio.decoder(song.url).probed(function ()
+			stat = 'playing'
+			p1.dur = dec.dur
+			c0 = pipe.copy(dec, p0, 'r').done(play_done)
 			c1.statchanged(statchanged)
-		end, fetch_opt)
-		fetch_opt = nil
+		end).failed(play_failed)
+	end
+
+	fetch = function ()
+		stat = 'fetching'
+		src.fetch(fetch_done, fetch_o)
+		fetch_o = nil
 	end
 
 	local function skip ()
-		if c0 then c0.close() end
-	end
-
-	p1.setsrc = function (src)
-		if closed then panic('already closed') end
-
-		if src then
-
-			if fetcher then
-
-				if fetching then
-					fetcher.cancel_fetch()
-					fetcher = src
-					fetch()
-				else
-					fetcher = src
-					c0.close()
-				end
-
-			else
-
-				fetcher = src
-				fetch()
-
-			end
-
-		else
-
-			if fetcher then
-
-				if fetching then
-					fetcher.cancel_fetch()
-					fetcher = nil
-				else
-					fetcher = nil
-					c0.close()
-				end
-
-			else
-
-				-- do nothing
-
-			end
-		end
-
-		if fetcher then
-			fetcher.skip = skip
-		end
+		if stat == 'playing' then c0.close() end
+		if stat == 'probing' then dec.stop() end
 	end
 
 	p1.next = function ()
-		if c0 then c0.close() end
+		skip()
 	end
 	
 	p1.prev = function ()
-		if c0 then c0.close() end
-		fetch_opt = {prev=true}
+		skip()
+		fetch_o = {prev=true}
 	end
 
-	p1.src = function ()
-		return fetcher
-	end
+	src.skip = skip
+	fetch()
 
 	return p1
 end

@@ -35,7 +35,7 @@ include ${config-mk}
 
 all: ${exe}
 
-hsrcs += $(wildcard *.h)
+hsrcs += $(shell find -maxdepth 2 -name '*.h')
 gitver = $(shell git rev-parse HEAD | sed 's/\(.......\).*/\1/')
 luvinit = $(foreach m,${luvmods}, extern void luv_${m}_init(lua_State *L, uv_loop_t *); luv_${m}_init(L, loop);)
 

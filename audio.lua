@@ -10,25 +10,39 @@ audio.noise = function ()
 end
 
 audio.decoder = function (url)
-	local mode = 're'
+	local mode = 'cer'
 
 	if not url then
 		url = '-'
-		mode = 'wer'
+		mode = 'cerw'
 	end
 
 	local p = pexec(string.format('avconv -i "%s" -f s16le -ar 44100 -ac 2 -', url), mode)
-	if p[3] then
-		pipe_setopt(p[3], 'read_mode', 'block')
-	elseif p[1] then
-		pipe_setopt(p[1], 'read_mode', 'block')
-	end
+	pipe_setopt(p[3], 'read_mode', 'block')
 
-	local d = {p[1], p[3]}
+	local d = {}
+	table.insert(d, p[4])
+	table.insert(d, p[3])
 
 	d.probed = function (cb)
 		d.probed_cb = cb
 		return d
+	end
+
+	d.failed = function (cb)
+		d.failed_cb = cb
+		return d
+	end
+
+	d.stop = function ()
+		p[1].kill()
+		return d
+	end
+
+	p[1].exit_cb = function (code)
+		if code ~= 0 and d.failed_cb then
+			d.failed_cb()
+		end
 	end
 
 	pipe.grep(p[2], 'Duration:', function (s)
@@ -92,7 +106,7 @@ audio.pipe = function (...)
 
 	local c
 	for i = 1, n-1 do 
-		c = pipe.copy(a[i][2], a[i+1][1], 'brw')
+		c = pipe.copy(a[i][2], a[i+1][1], 'rw')
 	end
 
 	r.done = c.done
@@ -142,10 +156,10 @@ audio.effect = function ()
 end
 
 audio.switcher = function ()
-	local sw = pdirect()
+	local sw = pipe.new()
 	local src, p_cur, c_cur, p_breakin
 
-	local function copy(p)
+	local function copy (p)
 		local mode = 'r'
 		if p == src then
 			mode = ''
@@ -158,7 +172,7 @@ audio.switcher = function ()
 			end
 
 			if reason == 'w' then
-				pclose_write(sw)
+				pipe.close_write(sw)
 				sw = nil
 				return
 			end

@@ -11,7 +11,7 @@ local function init (list, env, done)
 	end
 
 	local path = os.getenv(env)
-	readdir{path, function (dirs)
+	readdir {path, function (dirs)
 		local urls = {}
 		for _, d in pairs(dirs) do
 			table.insert(urls, path .. '/' .. d)
