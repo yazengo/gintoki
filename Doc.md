@@ -128,14 +128,20 @@ Gintoki Lua API
 	-- cancel fetching and done() wont't be called.
 	end
 
-## Url playlist
+## Urls playlist
 
 	list = playlist.urls {
 		'audio1.mp3',
 		'audio2.mp3',
 		'audio3.mp3',
-		loop=true,
+		mode='repeat_all/normal/repeat_one/random',
 	}
+	
+	-- reset urls
+	list.seturls({...}) 
+	
+	-- mode
+	list.setmode('repeat_all/normal/repeat_one/random')
 	
 ## Station playlist
 
@@ -186,6 +192,9 @@ station should implement `prefetch_songs(task)`. it will be called at any time.
 	
 	p.next()
 	-- play next song
+	
+	p.prev()
+	-- play prev song
 	
 	p.pause()
 	p.resume()

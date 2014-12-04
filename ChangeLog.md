@@ -13,6 +13,8 @@ ChangeLog
 * Improve pcopy buffering
   * enter buffering state when read blocks more than 1s
   * quit buffering state as soon as read starts
+* Rename pclose_write/read to pipe.close_read() pipe.close_write()
+* pipe.copy(a, b, mode) mode can be nil
 
 # Luv
 
@@ -64,7 +66,13 @@ ChangeLog
 
 # Playlist
 
-* rename playlist.station
+* Rename radio to playlist [DONE]
+* playlist.urls [DONE]
+   * set play mode (repeat_one/random/normal) [DONE]
+   * set urls [DONE]
+* playlist.player [DONE]
+   * prev() and next() support [DONE]
+* Douban save channel for next use
 * BBC
 * LocalMusic
 * Test Pandora/Douban/BBC/LocalMusic
