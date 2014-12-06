@@ -13,7 +13,7 @@ cobjs += asrc.o aout.o amixer.o pcm.o aeffect.o
 cobjs += cjson.o cjson_fpconv.o
 cobjs += blowfish.o base64.o sha1.o
 cobjs += curl.o http_parser.o zpnp.o
-cobjs += tcp.o
+cobjs += tcp.o http.o
 
 luvmods += pipebuf pdirect pipe pfilebuf
 luvmods += utils os timer immediate
@@ -23,7 +23,7 @@ luvmods += pexec pcopy pfifo
 luvmods += pstrsink
 luvmods += asrc aout amixer pcm aeffect
 luvmods += curl zpnp 
-luvmods += tcp
+luvmods += tcp http
 
 exe ?= gintoki
 now = $(shell date +'%Y%m%d-%H%M')

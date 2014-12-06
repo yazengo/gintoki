@@ -30,7 +30,11 @@ static void on_conn(uv_stream_t *st, int stat) {
 	p->gc = gc;
 	debug("p=%p", p);
 
-	luv_callfield(st, "conn_cb", 1, 0);
+	pipe_t *po = pipe_new(luv_state(st), st->loop);
+	po->type = PSTREAM_SINK;
+	po->st = (uv_stream_t *)t;
+
+	luv_callfield(st, "conn_cb", 2, 0);
 }
 
 // tcpsrv(addr, port, function (r, w) end)
